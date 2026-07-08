@@ -54,6 +54,18 @@ export default function SearchPage() {
     setPlan(null);
 
     try {
+      // Pre-validate that at least one API key is present
+      const keysRes = await api.get('/api/api-keys');
+      const validKeys = (keysRes.data.data ?? []).filter(
+        (k: any) => k.isValid && ['apollo', 'apify'].includes(k.provider)
+      );
+
+      if (validKeys.length === 0) {
+        toast.error('Please configure at least one API Provider (Apollo or Apify) in Settings -> API Keys before running a search.');
+        setLoading(false);
+        return;
+      }
+
       const res = await api.post('/api/search', { prompt });
       const jobData = res.data.data;
       setJob(jobData);
@@ -78,7 +90,7 @@ export default function SearchPage() {
       }
       if (parsed.type === 'done') {
         setProgress(parsed.data);
-        toast.success('Lead search completed! Inspect scored leads in Leads list.');
+        toast.success('Leads collected! Open Leads to select which ones to enrich.');
         eventSource.close();
         setLoading(false);
       }
@@ -95,16 +107,13 @@ export default function SearchPage() {
     };
   };
 
+  // Search flow stops after collect + merge. Enrichment is user-triggered from Leads.
   const stages = [
     { key: 'queued', label: 'Queued' },
     { key: 'planning', label: 'AI Strategy Planning' },
-    { key: 'collecting', label: 'Collecting Raw Leads' },
+    { key: 'collecting', label: 'Collecting & Saving Apollo Contacts' },
     { key: 'merging', label: 'Merging & Deduplicating' },
-    { key: 'enriching', label: 'TinyFish Data Enrichment' },
-    { key: 'verifying', label: 'Reoon Verification' },
-    { key: 'researching', label: 'AI Deep Research' },
-    { key: 'scoring', label: 'ICP Scoring Model' },
-    { key: 'completed', label: 'Complete' },
+    { key: 'completed', label: 'Leads Ready' },
   ];
 
   const getStageStatus = (stageKey: string) => {
@@ -128,7 +137,7 @@ export default function SearchPage() {
           <span>Lead Search Agent</span>
         </h1>
         <p className="text-text-200 text-sm mt-1">
-          Tell the AI agent what leads to find. The agent will formulate a plan, query providers, enrich, verify and score matching leads.
+          Tell the AI agent what leads to find. It plans, queries Apollo (saving contacts + pulling saved/contacted), then stops so you can choose which leads to enrich.
         </p>
       </div>
 

@@ -428,11 +428,29 @@ export default function OnboardingWizard() {
       setGeneratingSubNichesId(null);
     }
   };
-
   // ─── Step 5 Integrations ───────────────────────────────────────
   const handleSaveKeys = async () => {
     setSavingKeys(true);
     try {
+      let hasKey = false;
+      try {
+        const keysRes = await api.get('/api/api-keys');
+        const validKeys = (keysRes.data.data ?? []).filter(
+          (k: any) => k.isValid && ['apollo', 'apify'].includes(k.provider)
+        );
+        if (validKeys.length > 0) {
+          hasKey = true;
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!hasKey && !apolloKey && !apifyKey) {
+        toast.error('Please configure at least one API Provider (Apollo or Apify) to complete onboarding.');
+        setSavingKeys(false);
+        return;
+      }
+
       if (apolloKey) {
         await api.post('/api/api-keys', { provider: 'apollo', key: apolloKey });
       }
@@ -443,13 +461,12 @@ export default function OnboardingWizard() {
       await refreshOnboardingStatus();
       toast.success('Onboarding complete! Welcome to LeadHub.');
       router.push('/dashboard/search');
-    } catch {
-      toast.error('Failed to complete onboarding.');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message ?? 'Failed to complete onboarding.');
     } finally {
       setSavingKeys(false);
     }
   };
-
   // ─── Products / Services helpers ──────────────────────────────
   const addProduct = () => {
     if (newProduct && !products.includes(newProduct)) {

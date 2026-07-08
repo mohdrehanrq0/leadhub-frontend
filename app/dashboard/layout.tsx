@@ -17,23 +17,45 @@ import {
   IconMail,
 } from '@tabler/icons-react';
 
+type Workspace = {
+  id: string;
+  name: string;
+};
+
+function errorMessage(err: unknown, fallback: string) {
+  if (typeof err === 'object' && err && 'message' in err && typeof err.message === 'string') {
+    return err.message;
+  }
+  return fallback;
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, activeWorkspaceId, setActiveWorkspaceId, logout, onboardingStep } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
-  const [workspaces, setWorkspaces] = useState<any[]>([]);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  async function fetchWorkspaces() {
+    try {
+      const res = await api.get('/api/workspaces');
+      setWorkspaces(res.data.data ?? []);
+    } catch {
+      // ignore
+    }
+  }
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
-  }, [user, loading]);
+  }, [user, loading, router]);
 
   useEffect(() => {
     if (user) {
-      fetchWorkspaces();
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void fetchWorkspaces();
     }
   }, [user]);
 
@@ -41,16 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!loading && user && onboardingStep && onboardingStep !== 'completed') {
       router.push('/onboarding');
     }
-  }, [user, loading, onboardingStep]);
-
-  const fetchWorkspaces = async () => {
-    try {
-      const res = await api.get('/api/workspaces');
-      setWorkspaces(res.data.data ?? []);
-    } catch {
-      // ignore
-    }
-  };
+  }, [user, loading, onboardingStep, router]);
 
   const [showCreateWsModal, setShowCreateWsModal] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -62,13 +75,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     setCreatingWs(true);
     try {
       const res = await api.post('/api/workspaces', { name: newWsName.trim() });
-      const newWs = res.data.data;
+      const newWs = res.data.data as Workspace;
       setWorkspaces((prev) => [...prev, newWs]);
       setActiveWorkspaceId(newWs.id);
       setNewWsName('');
       setShowCreateWsModal(false);
-    } catch (err: any) {
-      alert(err.message ?? 'Failed to create workspace.');
+    } catch (err) {
+      alert(errorMessage(err, 'Failed to create workspace.'));
     } finally {
       setCreatingWs(false);
     }
@@ -85,6 +98,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
 
   const menuItems = [
+    { name: 'Leads CRM', href: '/dashboard/leads', icon: IconUsers },
     { name: 'Lead Search', href: '/dashboard/search', icon: IconSearch },
     { name: 'Campaigns', href: '/dashboard/campaigns', icon: IconMail },
     { name: 'Jobs Queue', href: '/dashboard/jobs', icon: IconBriefcase },
