@@ -1,0 +1,644 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import api from '../../lib/api';
+import { toast } from 'sonner';
+import { useAuth } from '../../context/AuthContext';
+import {
+  IconBuilding,
+  IconTarget,
+  IconGridPattern,
+  IconHierarchy,
+  IconPlug,
+  IconCheck,
+  IconArrowRight,
+  IconArrowLeft,
+  IconSparkles,
+  IconLoader2,
+  IconChevronRight,
+} from '@tabler/icons-react';
+
+export default function OnboardingWizard() {
+  const { activeWorkspaceId } = useAuth();
+  const router = useRouter();
+
+  // Wizard state
+  const [step, setStep] = useState<number>(1);
+  const [loading, setLoading] = useState(false);
+  const [prefilling, setPrefilling] = useState(false);
+
+  // Step 1: Company Profile
+  const [companyName, setCompanyName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [industry, setIndustry] = useState('');
+  const [teamSize, setTeamSize] = useState('11-50');
+  const [country, setCountry] = useState('United States');
+  const [description, setDescription] = useState('');
+  const [products, setProducts] = useState<string[]>([]);
+  const [services, setServices] = useState<string[]>([]);
+  const [newProduct, setNewProduct] = useState('');
+  const [newService, setNewService] = useState('');
+
+  // Step 2: ICP
+  const [icp, setIcp] = useState<any>(null);
+  const [generatingIcp, setGeneratingIcp] = useState(false);
+
+  // Step 3: Niches
+  const [niches, setNiches] = useState<any[]>([]);
+  const [generatingNiches, setGeneratingNiches] = useState(false);
+
+  // Step 4: Sub-Niches
+  const [subNicheMap, setSubNicheMap] = useState<Record<string, any[]>>({});
+  const [generatingSubNichesId, setGeneratingSubNichesId] = useState<string | null>(null);
+
+  // Step 5: API Keys / Integrations
+  const [apolloKey, setApolloKey] = useState('');
+  const [apifyKey, setApifyKey] = useState('');
+  const [savingKeys, setSavingKeys] = useState(false);
+
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      loadExistingProfile();
+    }
+  }, [activeWorkspaceId]);
+
+  const loadExistingProfile = async () => {
+    try {
+      const res = await api.get('/api/onboarding');
+      const profile = res.data.data;
+      if (profile) {
+        setCompanyName(profile.companyName ?? '');
+        setWebsite(profile.website ?? '');
+        setIndustry(profile.industry ?? '');
+        setTeamSize(profile.teamSize ?? '11-50');
+        setCountry(profile.country ?? 'United States');
+        setDescription(profile.description ?? '');
+        setProducts(profile.products ?? []);
+        setServices(profile.services ?? []);
+
+        if (profile.onboardingStep === 'icp') setStep(2);
+        if (profile.onboardingStep === 'niches') setStep(3);
+        if (profile.onboardingStep === 'sub_niches') setStep(4);
+        if (profile.onboardingStep === 'integrations') setStep(5);
+        if (profile.onboardingStep === 'completed') {
+          router.push('/dashboard/search');
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  };
+
+  // ─── TinyFish Prefill ──────────────────────────────────────────
+  const handlePrefill = async () => {
+    if (!website) {
+      toast.error('Please enter a website URL.');
+      return;
+    }
+    setPrefilling(true);
+    try {
+      const res = await api.post('/api/onboarding/prefill', { website });
+      const data = res.data.data;
+      if (data && Object.keys(data).length > 0) {
+        setCompanyName(data.name ?? companyName);
+        setDescription(data.description ?? description);
+        setIndustry(data.industry ?? industry);
+        setProducts(data.products ?? products);
+        setServices(data.services ?? services);
+        toast.success('Company context prefilled from TinyFish!');
+      } else {
+        toast.error('Could not retrieve company profile. Please fill manually.');
+      }
+    } catch {
+      toast.error('Prefill service unavailable.');
+    } finally {
+      setPrefilling(false);
+    }
+  };
+
+  // ─── Step 1 Save ──────────────────────────────────────────────
+  const handleSaveCompany = async () => {
+    if (!companyName) {
+      toast.error('Company Name is required.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await api.post('/api/onboarding/company', {
+        companyName,
+        website,
+        industry,
+        teamSize,
+        country,
+        description,
+        products,
+        services,
+      });
+      toast.success('Company context saved.');
+      setStep(2);
+    } catch {
+      toast.error('Failed to save company profile.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Step 2 Generate ICP ──────────────────────────────────────
+  const handleGenerateIcp = async () => {
+    setGeneratingIcp(true);
+    try {
+      const res = await api.post('/api/icp/generate');
+      setIcp(res.data.data);
+      toast.success('Ideal Customer Profile generated by AI!');
+      setStep(3);
+    } catch {
+      toast.error('Failed to generate ICP.');
+    } finally {
+      setGeneratingIcp(false);
+    }
+  };
+
+  // ─── Step 3 Generate Niches ───────────────────────────────────
+  const handleGenerateNiches = async () => {
+    setGeneratingNiches(true);
+    try {
+      await api.post('/api/niches/generate');
+      const res = await api.get('/api/niches');
+      setNiches(res.data.data ?? []);
+      toast.success('15 AI Market Niches discovered!');
+    } catch {
+      toast.error('Failed to discover niches.');
+    } finally {
+      setGeneratingNiches(false);
+    }
+  };
+
+  const toggleNiche = async (id: string, isSelected: boolean) => {
+    try {
+      await api.patch(`/api/niches/${id}/select`, { isSelected });
+      setNiches((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, isSelected } : n))
+      );
+    } catch {
+      toast.error('Failed to toggle selection.');
+    }
+  };
+
+  // ─── Step 4 Sub-Niches ─────────────────────────────────────────
+  const handleGenerateSubNiches = async (nicheId: string) => {
+    setGeneratingSubNichesId(nicheId);
+    try {
+      const res = await api.post(`/api/niches/${nicheId}/sub-niches`);
+      setSubNicheMap((prev) => ({
+        ...prev,
+        [nicheId]: res.data.data ?? [],
+      }));
+      toast.success('Target sub-niches mapped out!');
+    } catch {
+      toast.error('Failed to generate sub-niches.');
+    } finally {
+      setGeneratingSubNichesId(null);
+    }
+  };
+
+  // ─── Step 5 Integrations ───────────────────────────────────────
+  const handleSaveKeys = async () => {
+    setSavingKeys(true);
+    try {
+      if (apolloKey) {
+        await api.post('/api/api-keys', { provider: 'apollo', key: apolloKey });
+      }
+      if (apifyKey) {
+        await api.post('/api/api-keys', { provider: 'apify', key: apifyKey });
+      }
+      await api.post('/api/onboarding/complete');
+      toast.success('Onboarding complete! Welcome to LeadHub.');
+      router.push('/dashboard/search');
+    } catch {
+      toast.error('Failed to complete onboarding.');
+    } finally {
+      setSavingKeys(false);
+    }
+  };
+
+  // ─── Products / Services helpers ──────────────────────────────
+  const addProduct = () => {
+    if (newProduct && !products.includes(newProduct)) {
+      setProducts([...products, newProduct]);
+      setNewProduct('');
+    }
+  };
+
+  const addService = () => {
+    if (newService && !services.includes(newService)) {
+      setServices([...services, newService]);
+      setNewService('');
+    }
+  };
+
+  return (
+    <main className="min-h-screen bg-background text-text flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ minHeight: '100vh' }}>
+      {/* Stepper Header */}
+      <div className="w-full max-w-4xl flex items-center justify-between mb-8 z-10">
+        <h1 className="text-xl font-bold tracking-tight text-primary">LeadHub Onboarding</h1>
+        <div className="flex items-center space-x-2">
+          {[1, 2, 3, 4, 5].map((s) => (
+            <div
+              key={s}
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border ${
+                step === s
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : step > s
+                  ? 'bg-primary/10 text-primary border-primary/20'
+                  : 'bg-bg-300 text-text-300 border-border'
+              }`}
+            >
+              {step > s ? <IconCheck size={14} /> : s}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Main wizard card */}
+      <div className="w-full max-w-4xl bg-card p-8 min-h-[500px] flex flex-col justify-between relative z-10 border border-border rounded-xl shadow-input">
+        
+        {/* ─── Step 1: Company context ───────────────────────────── */}
+        {step === 1 && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center space-x-2">
+                <IconBuilding className="text-primary" />
+                <span>Tell us about your company</span>
+              </h2>
+              <p className="text-text-200 text-sm mt-1">
+                Enter your website URL to instantly fetch profile details or describe your company manually.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text-200">Website URL</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="url"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="https://example.com"
+                      className="flex-1 bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={handlePrefill}
+                      disabled={prefilling}
+                      className="bg-primary hover:bg-primary-200 text-white px-3 rounded-lg text-xs font-medium flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                    >
+                      {prefilling ? <IconLoader2 size={14} className="animate-spin" /> : <IconSparkles size={14} />}
+                      <span>{prefilling ? 'Fetching...' : 'Prefill'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text-200">Company Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="Example Corp"
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-text-200">Industry</label>
+                    <input
+                      type="text"
+                      value={industry}
+                      onChange={(e) => setIndustry(e.target.value)}
+                      placeholder="SaaS / Fintech"
+                      className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-text-200">Team Size</label>
+                    <select
+                      value={teamSize}
+                      onChange={(e) => setTeamSize(e.target.value)}
+                      className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm text-text-100"
+                    >
+                      <option>1-10</option>
+                      <option>11-50</option>
+                      <option>51-200</option>
+                      <option>201-500</option>
+                      <option>500+</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text-200">Describe what you do</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="We build B2B workflow software that saves recruiters time..."
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm h-[84px] focus:outline-none focus:border-primary text-text-100"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-text-200">Products Offered</label>
+                  <div className="flex space-x-2">
+                    <input
+                      type="text"
+                      value={newProduct}
+                      onChange={(e) => setNewProduct(e.target.value)}
+                      placeholder="Product A"
+                      className="flex-1 bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                    />
+                    <button
+                      type="button"
+                      onClick={addProduct}
+                      className="bg-bg-300 hover:bg-bg-300/80 px-3 rounded-lg text-xs border border-border text-text-100"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {products.map((p, idx) => (
+                      <span key={idx} className="bg-primary/10 text-primary text-[10px] px-2 py-0.5 border border-primary/20 rounded-full flex items-center">
+                        {p}
+                        <button type="button" onClick={() => setProducts(products.filter((pr) => pr !== p))} className="ml-1 text-text-300 hover:text-error">✕</button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-6">
+              <button
+                type="button"
+                onClick={handleSaveCompany}
+                disabled={loading}
+                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
+              >
+                <span>{loading ? 'Saving...' : 'Save & Continue'}</span>
+                <IconChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 2: Ideal Customer Profile ────────────────────── */}
+        {step === 2 && (
+          <div className="space-y-6 animate-fade-in text-center py-8">
+            <div className="max-w-md mx-auto space-y-4">
+              <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto">
+                <IconTarget size={32} />
+              </div>
+              <h2 className="text-2xl font-bold">Build Your ICP Model</h2>
+              <p className="text-text-200 text-sm">
+                We'll analyze your products, descriptions, and industry to build a multi-parameter Ideal Customer Profile.
+              </p>
+
+              <button
+                type="button"
+                onClick={handleGenerateIcp}
+                disabled={generatingIcp}
+                className="w-full bg-primary hover:bg-primary-200 text-white py-3 rounded-lg font-semibold flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50 cursor-pointer"
+              >
+                {generatingIcp ? (
+                  <>
+                    <IconLoader2 className="animate-spin" size={18} />
+                    <span>Analyzing & Modeling...</span>
+                  </>
+                ) : (
+                  <>
+                    <IconSparkles size={18} />
+                    <span>Generate AI Target Persona</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 3: Niche Discovery ───────────────────────────── */}
+        {step === 3 && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center space-x-2">
+                <IconGridPattern className="text-primary" />
+                <span>Niche Discovery Strategy</span>
+              </h2>
+              <p className="text-text-200 text-sm mt-1">
+                Generate market niches suitable for lead targeting. Select which ones you want to explore.
+              </p>
+            </div>
+
+            {niches.length === 0 ? (
+              <div className="py-12 text-center max-w-sm mx-auto space-y-4">
+                <button
+                  type="button"
+                  onClick={handleGenerateNiches}
+                  disabled={generatingNiches}
+                  className="w-full bg-primary hover:bg-primary-200 text-white py-3 rounded-lg font-semibold flex items-center justify-center space-x-2 shadow-sm disabled:opacity-50 cursor-pointer"
+                >
+                  {generatingNiches ? (
+                    <>
+                      <IconLoader2 className="animate-spin" size={18} />
+                      <span>Discovering...</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconSparkles size={18} />
+                      <span>Discover 15 Target Niches</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  {niches.map((n) => (
+                    <button
+                      key={n.id}
+                      onClick={() => toggleNiche(n.id, !n.isSelected)}
+                      className={`p-3 border rounded-xl text-left transition-all relative overflow-hidden cursor-pointer ${
+                        n.isSelected
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-border bg-bg-200 hover:border-border text-text-200'
+                      }`}
+                    >
+                      <p className="text-xs font-semibold">{n.name}</p>
+                      {n.isSelected && (
+                        <div className="absolute top-1.5 right-1.5 w-4 h-4 bg-primary text-white rounded-full flex items-center justify-center text-[10px]">
+                          ✓
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex justify-between pt-6 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    className="flex items-center space-x-1.5 text-text-200 hover:text-text-100 text-sm cursor-pointer"
+                  >
+                    <IconArrowLeft size={16} />
+                    <span>Back</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStep(4)}
+                    className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                  >
+                    <span>Next: Map Sub-Niches</span>
+                    <IconChevronRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Step 4: Sub-Niches ────────────────────────────────── */}
+        {step === 4 && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center space-x-2">
+                <IconHierarchy className="text-primary" />
+                <span>Micro-Niche Mapping</span>
+              </h2>
+              <p className="text-text-200 text-sm mt-1">
+                Drill down into chosen niches to build granular micro-targeting directories.
+              </p>
+            </div>
+
+            <div className="space-y-4 max-h-[360px] overflow-y-auto pr-2">
+              {niches.filter((n) => n.isSelected).map((n) => {
+                const subs = subNicheMap[n.id] ?? [];
+                return (
+                  <div key={n.id} className="bg-bg-300 p-4 border border-border rounded-xl space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-semibold text-primary">{n.name}</span>
+                      {subs.length === 0 && (
+                        <button
+                          onClick={() => handleGenerateSubNiches(n.id)}
+                          disabled={generatingSubNichesId === n.id}
+                          className="bg-bg-200 hover:bg-bg-300 border border-border text-text-100 text-[10px] px-2.5 py-1 rounded-md flex items-center space-x-1 disabled:opacity-50 cursor-pointer"
+                        >
+                          {generatingSubNichesId === n.id ? (
+                            <IconLoader2 size={12} className="animate-spin" />
+                          ) : (
+                            <IconSparkles size={12} />
+                          )}
+                          <span>Generate Sub-Niches</span>
+                        </button>
+                      )}
+                    </div>
+                    {subs.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {subs.map((s, idx) => (
+                          <span key={idx} className="bg-bg-200 border border-border text-text-200 text-[10px] px-2.5 py-1 rounded-full">
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-between pt-6 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                className="flex items-center space-x-1.5 text-text-200 hover:text-text-100 text-sm cursor-pointer"
+              >
+                <IconArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep(5)}
+                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
+              >
+                <span>Next: Setup Integrations</span>
+                <IconChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Step 5: Integrations Setup ────────────────────────── */}
+        {step === 5 && (
+          <div className="space-y-6 animate-fade-in">
+            <div>
+              <h2 className="text-2xl font-bold flex items-center space-x-2">
+                <IconPlug className="text-primary" />
+                <span>Connect API Platforms</span>
+              </h2>
+              <p className="text-text-200 text-sm mt-1">
+                Paste credentials to authorize lead collection. You can test and configure additional platforms inside Settings.
+              </p>
+            </div>
+
+            <div className="space-y-4 max-w-lg">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-200">Apollo API Key</label>
+                <input
+                  type="password"
+                  value={apolloKey}
+                  onChange={(e) => setApolloKey(e.target.value)}
+                  placeholder="Paste Apollo key here..."
+                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-200">Apify API Token</label>
+                <input
+                  type="password"
+                  value={apifyKey}
+                  onChange={(e) => setApifyKey(e.target.value)}
+                  placeholder="Paste Apify token here..."
+                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between pt-6 border-t border-border">
+              <button
+                type="button"
+                onClick={() => setStep(4)}
+                className="flex items-center space-x-1.5 text-text-200 hover:text-text-100 text-sm cursor-pointer"
+              >
+                <IconArrowLeft size={16} />
+                <span>Back</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveKeys}
+                disabled={savingKeys}
+                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
+              >
+                <span>{savingKeys ? 'Finalizing Setup...' : 'Complete Onboarding'}</span>
+                <IconChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </main>
+  );
+}
