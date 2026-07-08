@@ -18,7 +18,7 @@ import {
 } from '@tabler/icons-react';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, activeWorkspaceId, setActiveWorkspaceId, logout } = useAuth();
+  const { user, loading, activeWorkspaceId, setActiveWorkspaceId, logout, onboardingStep } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -37,6 +37,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   }, [user]);
 
+  useEffect(() => {
+    if (!loading && user && onboardingStep && onboardingStep !== 'completed') {
+      router.push('/onboarding');
+    }
+  }, [user, loading, onboardingStep]);
+
   const fetchWorkspaces = async () => {
     try {
       const res = await api.get('/api/workspaces');
@@ -46,20 +52,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  const createNewWorkspace = async () => {
-    const name = prompt('Enter workspace name:');
-    if (!name) return;
+  const [showCreateWsModal, setShowCreateWsModal] = useState(false);
+  const [newWsName, setNewWsName] = useState('');
+  const [creatingWs, setCreatingWs] = useState(false);
+
+  const handleCreateWorkspace = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newWsName.trim()) return;
+    setCreatingWs(true);
     try {
-      const res = await api.post('/api/workspaces', { name });
+      const res = await api.post('/api/workspaces', { name: newWsName.trim() });
       const newWs = res.data.data;
       setWorkspaces((prev) => [...prev, newWs]);
       setActiveWorkspaceId(newWs.id);
+      setNewWsName('');
+      setShowCreateWsModal(false);
     } catch (err: any) {
       alert(err.message ?? 'Failed to create workspace.');
+    } finally {
+      setCreatingWs(false);
     }
   };
 
-  if (loading || !user) {
+  if (loading || !user || !onboardingStep || onboardingStep !== 'completed') {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-zinc-950">
         <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
@@ -119,7 +134,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="border-t border-sidebar-border my-1" />
                 <button
                   onClick={() => {
-                    createNewWorkspace();
+                    setShowCreateWsModal(true);
                     setDropdownOpen(false);
                   }}
                   className="w-full text-left px-3 py-2 text-xs hover:bg-sidebar-hover transition-colors text-primary font-medium flex items-center space-x-1.5"
@@ -191,6 +206,55 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </header>
         <div className="flex-1 p-6 relative bg-background">{children}</div>
       </main>
+
+      {/* ─── Create Workspace Modal ────────────────────────────────── */}
+      {showCreateWsModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md p-6 animate-scale-up space-y-4">
+            <div>
+              <h3 className="text-lg font-bold text-text-100">Create New Workspace</h3>
+              <p className="text-text-300 text-xs mt-1">
+                A workspace represents a separate context for company profiles, campaigns, and lead generation lists.
+              </p>
+            </div>
+            <form onSubmit={handleCreateWorkspace} className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-text-200">Workspace Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newWsName}
+                  onChange={(e) => setNewWsName(e.target.value)}
+                  placeholder="e.g. Acme Sales Team"
+                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
+                  disabled={creatingWs}
+                  autoFocus
+                />
+              </div>
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateWsModal(false);
+                    setNewWsName('');
+                  }}
+                  className="px-4 py-2 border border-border rounded-lg text-xs font-semibold text-text-200 hover:bg-bg-300 transition-colors"
+                  disabled={creatingWs}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="bg-primary hover:bg-primary-200 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-sm disabled:opacity-50"
+                  disabled={creatingWs || !newWsName.trim()}
+                >
+                  {creatingWs ? 'Creating...' : 'Create'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

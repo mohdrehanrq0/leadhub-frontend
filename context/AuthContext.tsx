@@ -21,6 +21,8 @@ interface AuthContextType {
   signup: (email: string, pass: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  onboardingStep: string | null;
+  refreshOnboardingStatus: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,6 +31,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<string | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -39,6 +42,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     refreshUser();
   }, []);
+
+  useEffect(() => {
+    if (user && activeWorkspaceId) {
+      refreshOnboardingStatus();
+    } else {
+      setOnboardingStep(null);
+    }
+  }, [activeWorkspaceId]);
 
   const setActiveWorkspaceId = (id: string | null) => {
     setActiveWorkspaceIdState(id);
@@ -51,22 +62,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const refreshOnboardingStatus = async () => {
+    try {
+      const res = await api.get('/api/onboarding');
+      setOnboardingStep(res.data.data?.onboardingStep ?? 'company');
+    } catch {
+      setOnboardingStep('company');
+    }
+  };
+
   const refreshUser = async () => {
     try {
       setLoading(true);
       const res = await api.get('/api/auth/me');
-      setUser(res.data.data);
+      const currentUser = res.data.data;
+      setUser(currentUser);
 
       // Auto-set workspace if none active
-      const storedId = localStorage.getItem('leadhub_workspace_id');
+      let storedId = localStorage.getItem('leadhub_workspace_id');
       if (!storedId) {
         const wRes = await api.get('/api/workspaces');
         if (wRes.data.data?.length > 0) {
-          setActiveWorkspaceId(wRes.data.data[0].id);
+          storedId = wRes.data.data[0].id;
+          setActiveWorkspaceId(storedId);
         }
+      }
+
+      if (currentUser && storedId) {
+        try {
+          const obRes = await api.get('/api/onboarding', {
+            headers: { 'X-Workspace-ID': storedId }
+          });
+          setOnboardingStep(obRes.data.data?.onboardingStep ?? 'company');
+        } catch {
+          setOnboardingStep('company');
+        }
+      } else {
+        setOnboardingStep(null);
       }
     } catch {
       setUser(null);
+      setOnboardingStep(null);
     } finally {
       setLoading(false);
     }
@@ -76,14 +112,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const res = await api.post('/api/auth/login', { email, password: pass });
-      setUser(res.data.data.user);
+      const loggedInUser = res.data.data.user;
+      setUser(loggedInUser);
 
       // Fetch workspaces and set active
       const wRes = await api.get('/api/workspaces');
+      let workspaceId = null;
       if (wRes.data.data?.length > 0) {
-        setActiveWorkspaceId(wRes.data.data[0].id);
+        workspaceId = wRes.data.data[0].id;
+        setActiveWorkspaceId(workspaceId);
       }
-      router.push('/dashboard');
+
+      if (workspaceId) {
+        try {
+          const obRes = await api.get('/api/onboarding', {
+            headers: { 'X-Workspace-ID': workspaceId }
+          });
+          const profile = obRes.data.data;
+          const step = profile?.onboardingStep ?? 'company';
+          setOnboardingStep(step);
+          
+          if (step === 'completed') {
+            router.push('/dashboard/search');
+          } else {
+            router.push('/onboarding');
+          }
+        } catch {
+          setOnboardingStep('company');
+          router.push('/onboarding');
+        }
+      } else {
+        setOnboardingStep('company');
+        router.push('/onboarding');
+      }
     } catch (err: any) {
       throw new Error(err.response?.data?.message ?? 'Login failed.');
     } finally {
@@ -109,6 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       setActiveWorkspaceId(null);
+      setOnboardingStep(null);
       router.push('/login');
     }
   };
@@ -124,6 +186,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signup,
         logout,
         refreshUser,
+        onboardingStep,
+        refreshOnboardingStatus,
       }}
     >
       {children}
