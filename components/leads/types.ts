@@ -51,12 +51,17 @@ export type AiIntelligenceData = {
   leadId: string;
   companyId?: string | null;
   companySummary?: AiIntelligenceField<string>;
+  personSummary?: AiIntelligenceField<string>;
   painPoints?: AiIntelligenceField<string[]>;
+  likelyChallenges?: AiIntelligenceField<string[]>;
+  growthOpportunities?: AiIntelligenceField<string[]>;
   buyingIntent?: ScoredField<string>;
   recommendedOutreachAngle?: AiIntelligenceField<string>;
+  personalizationNotes?: AiIntelligenceField<string[]>;
   personaAnalysis?: AiIntelligenceField<Record<string, unknown>>;
   productFit?: ScoredField<string>;
   buyingSignals?: AiIntelligenceField<string[]>;
+  recentActivity?: AiIntelligenceField<string[]>;
   outreachInsights?: AiIntelligenceField<string[]>;
   suggestedEmailOpening?: AiIntelligenceField<string>;
   suggestedCta?: AiIntelligenceField<string>;
@@ -66,6 +71,30 @@ export type AiIntelligenceData = {
   priority?: Priority | null;
   generatedAt: string;
   updatedAt: string;
+};
+
+export type EnrichedProfileField = {
+  value: unknown;
+  source: string;
+  confidence: number;
+  status: 'found' | 'not_found' | 'inferred';
+  evidence?: Record<string, unknown>;
+  lastUpdated: string;
+};
+
+export type CanonicalLeadProfile = {
+  leadId: string;
+  companyId?: string | null;
+  contactId?: string | null;
+  fields: Record<string, EnrichedProfileField>;
+  registry: Array<{
+    key: string;
+    label: string;
+    entityType: 'company' | 'contact' | 'lead';
+    layer: 'verified' | 'ai' | 'user';
+    fetchStrategy: string;
+    requiredForEnrichment?: boolean;
+  }>;
 };
 
 // ─── Lead types ──────────────────────────────────────────────────
@@ -106,14 +135,19 @@ export type LeadRow = {
     id?: string | null;
     name?: string | null;
     domain?: string | null;
+    website?: string | null;
     industry?: string | null;
     size?: string | null;
+    foundedYear?: number | null;
+    country?: string | null;
+    city?: string | null;
     technologies?: string[];
     description?: string | null;
     products?: string[];
     services?: string[];
     socialLinks?: Record<string, string>;
     location?: { country?: string; city?: string } | null;
+    sourceHistory?: Array<{ source: string; fields: string[]; pages?: string[]; at: string }>;
   } | null;
   contact?: {
     id?: string | null;

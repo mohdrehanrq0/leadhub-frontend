@@ -18,6 +18,8 @@ import {
   IconSearch,
   IconAlertTriangle,
   IconKey,
+  IconCopyOff,
+  IconX,
 } from '@tabler/icons-react';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -55,12 +57,24 @@ export default function LeadsPage() {
   const [source, setSource] = useState('all');
   const [categoryId, setCategoryId] = useState('all');
   const [listId, setListId] = useState('all');
+  const [enrichmentStatus, setEnrichmentStatus] = useState('all');
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkStage, setBulkStage] = useState<PipelineStage>('contacted');
   const [bulkCategoryId, setBulkCategoryId] = useState('');
   const [bulkListId, setBulkListId] = useState('');
+
+  // Deduplication Modal States
+  const [showDeduplicateModal, setShowDeduplicateModal] = useState(false);
+  const [matchOn, setMatchOn] = useState<'email' | 'domain' | 'linkedinUrl' | 'company_contact'>('email');
+  const [keepStrategy, setKeepStrategy] = useState<'oldest' | 'newest'>('oldest');
+  const [dupListId, setDupListId] = useState('all');
+  const [dupCategoryId, setDupCategoryId] = useState('all');
+  const [dupSource, setDupSource] = useState('all');
+  const [previewData, setPreviewData] = useState<any>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [purging, setPurging] = useState(false);
 
   async function fetchLeads() {
     try {
@@ -71,6 +85,7 @@ export default function LeadsPage() {
       if (source !== 'all') params.set('source', source);
       if (categoryId !== 'all') params.set('categoryId', categoryId);
       if (listId !== 'all') params.set('listId', listId);
+      if (enrichmentStatus !== 'all') params.set('enrichmentStatus', enrichmentStatus);
       if (deferredQuery.trim()) params.set('q', deferredQuery.trim());
       const filteredUrl = `/api/leads?${params.toString()}`;
       const filteredRes = await api.get(filteredUrl);
@@ -104,7 +119,7 @@ export default function LeadsPage() {
       void fetchApiKeyStatus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeWorkspaceId, stage, priority, source, categoryId, listId, deferredQuery]);
+  }, [activeWorkspaceId, stage, priority, source, categoryId, listId, enrichmentStatus, deferredQuery]);
 
   const refreshLeads = async () => {
     await fetchLeads();
@@ -113,13 +128,56 @@ export default function LeadsPage() {
 
   async function fetchApiKeyStatus() {
     try {
-      const res = await api.get('/api/apikeys');
+      const res = await api.get('/api/api-keys');
       const keys: Array<{ provider: string }> = res.data.data ?? [];
       setHasOpenAiKey(keys.some((k) => k.provider === 'openai'));
     } catch {
       setHasOpenAiKey(false);
     }
   }
+
+  const handleAnalyze = async () => {
+    try {
+      setLoadingPreview(true);
+      const res = await api.post('/api/leads/duplicates/preview', {
+        matchOn,
+        keepStrategy,
+        listId: dupListId === 'all' ? undefined : dupListId,
+        categoryId: dupCategoryId === 'all' ? undefined : dupCategoryId,
+        source: dupSource === 'all' ? undefined : dupSource,
+      });
+      setPreviewData(res.data.data);
+      toast.success('Duplicate scan complete!');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Duplicate scan failed.'));
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const handlePurge = async () => {
+    if (!previewData || previewData.totalDuplicates === 0) return;
+    const ok = window.confirm(`Are you sure you want to permanently delete all ${previewData.totalDuplicates} duplicate leads? This action is irreversible.`);
+    if (!ok) return;
+
+    try {
+      setPurging(true);
+      const res = await api.post('/api/leads/duplicates/purge', {
+        matchOn,
+        keepStrategy,
+        listId: dupListId === 'all' ? undefined : dupListId,
+        categoryId: dupCategoryId === 'all' ? undefined : dupCategoryId,
+        source: dupSource === 'all' ? undefined : dupSource,
+      });
+      toast.success(`Successfully deleted ${res.data.data?.deletedCount ?? previewData.totalDuplicates} duplicate leads!`);
+      setShowDeduplicateModal(false);
+      await refreshLeads();
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to purge duplicates.'));
+    } finally {
+      setPurging(false);
+    }
+  };
 
   const filteredLeads = leads;
   const selectedLeads = filteredLeads.filter((lead) => selected.has(lead.id));
@@ -244,9 +302,7 @@ export default function LeadsPage() {
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Import, sync, qualify, enrich, and move leads through a CRM pipeline with table and Kanban views.
             </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+          </div>          <div className="flex flex-wrap gap-2">
             {hasOpenAiKey === false && (
               <Link
                 href="/dashboard/settings/api-keys"
@@ -255,6 +311,18 @@ export default function LeadsPage() {
                 <IconAlertTriangle size={15} /> Add OpenAI key to enable AI enrichment
               </Link>
             )}
+            <button
+              onClick={() => {
+                setDupListId(listId);
+                setDupCategoryId(categoryId);
+                setDupSource(source);
+                setPreviewData(null);
+                setShowDeduplicateModal(true);
+              }}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 cursor-pointer"
+            >
+              <IconCopyOff size={15} /> Clean Duplicates
+            </button>
             <Link href="/dashboard/leads/import" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50">
               <IconUpload size={15} /> Import CSV
             </Link>
@@ -269,7 +337,7 @@ export default function LeadsPage() {
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 lg:grid-cols-[1.4fr_repeat(5,minmax(120px,1fr))_auto]">
+        <div className="grid gap-3 lg:grid-cols-[1.4fr_repeat(6,minmax(120px,1fr))_auto]">
           <label className="relative">
             <IconSearch size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -280,27 +348,35 @@ export default function LeadsPage() {
             />
           </label>
 
-          <select value={stage} onChange={(event) => setStage(event.target.value as 'all' | PipelineStage)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+          <select value={stage} onChange={(event) => setStage(event.target.value as 'all' | PipelineStage)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
             <option value="all">All stages</option>
             {PIPELINE_STAGES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
           </select>
-          <select value={priority} onChange={(event) => setPriority(event.target.value as 'all' | 'hot' | 'warm' | 'cold' | 'unknown')} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+          <select value={priority} onChange={(event) => setPriority(event.target.value as 'all' | 'hot' | 'warm' | 'cold' | 'unknown')} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
             <option value="all">All priority</option>
             <option value="hot">Hot</option>
             <option value="warm">Warm</option>
             <option value="cold">Cold</option>
             <option value="unknown">Unknown</option>
           </select>
-          <select value={source} onChange={(event) => setSource(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+          <select value={source} onChange={(event) => setSource(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
             {sourceOptions.map((item) => <option key={item} value={item}>{item === 'all' ? 'All sources' : item}</option>)}
           </select>
-          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
             <option value="all">All categories</option>
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
-          <select value={listId} onChange={(event) => setListId(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700">
+          <select value={listId} onChange={(event) => setListId(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
             <option value="all">All lists</option>
             {lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
+          </select>
+          <select value={enrichmentStatus} onChange={(event) => setEnrichmentStatus(event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none">
+            <option value="all">All Enrichment</option>
+            <option value="not_started">Not Enriched</option>
+            <option value="in_progress">Enriching...</option>
+            <option value="completed">Completed</option>
+            <option value="partial">Partial</option>
+            <option value="failed">Failed</option>
           </select>
 
           <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
@@ -531,6 +607,156 @@ export default function LeadsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Deduplication Modal */}
+      {showDeduplicateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-[540px] max-w-full shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-black text-slate-950 flex items-center gap-2">
+                  <IconCopyOff className="text-rose-600" size={18} /> Find & Remove Duplicates
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  Locate and purge duplicate lead records in your CRM based on flexible matching rules.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowDeduplicateModal(false)}
+                className="text-slate-400 hover:text-slate-650 transition cursor-pointer"
+              >
+                <IconX size={18} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 space-y-4 pr-1 thin-scrollbar">
+              {/* Match Criteria */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Match leads on</label>
+                <select
+                  value={matchOn}
+                  onChange={(e: any) => { setMatchOn(e.target.value); setPreviewData(null); }}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 outline-none"
+                >
+                  <option value="email">Exact Email Address</option>
+                  <option value="domain">Company Website Domain</option>
+                  <option value="linkedinUrl">Contact LinkedIn URL</option>
+                  <option value="company_contact">Same Company & Contact Name</option>
+                </select>
+              </div>
+
+              {/* Strategy */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-2">Deduplication Strategy</label>
+                <select
+                  value={keepStrategy}
+                  onChange={(e: any) => { setKeepStrategy(e.target.value); setPreviewData(null); }}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 outline-none"
+                >
+                  <option value="oldest">Keep Oldest Record first (Preserve original imports)</option>
+                  <option value="newest">Keep Newest Record first (Preserve latest overrides)</option>
+                </select>
+              </div>
+
+              {/* Scope Override */}
+              <div className="border-t border-slate-100 pt-3 space-y-3">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block">Scope Filters</label>
+                <div className="grid gap-2 grid-cols-3">
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">List</label>
+                    <select
+                      value={dupListId}
+                      onChange={(e) => { setDupListId(e.target.value); setPreviewData(null); }}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 outline-none"
+                    >
+                      <option value="all">All lists</option>
+                      {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Category</label>
+                    <select
+                      value={dupCategoryId}
+                      onChange={(e) => { setDupCategoryId(e.target.value); setPreviewData(null); }}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 outline-none"
+                    >
+                      <option value="all">All categories</option>
+                      {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[9px] font-bold text-slate-400 block mb-1">Source</label>
+                    <select
+                      value={dupSource}
+                      onChange={(e) => { setDupSource(e.target.value); setPreviewData(null); }}
+                      className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 outline-none"
+                    >
+                      <option value="all">All sources</option>
+                      {sourceOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Preview results */}
+              {previewData && (
+                <div className="border-t border-slate-100 pt-3 space-y-2">
+                  <div className="flex justify-between items-center bg-slate-50 rounded-xl p-3 border border-slate-150">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">Analysis Results</p>
+                      <p className="text-[11px] text-slate-500">Matches grouped: {previewData.duplicateGroupsCount}</p>
+                    </div>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${previewData.totalDuplicates > 0 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                      {previewData.totalDuplicates} duplicates found
+                    </span>
+                  </div>
+
+                  {previewData.totalDuplicates > 0 && (
+                    <div className="rounded-xl border border-slate-100 max-h-36 overflow-y-auto p-2 bg-slate-50/50 space-y-1.5 thin-scrollbar">
+                      {previewData.preview.map((group: any, i: number) => (
+                        <div key={i} className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200/65 flex justify-between items-center">
+                          <span className="font-bold text-slate-800 truncate max-w-[240px]">{group.matchValue}</span>
+                          <span className="text-slate-400">Keeping ID: {group.keeper.id.slice(0, 8)} ({group.duplicates.length} to purge)</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 flex gap-3 justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowDeduplicateModal(false)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={handleAnalyze}
+                disabled={loadingPreview}
+                className="rounded-xl border border-blue-200 bg-blue-50 text-blue-700 px-4 py-2.5 text-xs font-bold hover:bg-blue-100 disabled:opacity-40 cursor-pointer"
+              >
+                {loadingPreview ? <IconLoader2 className="animate-spin inline mr-1" size={13} /> : null}
+                Run Duplicate Scan
+              </button>
+              {previewData && previewData.totalDuplicates > 0 && (
+                <button
+                  type="button"
+                  onClick={handlePurge}
+                  disabled={purging}
+                  className="rounded-xl bg-rose-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-rose-700 shadow-md shadow-rose-200 disabled:opacity-40 cursor-pointer"
+                >
+                  {purging ? <IconLoader2 className="animate-spin inline mr-1" size={13} /> : null}
+                  Purge {previewData.totalDuplicates} Duplicates
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

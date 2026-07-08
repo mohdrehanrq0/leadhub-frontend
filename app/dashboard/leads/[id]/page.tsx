@@ -9,13 +9,12 @@ import {
   IconBrain,
   IconBuilding,
   IconCheck,
-  IconCpu,
+  IconChevronDown,
+  IconChevronUp,
   IconExternalLink,
-  IconList,
   IconLoader2,
   IconMail,
   IconNotes,
-  IconPhone,
   IconSparkles,
   IconUser,
   IconX,
@@ -26,9 +25,11 @@ import { useAuth } from '../../../../context/AuthContext';
 import {
   apolloCategoryLabel,
   AiIntelligenceData,
+  CanonicalLeadProfile,
   ENRICHMENT_STEP_ICONS,
   ENRICHMENT_STEP_LABELS,
   EnrichmentLog,
+  EnrichmentStep,
   enrichmentStatusMeta,
   LeadCategory,
   LeadList,
@@ -63,6 +64,70 @@ function errorMessage(err: unknown, fallback: string) {
 
 type Tab = 'verified' | 'ai' | 'mydata';
 
+// ─── Step details with marketing titles & copy ───────────────────
+
+interface StepMarketingMeta {
+  title: string;
+  desc: string;
+  runningText: string;
+  icon: string;
+  glowColor: string;
+}
+
+const ENRICHMENT_STEP_MARKETING: Record<EnrichmentStep, StepMarketingMeta> = {
+  identity_resolution: {
+    title: 'Resolving Digital Footprints',
+    desc: 'Scanning social media registries, domain records, and public directories to map this contact to their authentic web profile.',
+    runningText: 'Cross-referencing domain registers and digital records...',
+    icon: '🔎',
+    glowColor: 'bg-blue-500',
+  },
+  company_fetch: {
+    title: 'Extracting Company Firmographics',
+    desc: 'Connecting to TinyFish database to pull company location, industry tags, headcount, growth history, and active tech stack.',
+    runningText: 'Fetching firmographics, sizing metrics, and technographic stack...',
+    icon: '🏢',
+    glowColor: 'bg-indigo-500',
+  },
+  contact_enrichment: {
+    title: 'Pinpointing Direct Contact Details',
+    desc: 'Locating direct telephone numbers, specific corporate roles, seniority indices, and complete professional backgrounds.',
+    runningText: 'Resolving org hierarchy and direct contact lines...',
+    icon: '👤',
+    glowColor: 'bg-purple-500',
+  },
+  email_verification: {
+    title: 'Validating Email Deliverability',
+    desc: 'Executing triple-pass SMTP handshakes and catch-all validation via Reoon to guarantee inbox deliverability and protect sender reputation.',
+    runningText: 'Opening secure MX port handshake and verifying mailbox...',
+    icon: '📧',
+    glowColor: 'bg-rose-500',
+  },
+  ai_research: {
+    title: 'Executing Deep AI Web Research',
+    desc: 'Deploying custom LLM web scrapers to synthesize company value propositions, active buying signals, and critical pain points.',
+    runningText: 'AI agent crawling homepage and recent news press releases...',
+    icon: '🤖',
+    glowColor: 'bg-teal-500',
+  },
+  ai_scoring: {
+    title: 'Evaluating ICP Fit & Personalizing Angle',
+    desc: 'Correlating profile data points with your workspace scoring model, scoring target fit/intent, and drafting custom opening outreach templates.',
+    runningText: 'Writing personalized outreach hooks and CTA suggestions...',
+    icon: '⭐',
+    glowColor: 'bg-amber-500',
+  },
+};
+
+const stepsOrder: EnrichmentStep[] = [
+  'identity_resolution',
+  'company_fetch',
+  'contact_enrichment',
+  'email_verification',
+  'ai_research',
+  'ai_scoring',
+];
+
 // ─── Confidence badge ─────────────────────────────────────────────
 
 function ConfidenceBadge({ value }: { value: number }) {
@@ -73,6 +138,19 @@ function ConfidenceBadge({ value }: { value: number }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>
       {value}% confidence
+    </span>
+  );
+}
+
+function FieldMetaBadge({ field }: { field?: CanonicalLeadProfile['fields'][string] }) {
+  if (!field) return null;
+  const tone =
+    field.status === 'found' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
+    field.status === 'inferred' ? 'border-violet-200 bg-violet-50 text-violet-700' :
+    'border-slate-200 bg-slate-50 text-slate-500';
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>
+      {field.source} · {field.confidence}% · {field.status.replace('_', ' ')}
     </span>
   );
 }
@@ -105,7 +183,8 @@ export default function LeadDetailPage() {
   // Enrichment state
   const [enrichmentLogs, setEnrichmentLogs] = useState<EnrichmentLog[]>([]);
   const [aiIntelligence, setAiIntelligence] = useState<AiIntelligenceData | null>(null);
-  const [loadingAi, setLoadingAi] = useState(false);
+  const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
+  const [showJourney, setShowJourney] = useState(true);
   const sseRef = useRef<EventSource | null>(null);
 
   // ─── Data loading ───────────────────────────────────────────────
@@ -124,6 +203,12 @@ export default function LeadDetailPage() {
       setNotes(leadData.notes ?? '');
       setCategories(catRes.data.data ?? []);
       setLists(listRes.data.data ?? []);
+      // If it's not active in_progress, collapse the journey panel by default to keep page clean
+      if (leadData.enrichmentStatus !== 'in_progress') {
+        setShowJourney(false);
+      } else {
+        setShowJourney(true);
+      }
     } catch {
       toast.error('Failed to load lead.');
     } finally {
@@ -134,12 +219,14 @@ export default function LeadDetailPage() {
   const loadEnrichmentData = useCallback(async () => {
     if (!id) return;
     try {
-      const [logsRes, aiRes] = await Promise.all([
+      const [logsRes, aiRes, profileRes] = await Promise.all([
         api.get(`/api/leads/${id}/enrichment-logs`),
         api.get(`/api/leads/${id}/ai-intelligence`),
+        api.get(`/api/leads/${id}/profile`),
       ]);
       setEnrichmentLogs(logsRes.data.data ?? []);
       setAiIntelligence(aiRes.data.data ?? null);
+      setCanonicalProfile(profileRes.data.data ?? null);
     } catch {
       // Non-blocking
     }
@@ -157,7 +244,7 @@ export default function LeadDetailPage() {
     if (lead.enrichmentStatus !== 'in_progress') return;
 
     // Connect SSE
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? '';
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001';
     const es = new EventSource(`${baseUrl}/api/leads/${id}/enrichment-status`, { withCredentials: true });
     sseRef.current = es;
 
@@ -233,6 +320,15 @@ export default function LeadDetailPage() {
     </div>
   );
 
+  // Determine current active step log index for progress calculation
+  const completedCount = enrichmentLogs.filter((l) => ['completed', 'skipped'].includes(l.status)).length;
+  const progressPercent = Math.min(100, Math.round((completedCount / 6) * 100));
+
+  // Find the step currently running
+  const runningStepLog = enrichmentLogs.find((l) => l.status === 'in_progress');
+  const runningStepMeta = runningStepLog ? ENRICHMENT_STEP_MARKETING[runningStepLog.step] : null;
+  const profileField = (key: string) => canonicalProfile?.fields?.[key];
+
   // ─── Render ─────────────────────────────────────────────────────
 
   if (loading) {
@@ -265,7 +361,7 @@ export default function LeadDetailPage() {
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-blue-500 to-violet-600 text-2xl font-black text-white shadow-lg">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-blue-500 to-violet-600 text-2xl font-black text-white shadow-lg">
               {contactName.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -298,6 +394,167 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Enrichment Engine Journey Console ─────────────────── */}
+      {lead.enrichmentStatus !== 'not_started' && (
+        <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-linear-to-b from-slate-900 to-slate-950 p-6 shadow-2xl text-white">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="flex items-center justify-between border-b border-slate-800 pb-4 mb-5">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400">
+                <IconSparkles size={18} className={lead.enrichmentStatus === 'in_progress' ? 'animate-spin' : ''} />
+              </div>
+              <div>
+                <h2 className="text-sm font-black tracking-wider uppercase text-slate-200">
+                  LeadHub AI Enrichment Journey
+                </h2>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Multipass synthesis engine running through direct firmographics, verification, and agent intelligence.
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowJourney(!showJourney)}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/55 px-3 py-1.5 text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            >
+              {showJourney ? 'Collapse Journey' : 'Expand Journey'}
+              {showJourney ? <IconChevronUp size={14} /> : <IconChevronDown size={14} />}
+            </button>
+          </div>
+
+          {showJourney && (
+            <div className="space-y-6">
+              {/* Overall Progress Section */}
+              <div className="grid gap-4 md:grid-cols-[1.4fr_1fr] bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl">
+                <div>
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <span className="font-bold text-slate-300">Enrichment Orchestration Pipeline</span>
+                    <span className="font-mono font-bold text-blue-400">{progressPercent}% Completed</span>
+                  </div>
+                  <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-linear-to-r from-blue-500 to-indigo-500 transition-all duration-500"
+                      style={{ width: `${progressPercent}%` }}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col justify-center border-t md:border-t-0 md:border-l border-slate-800 pt-3 md:pt-0 md:pl-4 text-xs">
+                  {lead.enrichmentStatus === 'in_progress' && runningStepMeta ? (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider font-bold text-blue-400 flex items-center gap-1.5 animate-pulse">
+                        <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
+                        Active Process: {runningStepMeta.title}
+                      </p>
+                      <p className="text-slate-300 text-[11px] mt-1 font-mono italic truncate">
+                        {runningStepLog?.message || runningStepMeta.runningText}
+                      </p>
+                    </div>
+                  ) : lead.enrichmentStatus === 'completed' ? (
+                    <div className="text-emerald-400 font-bold flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">✓</span>
+                      <span>Pipeline Completed Successfully</span>
+                    </div>
+                  ) : lead.enrichmentStatus === 'failed' ? (
+                    <div className="text-rose-400 font-bold flex items-center gap-2">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs">✕</span>
+                      <span className="truncate">Pipeline Terminated: {lead.enrichmentError || 'Process error'}</span>
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 font-bold flex items-center gap-2">
+                      <span>Pipeline Idle</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step By Step Grid Visualizer */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {stepsOrder.map((step, idx) => {
+                  const log = enrichmentLogs.find((l) => l.step === step);
+                  const marketing = ENRICHMENT_STEP_MARKETING[step];
+                  const stepNum = idx + 1;
+
+                  // Determine status styling
+                  let statusText = 'Pending';
+                  let statusColor = 'text-slate-500 border-slate-800 bg-slate-950/20';
+                  let isWorking = false;
+
+                  if (log) {
+                    if (log.status === 'completed') {
+                      statusText = 'Completed';
+                      statusColor = 'border-emerald-500/30 bg-emerald-950/20 text-emerald-400';
+                    } else if (log.status === 'failed') {
+                      statusText = 'Failed';
+                      statusColor = 'border-rose-500/30 bg-rose-950/20 text-rose-400';
+                    } else if (log.status === 'skipped') {
+                      statusText = 'Skipped';
+                      statusColor = 'border-slate-800 bg-slate-900/40 text-slate-400';
+                    } else if (log.status === 'in_progress') {
+                      statusText = 'Running';
+                      statusColor = 'border-blue-500/40 bg-blue-950/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.1)]';
+                      isWorking = true;
+                    }
+                  } else if (lead.enrichmentStatus === 'in_progress') {
+                    // Check if previous step is active or failed
+                    const prevLogs = enrichmentLogs.filter((l) => stepsOrder.indexOf(l.step) < idx);
+                    const anyFailed = prevLogs.some((l) => l.status === 'failed');
+                    if (anyFailed) {
+                      statusText = 'Skipped';
+                      statusColor = 'border-slate-800 bg-slate-900/10 text-slate-600';
+                    }
+                  }
+
+                  return (
+                    <div
+                      key={step}
+                      className={`relative flex flex-col rounded-2xl border p-4 transition-all duration-300 ${
+                        isWorking ? 'border-blue-500/40 scale-[1.01]' : 'border-slate-800 bg-slate-900/30'
+                      }`}
+                    >
+                      {/* Step index badge */}
+                      <span className="absolute top-3 right-3 font-mono text-[9px] font-bold text-slate-600">
+                        Step 0{stepNum}/06
+                      </span>
+
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-xl">{marketing.icon}</span>
+                        <h3 className="text-xs font-bold text-slate-100">{marketing.title}</h3>
+                      </div>
+
+                      <p className="text-[11px] text-slate-400 leading-relaxed flex-1">
+                        {marketing.desc}
+                      </p>
+
+                      {/* Log output / feedback line */}
+                      {log && (log.message || log.error) && (
+                        <div className="mt-3 rounded bg-slate-950/80 p-2 font-mono text-[10px] border border-slate-850">
+                          <p className={`line-clamp-2 ${log.error ? 'text-rose-400' : 'text-slate-300'}`}>
+                            {log.error ? `Error: ${log.error}` : log.message}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="mt-3 flex items-center justify-between border-t border-slate-800/80 pt-2.5 text-[10px]">
+                        <span className={`rounded-full border px-2 py-0.5 font-bold uppercase tracking-wider text-[9px] ${statusColor}`}>
+                          {isWorking && <IconLoader2 size={8} className="animate-spin inline mr-1" />}
+                          {statusText}
+                        </span>
+                        {log?.duration && (
+                          <span className="text-slate-500 font-mono">{(log.duration / 1000).toFixed(2)}s elapsed</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         {/* ── Main content ────────────────────────────────────── */}
@@ -335,16 +592,19 @@ export default function LeadDetailPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    ['Name', lead.company?.name],
-                    ['Domain', lead.company?.domain],
-                    ['Industry', lead.company?.industry],
-                    ['Size', lead.company?.size],
-                    ['Location', [lead.company?.location?.city, lead.company?.location?.country].filter(Boolean).join(', ')],
-                    ['LinkedIn', (lead.company?.socialLinks as Record<string, string>)?.linkedin],
-                  ].map(([label, val]) => val ? (
+                    ['Name', lead.company?.name, 'company.identity.companyName'],
+                    ['Domain', lead.company?.domain, 'company.identity.website'],
+                    ['Website', lead.company?.website, 'company.identity.website'],
+                    ['Industry', lead.company?.industry, 'company.profile.industry'],
+                    ['Size', lead.company?.size, 'company.profile.companySize'],
+                    ['Founded', lead.company?.foundedYear?.toString(), 'company.profile.foundedYear'],
+                    ['Location', [lead.company?.location?.city, lead.company?.location?.country].filter(Boolean).join(', '), 'company.profile.headquarters'],
+                    ['LinkedIn', (lead.company?.socialLinks as Record<string, string>)?.linkedin, 'company.social.linkedin'],
+                  ].map(([label, val, fieldKey]) => val ? (
                     <div key={label as string} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-800 break-words">{val as string}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-800 wrap-break-word">{val as string}</p>
+                      <div className="mt-2"><FieldMetaBadge field={profileField(fieldKey as string)} /></div>
                     </div>
                   ) : null)}
                 </div>
@@ -362,6 +622,37 @@ export default function LeadDetailPage() {
                         <span key={t} className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t}</span>
                       ))}
                     </div>
+                    <div className="mt-2"><FieldMetaBadge field={profileField('company.technology.techStack')} /></div>
+                  </div>
+                )}
+                {(['products', 'services'] as const).map((key) => {
+                  const values = lead.company?.[key] ?? [];
+                  if (!values.length) return null;
+                  const fieldKey = key === 'products' ? 'company.products.products' : 'company.products.services';
+                  return (
+                    <div key={key} className="mt-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{key}</p>
+                        <FieldMetaBadge field={profileField(fieldKey)} />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {values.map((value) => (
+                          <span key={value} className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">{value}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+                {(lead.company?.sourceHistory?.length ?? 0) > 0 && (
+                  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Source History</p>
+                    <ul className="mt-2 space-y-1">
+                      {lead.company!.sourceHistory!.slice(-3).map((entry, index) => (
+                        <li key={`${entry.source}-${entry.at}-${index}`} className="text-[11px] text-slate-600">
+                          <span className="font-bold">{entry.source}</span> found {entry.fields.join(', ') || 'no fields'} on {formatDate(entry.at)}.
+                        </li>
+                      ))}
+                    </ul>
                   </div>
                 )}
               </div>
@@ -374,14 +665,15 @@ export default function LeadDetailPage() {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
-                    ['Name', [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ')],
-                    ['Role', lead.contact?.role],
-                    ['Phone', lead.contact?.phone],
-                    ['LinkedIn', lead.contact?.linkedinUrl],
-                  ].map(([label, val]) => val ? (
+                    ['Name', [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' '), 'contact.profile.fullName'],
+                    ['Role', lead.contact?.role, 'contact.profile.jobTitle'],
+                    ['Phone', lead.contact?.phone, 'contact.profile.phone'],
+                    ['LinkedIn', lead.contact?.linkedinUrl, 'contact.profile.linkedinProfile'],
+                  ].map(([label, val, fieldKey]) => val ? (
                     <div key={label as string} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-800 break-words">{val as string}</p>
+                      <p className="mt-0.5 text-sm font-semibold text-slate-800 wrap-break-word">{val as string}</p>
+                      <div className="mt-2"><FieldMetaBadge field={profileField(fieldKey as string)} /></div>
                     </div>
                   ) : null)}
                 </div>
@@ -391,6 +683,7 @@ export default function LeadDetailPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
                       <p className="mt-0.5 text-sm font-semibold text-slate-800">{lead.contact.email}</p>
+                      <div className="mt-2"><FieldMetaBadge field={profileField('contact.profile.email')} /></div>
                     </div>
                     {lead.contact.emailVerificationStatus && (
                       <span className={`rounded-full border px-2 py-1 text-[10px] font-bold capitalize ${
@@ -448,6 +741,40 @@ export default function LeadDetailPage() {
                       <p className="text-sm text-slate-700 leading-relaxed">{aiIntelligence.companySummary.value}</p>
                     </div>
                   )}
+                  {aiIntelligence.personSummary && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="mb-2 flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Person Summary</h3>
+                        <ConfidenceBadge value={aiIntelligence.personSummary.confidence} />
+                      </div>
+                      <p className="text-sm text-slate-700 leading-relaxed">{aiIntelligence.personSummary.value}</p>
+                    </div>
+                  )}
+
+                  {(aiIntelligence.buyingIntent || aiIntelligence.productFit) && (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {aiIntelligence.buyingIntent && (
+                        <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
+                          <div className="mb-2 flex items-center justify-between">
+                            <h3 className="text-xs font-black uppercase tracking-wider text-amber-800">Buying Intent</h3>
+                            <ConfidenceBadge value={aiIntelligence.buyingIntent.confidence} />
+                          </div>
+                          <p className="text-2xl font-black text-amber-900">{aiIntelligence.buyingIntent.score}%</p>
+                          <p className="mt-1 text-xs text-slate-700">{aiIntelligence.buyingIntent.value}</p>
+                        </div>
+                      )}
+                      {aiIntelligence.productFit && (
+                        <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
+                          <div className="mb-2 flex items-center justify-between">
+                            <h3 className="text-xs font-black uppercase tracking-wider text-blue-800">Product Fit</h3>
+                            <ConfidenceBadge value={aiIntelligence.productFit.confidence} />
+                          </div>
+                          <p className="text-2xl font-black text-blue-900">{aiIntelligence.productFit.score}%</p>
+                          <p className="mt-1 text-xs text-slate-700">{aiIntelligence.productFit.value}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Pain Points + Buying Signals */}
                   <div className="grid gap-4 md:grid-cols-2">
@@ -483,6 +810,28 @@ export default function LeadDetailPage() {
                     )}
                   </div>
 
+                  {(aiIntelligence.likelyChallenges || aiIntelligence.growthOpportunities || aiIntelligence.recentActivity) && (
+                    <div className="grid gap-4 md:grid-cols-3">
+                      {[
+                        { title: 'Likely Challenges', field: aiIntelligence.likelyChallenges, tone: 'border-rose-100 bg-rose-50/40 text-rose-800' },
+                        { title: 'Growth Opportunities', field: aiIntelligence.growthOpportunities, tone: 'border-emerald-100 bg-emerald-50/40 text-emerald-800' },
+                        { title: 'Recent Activity', field: aiIntelligence.recentActivity, tone: 'border-sky-100 bg-sky-50/40 text-sky-800' },
+                      ].map(({ title, field, tone }) => field ? (
+                        <div key={title} className={`rounded-2xl border p-4 ${tone}`}>
+                          <div className="mb-3 flex items-center justify-between">
+                            <h3 className="text-xs font-black uppercase tracking-wider">{title}</h3>
+                            <ConfidenceBadge value={field.confidence} />
+                          </div>
+                          <ul className="space-y-1.5">
+                            {field.value.map((item, i) => (
+                              <li key={i} className="text-xs text-slate-700">{item}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      ) : null)}
+                    </div>
+                  )}
+
                   {/* Outreach Angle + Insights */}
                   {aiIntelligence.recommendedOutreachAngle && (
                     <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
@@ -509,6 +858,25 @@ export default function LeadDetailPage() {
                     </div>
                   )}
 
+                  {aiIntelligence.personaAnalysis && (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Persona Analysis</h3>
+                        <ConfidenceBadge value={aiIntelligence.personaAnalysis.confidence} />
+                      </div>
+                      <dl className="grid gap-2 sm:grid-cols-2">
+                        {Object.entries(aiIntelligence.personaAnalysis.value).map(([key, value]) => (
+                          <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                            <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{key}</dt>
+                            <dd className="mt-1 text-xs text-slate-700">
+                              {Array.isArray(value) ? value.join(', ') : String(value)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )}
+
                   {/* Email Copy */}
                   {(aiIntelligence.suggestedEmailOpening || aiIntelligence.suggestedCta) && (
                     <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 space-y-3">
@@ -516,13 +884,26 @@ export default function LeadDetailPage() {
                       {aiIntelligence.suggestedEmailOpening && (
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Opening</p>
-                          <p className="text-sm text-slate-700 italic">"{aiIntelligence.suggestedEmailOpening.value}"</p>
+                          <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedEmailOpening.value}</p>
                         </div>
                       )}
                       {aiIntelligence.suggestedCta && (
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Call To Action</p>
-                          <p className="text-sm text-slate-700 italic">"{aiIntelligence.suggestedCta.value}"</p>
+                          <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedCta.value}</p>
+                        </div>
+                      )}
+                      {aiIntelligence.personalizationNotes && (
+                        <div>
+                          <div className="mb-1 flex items-center justify-between">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Personalization Notes</p>
+                            <ConfidenceBadge value={aiIntelligence.personalizationNotes.confidence} />
+                          </div>
+                          <ul className="space-y-1">
+                            {aiIntelligence.personalizationNotes.value.map((note, i) => (
+                              <li key={i} className="text-xs text-slate-700">{note}</li>
+                            ))}
+                          </ul>
                         </div>
                       )}
                     </div>
