@@ -7,26 +7,32 @@ import { IconKey, IconTrash, IconCheck, IconAlertTriangle, IconRefresh } from '@
 
 interface ApiKeyRecord {
   id: string;
-  provider: 'apollo' | 'apify' | 'openai' | 'leadsnipper';
+  provider: 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper';
   maskedKey: string;
   isValid: boolean;
   lastTestedAt?: string;
   createdAt: string;
 }
 
+type LlmMode = 'openai' | 'gemini' | 'mix';
+
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [provider, setProvider] = useState<'apollo' | 'apify' | 'openai' | 'leadsnipper'>('apollo');
+  const [provider, setProvider] = useState<'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper'>('apollo');
   const [keyValue, setKeyValue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [llmMode, setLlmMode] = useState<LlmMode>('openai');
+  const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
+  const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
-    fetchKeys();
+    void Promise.all([fetchKeys(), fetchPreferences()]);
   }, []);
 
-  const fetchKeys = async () => {
+  async function fetchKeys() {
     try {
       setLoading(true);
       const res = await api.get('/api/api-keys');
@@ -36,7 +42,7 @@ export default function ApiKeysPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,10 +53,41 @@ export default function ApiKeysPage() {
       toast.success('API key saved successfully.');
       setKeyValue('');
       fetchKeys();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message ?? 'Failed to save API key.');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? 'Failed to save API key.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  async function fetchPreferences() {
+    try {
+      const res = await api.get('/api/api-keys/preferences');
+      const data = res.data.data;
+      setLlmMode(data.llmMode ?? 'openai');
+      setOpenaiModel(data.openaiModel ?? 'gpt-4o-mini');
+      setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
+    } catch {
+      toast.error('Failed to load LLM preferences.');
+    }
+  }
+
+  const savePreferences = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingPrefs(true);
+    try {
+      await api.put('/api/api-keys/preferences', {
+        llmMode,
+        openaiModel,
+        geminiModel,
+      });
+      toast.success('LLM preferences updated.');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? 'Failed to save LLM preferences.');
+    } finally {
+      setSavingPrefs(false);
     }
   };
 
@@ -106,12 +143,13 @@ export default function ApiKeysPage() {
               <select
                 id="provider"
                 value={provider}
-                onChange={(e: any) => setProvider(e.target.value)}
+                onChange={(e) => setProvider(e.target.value as 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper')}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
               >
                 <option value="apollo">Apollo API</option>
                 <option value="apify">Apify Platform</option>
                 <option value="openai">OpenAI Platform</option>
+                <option value="gemini">Gemini Platform</option>
                 <option value="leadsnipper">LeadSniper API</option>
               </select>
             </div>
@@ -139,8 +177,58 @@ export default function ApiKeysPage() {
           </form>
         </div>
 
+        <div className="md:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-xl shadow-input">
+          <h2 className="text-sm font-semibold text-text-100">LLM Routing</h2>
+          <p className="text-[11px] text-text-300">
+            Mix mode routes simple tasks to Gemini and important scoring decisions to OpenAI.
+          </p>
+          <form onSubmit={savePreferences} className="space-y-4">
+            <div className="space-y-1">
+              <label htmlFor="llmMode" className="text-xs font-semibold text-text-200">Mode</label>
+              <select
+                id="llmMode"
+                value={llmMode}
+                onChange={(e) => setLlmMode(e.target.value as LlmMode)}
+                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+              >
+                <option value="openai">OpenAI only</option>
+                <option value="gemini">Gemini only</option>
+                <option value="mix">Mix mode (dynamic)</option>
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
+              <input
+                id="openaiModel"
+                value={openaiModel}
+                onChange={(e) => setOpenaiModel(e.target.value)}
+                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
+              <input
+                id="geminiModel"
+                value={geminiModel}
+                onChange={(e) => setGeminiModel(e.target.value)}
+                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={savingPrefs}
+              className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
+            >
+              {savingPrefs ? 'Saving...' : 'Save LLM Settings'}
+            </button>
+          </form>
+        </div>
+
         {/* List panel */}
-        <div className="md:col-span-2 space-y-4">
+        <div className="md:col-span-1 space-y-4">
           {loading ? (
             <div className="space-y-3">
               <div className="h-16 skeleton" />
