@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   IconArrowLeft,
@@ -13,6 +13,20 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { FieldMappingPanel } from '../../../../components/leads/FieldMappingPanel';
+import {
+  ImportDestinationFields,
+  parseTagInput,
+} from '../../../../components/leads/ImportDestinationFields';
+import type { LeadCategory, LeadList } from '../../../../components/leads/types';
+import {
+  APOLLO_DEFAULT_MAPPING,
+  applyFieldMapping,
+  detectFieldMapping,
+  getDefaultMappingForSource,
+  isUsableMappedLead,
+  type FieldMapping,
+} from '../../../../lib/lead-field-mapping';
 
 type ProviderKey = {
   id: string;
@@ -29,6 +43,7 @@ type ApolloPreviewLead = {
   contactName?: string;
   contactRole?: string;
   linkedinUrl?: string;
+  location?: string;
   apolloContactId?: string;
   apolloPersonId?: string;
 };
@@ -37,6 +52,14 @@ type ApolloPreview = {
   contacts: ApolloPreviewLead[];
   people: ApolloPreviewLead[];
 };
+
+type ApifyPreview = {
+  items: Record<string, unknown>[];
+  sourceFields: string[];
+  sampleCount: number;
+};
+
+const APOLLO_SOURCE_FIELDS = ['contactName', 'email', 'contactRole', 'linkedinUrl', 'location', 'companyName', 'domain'];
 
 function errorMessage(err: unknown, fallback: string) {
   if (typeof err === 'object' && err && 'response' in err) {
@@ -52,20 +75,67 @@ export default function LeadSyncPage() {
   const [apolloKeywords, setApolloKeywords] = useState('');
   const [apolloModalOpen, setApolloModalOpen] = useState(false);
   const [apolloPreview, setApolloPreview] = useState<ApolloPreview | null>(null);
+  const [apolloMapping, setApolloMapping] = useState<FieldMapping>({ ...APOLLO_DEFAULT_MAPPING });
+  const [apolloStep, setApolloStep] = useState<'select' | 'mapping'>('select');
   const [selectedContactKeys, setSelectedContactKeys] = useState<Set<string>>(new Set());
   const [selectedPeopleKeys, setSelectedPeopleKeys] = useState<Set<string>>(new Set());
   const [importAllContacts, setImportAllContacts] = useState(true);
   const [importAllPeople, setImportAllPeople] = useState(false);
+
   const [apifyActorId, setApifyActorId] = useState('apify/web-scraper');
   const [apifyInput, setApifyInput] = useState('{\n  "startUrls": []\n}');
   const [apifyLimit, setApifyLimit] = useState(100);
-  const [loading, setLoading] = useState<'keys' | 'apollo-preview' | 'apollo-import' | 'apify' | null>(null);
+  const [apifyModalOpen, setApifyModalOpen] = useState(false);
+  const [apifyPreview, setApifyPreview] = useState<ApifyPreview | null>(null);
+  const [apifyMapping, setApifyMapping] = useState<FieldMapping>({});
+  const [apifyConfidence, setApifyConfidence] = useState<ReturnType<typeof detectFieldMapping>['confidence']>({});
+
+  const [loading, setLoading] = useState<'keys' | 'apollo-preview' | 'apollo-import' | 'apify-preview' | 'apify-import' | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+
+  const [lists, setLists] = useState<LeadList[]>([]);
+  const [categories, setCategories] = useState<LeadCategory[]>([]);
+  const [listId, setListId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [tags, setTags] = useState('');
 
   const apolloKey = keys.find((key) => key.provider === 'apollo');
   const apifyKey = keys.find((key) => key.provider === 'apify');
   const apolloEnabled = !!apolloKey?.isValid;
   const apifyEnabled = !!apifyKey?.isValid;
+
+  const destinationPayload = () => {
+    const parsedTags = parseTagInput(tags);
+    return {
+      listId: listId || undefined,
+      categoryId: categoryId || undefined,
+      tags: parsedTags.length > 0 ? parsedTags : undefined,
+    };
+  };
+
+  const selectedApolloLeads = useMemo(() => {
+    if (!apolloPreview) return [];
+    const contacts = importAllContacts
+      ? apolloPreview.contacts
+      : apolloPreview.contacts.filter((lead) => selectedContactKeys.has(lead.key));
+    const people = importAllPeople
+      ? apolloPreview.people
+      : apolloPreview.people.filter((lead) => selectedPeopleKeys.has(lead.key));
+    return [...contacts, ...people];
+  }, [apolloPreview, importAllContacts, importAllPeople, selectedContactKeys, selectedPeopleKeys]);
+
+  const apolloMappedPreview = useMemo(() => {
+    return selectedApolloLeads
+      .map((lead) => applyFieldMapping(lead as Record<string, unknown>, apolloMapping))
+      .filter(isUsableMappedLead);
+  }, [selectedApolloLeads, apolloMapping]);
+
+  const apifyMappedPreview = useMemo(() => {
+    if (!apifyPreview) return [];
+    return apifyPreview.items
+      .map((item) => applyFieldMapping(item, apifyMapping))
+      .filter(isUsableMappedLead);
+  }, [apifyPreview, apifyMapping]);
 
   async function fetchKeys() {
     try {
@@ -79,9 +149,23 @@ export default function LeadSyncPage() {
     }
   }
 
+  async function fetchDestinations() {
+    try {
+      const [listsRes, categoriesRes] = await Promise.all([
+        api.get('/api/lists'),
+        api.get('/api/categories'),
+      ]);
+      setLists(listsRes.data.data ?? []);
+      setCategories(categoriesRes.data.data ?? []);
+    } catch {
+      // non-blocking
+    }
+  }
+
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchKeys();
+    void fetchDestinations();
   }, []);
 
   const apolloFilters = () => ({
@@ -95,6 +179,8 @@ export default function LeadSyncPage() {
     if (!apolloEnabled) return;
     setApolloModalOpen(true);
     setApolloPreview(null);
+    setApolloStep('select');
+    setApolloMapping({ ...APOLLO_DEFAULT_MAPPING });
     setSelectedContactKeys(new Set());
     setSelectedPeopleKeys(new Set());
     setImportAllContacts(true);
@@ -126,6 +212,8 @@ export default function LeadSyncPage() {
         peopleKeys: Array.from(selectedPeopleKeys),
         importAllContacts,
         importAllPeople,
+        fieldMapping: apolloMapping,
+        ...destinationPayload(),
       });
       setJobId(res.data.data?.jobId);
       setApolloModalOpen(false);
@@ -137,20 +225,48 @@ export default function LeadSyncPage() {
     }
   };
 
-  const syncApify = async () => {
+  const openApifyModal = async () => {
     if (!apifyEnabled) return;
+    setApifyModalOpen(true);
+    setApifyPreview(null);
     try {
-      setLoading('apify');
+      setLoading('apify-preview');
       const actorInput = apifyInput.trim() ? JSON.parse(apifyInput) : {};
-      const res = await api.post('/api/sync/apify', {
+      const res = await api.post('/api/sync/apify/preview', {
+        actorId: apifyActorId,
+        actorInput,
+        sampleLimit: 5,
+      });
+      const preview = res.data.data as ApifyPreview;
+      const detected = getDefaultMappingForSource('apify', preview.sourceFields);
+      setApifyPreview(preview);
+      setApifyMapping(detected.mapping);
+      setApifyConfidence(detected.confidence);
+      toast.success(`Loaded ${preview.sampleCount} sample rows from Apify. Review field mapping.`);
+    } catch (err) {
+      toast.error(errorMessage(err, 'Apify preview failed. Check JSON input.'));
+      setApifyModalOpen(false);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const importApifySelection = async () => {
+    try {
+      setLoading('apify-import');
+      const actorInput = apifyInput.trim() ? JSON.parse(apifyInput) : {};
+      const res = await api.post('/api/sync/apify/import', {
         actorId: apifyActorId,
         actorInput,
         estimatedCount: apifyLimit,
+        fieldMapping: apifyMapping,
+        ...destinationPayload(),
       });
       setJobId(res.data.data?.jobId);
-      toast.success('Apify sync started.');
+      setApifyModalOpen(false);
+      toast.success('Apify import started.');
     } catch (err) {
-      toast.error(errorMessage(err, 'Apify sync failed. Check JSON input.'));
+      toast.error(errorMessage(err, 'Apify import failed.'));
     } finally {
       setLoading(null);
     }
@@ -164,9 +280,9 @@ export default function LeadSyncPage() {
 
       <section className="rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#ede9fe,transparent_28%),linear-gradient(135deg,#fff,#f8fafc)] p-6 shadow-sm">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Provider Sync</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Sync Apollo and Apify independently.</h1>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Sync Apollo and Apify with field mapping.</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Apollo opens a review modal for saved contacts and exported people. Apify runs its actor flow directly.
+          Preview integration data, review auto-detected field mapping, adjust mappings if needed, then import enrichment-ready leads.
         </p>
       </section>
 
@@ -181,7 +297,7 @@ export default function LeadSyncPage() {
           <ProviderHeader
             icon={<IconSparkles size={22} />}
             title="Apollo Sync"
-            subtitle="Preview saved contacts and exported people before importing."
+            subtitle="Preview contacts, review field mapping, then import."
             enabled={apolloEnabled}
             keyLabel={apolloKey?.maskedKey}
             missingLabel={apolloKey ? 'Test Apollo key to enable sync' : 'Add Apollo API key to enable sync'}
@@ -219,7 +335,7 @@ export default function LeadSyncPage() {
           <ProviderHeader
             icon={<IconRefresh size={22} />}
             title="Apify Sync"
-            subtitle="Run a configured Apify actor and merge returned records as leads."
+            subtitle="Preview actor output, map fields, then import."
             enabled={apifyEnabled}
             keyLabel={apifyKey?.maskedKey}
             missingLabel={apifyKey ? 'Test Apify key to enable sync' : 'Add Apify API key to enable sync'}
@@ -234,9 +350,9 @@ export default function LeadSyncPage() {
           <label className="mt-4 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Actor input JSON</label>
           <textarea value={apifyInput} onChange={(event) => setApifyInput(event.target.value)} rows={8} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-950 p-3 font-mono text-xs text-slate-100 outline-none focus:border-violet-300" />
 
-          <button onClick={syncApify} disabled={!apifyEnabled || loading !== null} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-black text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500">
-            {loading === 'apify' ? <IconLoader2 size={16} className="animate-spin" /> : <IconRefresh size={16} />}
-            Start Apify Sync
+          <button onClick={openApifyModal} disabled={!apifyEnabled || loading !== null} className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 text-sm font-black text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500">
+            {loading === 'apify-preview' ? <IconLoader2 size={16} className="animate-spin" /> : <IconRefresh size={16} />}
+            Preview & Map Apify Fields
           </button>
         </section>
       </div>
@@ -245,6 +361,12 @@ export default function LeadSyncPage() {
         <ApolloModal
           preview={apolloPreview}
           loading={loading}
+          step={apolloStep}
+          setStep={setApolloStep}
+          mapping={apolloMapping}
+          setMapping={setApolloMapping}
+          mappedPreview={apolloMappedPreview}
+          selectedPreviewRows={selectedApolloLeads}
           importAllContacts={importAllContacts}
           importAllPeople={importAllPeople}
           selectedContactKeys={selectedContactKeys}
@@ -255,6 +377,35 @@ export default function LeadSyncPage() {
           setSelectedPeopleKeys={setSelectedPeopleKeys}
           onClose={() => setApolloModalOpen(false)}
           onImport={importApolloSelection}
+          lists={lists}
+          categories={categories}
+          listId={listId}
+          categoryId={categoryId}
+          tags={tags}
+          onListIdChange={setListId}
+          onCategoryIdChange={setCategoryId}
+          onTagsChange={setTags}
+        />
+      )}
+
+      {apifyModalOpen && (
+        <ApifyModal
+          preview={apifyPreview}
+          loading={loading}
+          mapping={apifyMapping}
+          confidence={apifyConfidence}
+          mappedPreview={apifyMappedPreview}
+          setMapping={setApifyMapping}
+          onClose={() => setApifyModalOpen(false)}
+          onImport={importApifySelection}
+          lists={lists}
+          categories={categories}
+          listId={listId}
+          categoryId={categoryId}
+          tags={tags}
+          onListIdChange={setListId}
+          onCategoryIdChange={setCategoryId}
+          onTagsChange={setTags}
         />
       )}
     </div>
@@ -295,6 +446,12 @@ function ProviderHeader({
 function ApolloModal({
   preview,
   loading,
+  step,
+  setStep,
+  mapping,
+  setMapping,
+  mappedPreview,
+  selectedPreviewRows,
   importAllContacts,
   importAllPeople,
   selectedContactKeys,
@@ -305,9 +462,23 @@ function ApolloModal({
   setSelectedPeopleKeys,
   onClose,
   onImport,
+  lists,
+  categories,
+  listId,
+  categoryId,
+  tags,
+  onListIdChange,
+  onCategoryIdChange,
+  onTagsChange,
 }: {
   preview: ApolloPreview | null;
   loading: string | null;
+  step: 'select' | 'mapping';
+  setStep: (step: 'select' | 'mapping') => void;
+  mapping: FieldMapping;
+  setMapping: (mapping: FieldMapping) => void;
+  mappedPreview: ReturnType<typeof applyFieldMapping>[];
+  selectedPreviewRows: ApolloPreviewLead[];
   importAllContacts: boolean;
   importAllPeople: boolean;
   selectedContactKeys: Set<string>;
@@ -318,6 +489,14 @@ function ApolloModal({
   setSelectedPeopleKeys: React.Dispatch<React.SetStateAction<Set<string>>>;
   onClose: () => void;
   onImport: () => void;
+  lists: LeadList[];
+  categories: LeadCategory[];
+  listId: string;
+  categoryId: string;
+  tags: string;
+  onListIdChange: (value: string) => void;
+  onCategoryIdChange: (value: string) => void;
+  onTagsChange: (value: string) => void;
 }) {
   const selectedCount =
     (importAllContacts ? preview?.contacts.length ?? 0 : selectedContactKeys.size) +
@@ -325,12 +504,13 @@ function ApolloModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
-      <div className="flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-slate-200 p-5">
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Apollo review</p>
-            <h2 className="mt-1 text-2xl font-black text-slate-950">Choose contacts and exported people to import</h2>
-            <p className="mt-1 text-xs text-slate-500">People already present as contacts are hidden from the people list.</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">
+              {step === 'select' ? 'Choose records to import' : 'Review Apollo field mapping'}
+            </h2>
           </div>
           <button onClick={onClose} className="rounded-full border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
             <IconX size={18} />
@@ -344,7 +524,7 @@ function ApolloModal({
               <p className="mt-3 text-sm font-bold text-slate-700">Fetching Apollo contacts and exported people...</p>
             </div>
           </div>
-        ) : (
+        ) : step === 'select' ? (
           <>
             <div className="grid min-h-0 flex-1 gap-4 overflow-hidden p-5 lg:grid-cols-2">
               <ApolloSelectionPanel
@@ -366,18 +546,155 @@ function ApolloModal({
                 setSelectedKeys={setSelectedPeopleKeys}
               />
             </div>
-
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-4">
               <div className="text-sm text-slate-600">
-                <span className="font-black text-slate-950">{selectedCount}</span> Apollo records selected for import.
+                <span className="font-black text-slate-950">{selectedCount}</span> Apollo records selected.
               </div>
               <div className="flex gap-2">
                 <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
                   Cancel
                 </button>
-                <button onClick={onImport} disabled={selectedCount === 0 || loading === 'apollo-import'} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500">
-                  {loading === 'apollo-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
-                  Import selected
+                <button
+                  onClick={() => setStep('mapping')}
+                  disabled={selectedCount === 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40"
+                >
+                  Continue to mapping
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 thin-scrollbar">
+              <FieldMappingPanel
+                sourceLabel="Apollo"
+                sourceFields={APOLLO_SOURCE_FIELDS}
+                mapping={mapping}
+                onMappingChange={setMapping}
+                previewRows={selectedPreviewRows.slice(0, 5) as Record<string, unknown>[]}
+                mappedPreviewRows={mappedPreview}
+                sampleSize={5}
+              />
+              <ImportDestinationFields
+                lists={lists}
+                categories={categories}
+                listId={listId}
+                categoryId={categoryId}
+                tags={tags}
+                onListIdChange={onListIdChange}
+                onCategoryIdChange={onCategoryIdChange}
+                onTagsChange={onTagsChange}
+                compact
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-4">
+              <button onClick={() => setStep('select')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                Back
+              </button>
+              <button onClick={onImport} disabled={selectedCount === 0 || loading === 'apollo-import'} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40">
+                {loading === 'apollo-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
+                Import {selectedCount} records
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ApifyModal({
+  preview,
+  loading,
+  mapping,
+  confidence,
+  mappedPreview,
+  setMapping,
+  onClose,
+  onImport,
+  lists,
+  categories,
+  listId,
+  categoryId,
+  tags,
+  onListIdChange,
+  onCategoryIdChange,
+  onTagsChange,
+}: {
+  preview: ApifyPreview | null;
+  loading: string | null;
+  mapping: FieldMapping;
+  confidence: ReturnType<typeof detectFieldMapping>['confidence'];
+  mappedPreview: ReturnType<typeof applyFieldMapping>[];
+  setMapping: (mapping: FieldMapping) => void;
+  onClose: () => void;
+  onImport: () => void;
+  lists: LeadList[];
+  categories: LeadCategory[];
+  listId: string;
+  categoryId: string;
+  tags: string;
+  onListIdChange: (value: string) => void;
+  onCategoryIdChange: (value: string) => void;
+  onTagsChange: (value: string) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-slate-200 p-5">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Apify field mapping</p>
+            <h2 className="mt-1 text-2xl font-black text-slate-950">Review how Apify fields map to LeadHub</h2>
+          </div>
+          <button onClick={onClose} className="rounded-full border border-slate-200 p-2 text-slate-500 hover:bg-slate-50">
+            <IconX size={18} />
+          </button>
+        </div>
+
+        {loading === 'apify-preview' || !preview ? (
+          <div className="grid min-h-[420px] place-items-center">
+            <div className="text-center">
+              <IconLoader2 size={28} className="mx-auto animate-spin text-violet-600" />
+              <p className="mt-3 text-sm font-bold text-slate-700">Running Apify preview...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 thin-scrollbar">
+              <FieldMappingPanel
+                sourceLabel="Apify"
+                sourceFields={preview.sourceFields}
+                mapping={mapping}
+                confidence={confidence}
+                onMappingChange={setMapping}
+                previewRows={preview.items}
+                mappedPreviewRows={mappedPreview}
+                sampleSize={5}
+              />
+              <ImportDestinationFields
+                lists={lists}
+                categories={categories}
+                listId={listId}
+                categoryId={categoryId}
+                tags={tags}
+                onListIdChange={onListIdChange}
+                onCategoryIdChange={onCategoryIdChange}
+                onTagsChange={onTagsChange}
+                compact
+              />
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 p-4">
+              <div className="text-sm text-slate-600">
+                Previewed <span className="font-black text-slate-950">{preview.sampleCount}</span> sample rows. Full import uses your configured limit.
+              </div>
+              <div className="flex gap-2">
+                <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
+                  Cancel
+                </button>
+                <button onClick={onImport} disabled={loading === 'apify-import'} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white hover:bg-violet-700 disabled:opacity-40">
+                  {loading === 'apify-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
+                  Import with mapping
                 </button>
               </div>
             </div>

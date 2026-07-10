@@ -22,8 +22,11 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   onboardingStep: string | null;
+  onboardingLoading: boolean;
   refreshOnboardingStatus: () => Promise<void>;
 }
+
+const POST_ONBOARDING_ROUTE = '/dashboard/leads';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -32,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<string | null>(null);
+  const [onboardingLoading, setOnboardingLoading] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -45,11 +49,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (user && activeWorkspaceId) {
-      refreshOnboardingStatus();
+      setOnboardingStep(null);
+      void refreshOnboardingStatus();
     } else {
       setOnboardingStep(null);
+      setOnboardingLoading(false);
     }
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, user]);
 
   const setActiveWorkspaceId = (id: string | null) => {
     setActiveWorkspaceIdState(id);
@@ -63,11 +69,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const refreshOnboardingStatus = async () => {
+    setOnboardingLoading(true);
     try {
       const res = await api.get('/api/onboarding');
       setOnboardingStep(res.data.data?.onboardingStep ?? 'company');
     } catch {
-      setOnboardingStep('company');
+      // Avoid treating fetch failures as incomplete onboarding for completed workspaces.
+      setOnboardingStep(null);
+    } finally {
+      setOnboardingLoading(false);
     }
   };
 
@@ -89,16 +99,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (currentUser && storedId) {
+        setOnboardingLoading(true);
         try {
           const obRes = await api.get('/api/onboarding', {
             headers: { 'X-Workspace-ID': storedId }
           });
           setOnboardingStep(obRes.data.data?.onboardingStep ?? 'company');
         } catch {
-          setOnboardingStep('company');
+          setOnboardingStep(null);
+        } finally {
+          setOnboardingLoading(false);
         }
       } else {
         setOnboardingStep(null);
+        setOnboardingLoading(false);
       }
     } catch {
       setUser(null);
@@ -124,6 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (workspaceId) {
+        setOnboardingLoading(true);
         try {
           const obRes = await api.get('/api/onboarding', {
             headers: { 'X-Workspace-ID': workspaceId }
@@ -131,18 +146,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const profile = obRes.data.data;
           const step = profile?.onboardingStep ?? 'company';
           setOnboardingStep(step);
-          
+
           if (step === 'completed') {
-            router.push('/dashboard/search');
+            router.push(POST_ONBOARDING_ROUTE);
           } else {
             router.push('/onboarding');
           }
         } catch {
-          setOnboardingStep('company');
+          setOnboardingStep(null);
           router.push('/onboarding');
+        } finally {
+          setOnboardingLoading(false);
         }
       } else {
         setOnboardingStep('company');
+        setOnboardingLoading(false);
         router.push('/onboarding');
       }
     } catch (err: any) {
@@ -187,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         logout,
         refreshUser,
         onboardingStep,
+        onboardingLoading,
         refreshOnboardingStatus,
       }}
     >

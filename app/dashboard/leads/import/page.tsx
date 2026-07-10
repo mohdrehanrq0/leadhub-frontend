@@ -1,27 +1,26 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { IconArrowLeft, IconLoader2, IconUpload } from '@tabler/icons-react';
+import { IconArrowLeft, IconDownload, IconLoader2, IconUpload } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
-import { LeadList } from '../../../../components/leads/types';
+import { LeadCategory, LeadList } from '../../../../components/leads/types';
+import { FieldMappingPanel } from '../../../../components/leads/FieldMappingPanel';
+import {
+  ImportDestinationFields,
+  parseTagInput,
+} from '../../../../components/leads/ImportDestinationFields';
+import {
+  applyFieldMapping,
+  detectFieldMapping,
+  downloadCsvTemplate,
+  isUsableMappedLead,
+  summarizeReadiness,
+  type FieldMapping,
+} from '../../../../lib/lead-field-mapping';
 
-type ImportRow = {
-  company: { name?: string; domain?: string };
-  contact: {
-    firstName?: string;
-    lastName?: string;
-    email?: string;
-    role?: string;
-    phone?: string;
-    linkedinUrl?: string;
-  };
-  notes?: string;
-  tags?: string[];
-};
-
-type CsvParseResult = { data?: Array<Record<string, string>> };
+type CsvParseResult = { data?: Array<Record<string, string>>; meta?: { fields?: string[] } };
 type PapaParser = {
   parse: (
     file: File,
@@ -42,55 +41,36 @@ function errorMessage(err: unknown, fallback: string) {
   return fallback;
 }
 
-const columnAliases: Record<string, string[]> = {
-  email: ['email', 'work email', 'business email'],
-  firstName: ['first name', 'firstname', 'first'],
-  lastName: ['last name', 'lastname', 'last'],
-  company: ['company', 'company name', 'organization', 'account'],
-  domain: ['domain', 'website', 'company website'],
-  role: ['role', 'title', 'job title', 'position'],
-  phone: ['phone', 'mobile', 'phone number'],
-  linkedinUrl: ['linkedin', 'linkedin url', 'profile'],
-  notes: ['notes', 'note'],
-};
-
-function pick(row: Record<string, string>, key: string) {
-  const headers = columnAliases[key] ?? [key];
-  for (const header of headers) {
-    const found = Object.keys(row).find((item) => item.trim().toLowerCase() === header);
-    if (found && row[found]?.trim()) return row[found].trim();
-  }
-  return undefined;
-}
-
-function normalizeRows(rows: Array<Record<string, string>>): ImportRow[] {
-  return rows
-    .map((row) => ({
-      company: { name: pick(row, 'company'), domain: pick(row, 'domain') },
-      contact: {
-        firstName: pick(row, 'firstName'),
-        lastName: pick(row, 'lastName'),
-        email: pick(row, 'email'),
-        role: pick(row, 'role'),
-        phone: pick(row, 'phone'),
-        linkedinUrl: pick(row, 'linkedinUrl'),
-      },
-      notes: pick(row, 'notes'),
-      tags: ['csv'],
-    }))
-    .filter((row) => row.contact.email || row.company.name || row.company.domain);
-}
-
 export default function LeadImportPage() {
   const [lists, setLists] = useState<LeadList[]>([]);
-  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [categories, setCategories] = useState<LeadCategory[]>([]);
   const [listId, setListId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [tags, setTags] = useState('');
   const [importing, setImporting] = useState(false);
+  const [step, setStep] = useState<'upload' | 'mapping'>('upload');
+  const [rawRows, setRawRows] = useState<Array<Record<string, string>>>([]);
+  const [sourceFields, setSourceFields] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<FieldMapping>({});
+  const [confidence, setConfidence] = useState<ReturnType<typeof detectFieldMapping>['confidence']>({});
 
-  async function fetchLists() {
+  const mappedRows = useMemo(() => {
+    return rawRows
+      .map((row) => applyFieldMapping(row, mapping))
+      .filter(isUsableMappedLead)
+      .map((row) => ({ ...row, tags: ['csv'] as string[] }));
+  }, [rawRows, mapping]);
+
+  const readiness = useMemo(() => summarizeReadiness(mappedRows), [mappedRows]);
+
+  async function fetchDestinations() {
     try {
-      const res = await api.get('/api/lists');
-      setLists(res.data.data ?? []);
+      const [listsRes, categoriesRes] = await Promise.all([
+        api.get('/api/lists'),
+        api.get('/api/categories'),
+      ]);
+      setLists(listsRes.data.data ?? []);
+      setCategories(categoriesRes.data.data ?? []);
     } catch {
       // non-blocking
     }
@@ -98,7 +78,7 @@ export default function LeadImportPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchLists();
+    void fetchDestinations();
   }, []);
 
   const parseFile = async (file: File) => {
@@ -108,29 +88,54 @@ export default function LeadImportPage() {
       header: true,
       skipEmptyLines: true,
       complete: (result) => {
-        const parsed = normalizeRows(result.data ?? []);
-        setRows(parsed);
-        toast.success(`Parsed ${parsed.length} usable rows.`);
+        const rows = result.data ?? [];
+        const fields =
+          result.meta?.fields?.filter(Boolean) ??
+          Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+
+        const detected = detectFieldMapping(fields);
+        setRawRows(rows);
+        setSourceFields(fields);
+        setMapping(detected.mapping);
+        setConfidence(detected.confidence);
+        setStep('mapping');
+        toast.success(`Detected ${fields.length} columns across ${rows.length} rows. Review field mapping.`);
       },
       error: () => toast.error('Could not parse CSV file.'),
     });
   };
 
   const uploadRows = async () => {
-    if (rows.length === 0) {
-      toast.error('Choose a CSV file first.');
+    if (mappedRows.length === 0) {
+      toast.error('No usable rows after mapping. Adjust your field mapping.');
       return;
     }
     try {
       setImporting(true);
-      const res = await api.post('/api/leads/upload', { rows, listId: listId || undefined });
+      const parsedTags = parseTagInput(tags);
+      const res = await api.post('/api/leads/upload', {
+        rows: mappedRows,
+        listId: listId || undefined,
+        categoryId: categoryId || undefined,
+        tags: parsedTags.length > 0 ? parsedTags : undefined,
+      });
       toast.success(`Imported ${res.data.data?.created ?? 0} leads.`);
-      setRows([]);
+      setRawRows([]);
+      setSourceFields([]);
+      setMapping({});
+      setStep('upload');
     } catch (err) {
       toast.error(errorMessage(err, 'Import failed.'));
     } finally {
       setImporting(false);
     }
+  };
+
+  const resetImport = () => {
+    setRawRows([]);
+    setSourceFields([]);
+    setMapping({});
+    setStep('upload');
   };
 
   return (
@@ -144,71 +149,107 @@ export default function LeadImportPage() {
           <p className="text-[11px] font-black uppercase tracking-[0.18em] text-emerald-700">CSV Upload</p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Bulk import leads into the CRM.</h1>
           <p className="mt-2 text-sm leading-6 text-slate-600">
-            Upload a CSV with email, first name, last name, company, domain, role, phone, LinkedIn, and notes. Headers are matched flexibly.
+            Upload a CSV, review auto-detected field mapping, choose list/category/tags, then import with enrichment readiness shown upfront.
           </p>
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:bg-white">
-            <IconUpload size={32} className="text-emerald-600" />
-            <span className="mt-3 text-sm font-black text-slate-900">Drop or choose a CSV</span>
-            <span className="mt-1 text-xs text-slate-500">Client-side preview before import</span>
-            <input type="file" accept=".csv,text/csv" className="hidden" onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) void parseFile(file);
-            }} />
-          </label>
+      {step === 'upload' && (
+        <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center hover:bg-white">
+              <IconUpload size={32} className="text-emerald-600" />
+              <span className="mt-3 text-sm font-black text-slate-900">Drop or choose a CSV</span>
+              <span className="mt-1 text-xs text-slate-500">We will auto-detect column mapping next</span>
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void parseFile(file);
+                }}
+              />
+            </label>
+          </section>
 
-          <div className="mt-4 space-y-2">
-            <label className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Attach to list</label>
-            <select value={listId} onChange={(event) => setListId(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700">
-              <option value="">No list</option>
-              {lists.map((list) => <option key={list.id} value={list.id}>{list.name}</option>)}
-            </select>
-          </div>
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-black text-slate-950">Supported columns</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Company, location, first/last name (optional), email, domain, role, phone, LinkedIn, and notes.
+                </p>
+                <p className="mt-4 text-xs font-bold text-slate-500">
+                  Required for enrichment: company name + location. Person name is optional — the research agent finds founders and decision-makers.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  downloadCsvTemplate();
+                  toast.success('CSV template downloaded.');
+                }}
+                className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-800 hover:bg-emerald-100"
+              >
+                <IconDownload size={16} />
+                Download CSV template
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
-          <button onClick={uploadRows} disabled={importing || rows.length === 0} className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 text-sm font-black text-white disabled:opacity-40">
-            {importing && <IconLoader2 size={16} className="animate-spin" />}
-            Import {rows.length || ''} leads
-          </button>
-        </section>
+      {step === 'mapping' && (
+        <div className="space-y-6">
+          <FieldMappingPanel
+            sourceLabel="CSV"
+            sourceFields={sourceFields}
+            mapping={mapping}
+            confidence={confidence}
+            onMappingChange={setMapping}
+            previewRows={rawRows}
+            mappedPreviewRows={mappedRows}
+            sampleSize={5}
+          />
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="border-b border-slate-200 p-4">
-            <h2 className="text-sm font-black text-slate-950">Preview</h2>
-            <p className="text-xs text-slate-500">First 25 normalized rows.</p>
+          <ImportDestinationFields
+            lists={lists}
+            categories={categories}
+            listId={listId}
+            categoryId={categoryId}
+            tags={tags}
+            onListIdChange={setListId}
+            onCategoryIdChange={setCategoryId}
+            onTagsChange={setTags}
+          />
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="text-sm text-slate-600">
+              <span className="font-black text-slate-950">{mappedRows.length}</span> usable rows after mapping.
+              {readiness.notReady > 0 && (
+                <span className="ml-2 text-rose-600">{readiness.notReady} rows are not enrichment-ready.</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={resetImport}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                Start over
+              </button>
+              <button
+                onClick={uploadRows}
+                disabled={importing || mappedRows.length === 0}
+                className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-40"
+              >
+                {importing && <IconLoader2 size={16} className="animate-spin" />}
+                Import {mappedRows.length} leads
+              </button>
+            </div>
           </div>
-          <div className="max-h-[520px] overflow-auto">
-            <table className="w-full min-w-[720px] text-left text-xs">
-              <thead className="sticky top-0 bg-slate-50 text-[10px] uppercase tracking-[0.12em] text-slate-500">
-                <tr>
-                  <th className="p-3">Contact</th>
-                  <th className="p-3">Email</th>
-                  <th className="p-3">Company</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Domain</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.slice(0, 25).map((row, index) => (
-                  <tr key={index}>
-                    <td className="p-3 font-bold text-slate-800">{row.contact.firstName} {row.contact.lastName}</td>
-                    <td className="p-3 text-slate-600">{row.contact.email}</td>
-                    <td className="p-3 text-slate-600">{row.company.name}</td>
-                    <td className="p-3 text-slate-600">{row.contact.role}</td>
-                    <td className="p-3 text-slate-600">{row.company.domain}</td>
-                  </tr>
-                ))}
-                {rows.length === 0 && (
-                  <tr><td colSpan={5} className="p-12 text-center text-sm text-slate-500">No CSV parsed yet.</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

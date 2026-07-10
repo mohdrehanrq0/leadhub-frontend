@@ -22,7 +22,22 @@ export type EnrichmentStep =
   | 'contact_enrichment'
   | 'email_verification'
   | 'ai_research'
-  | 'ai_scoring';
+  | 'ai_scoring'
+  | 'intake'
+  | 'query_planning'
+  | 'search'
+  | 'scrape_extract'
+  | 'synthesis';
+
+export type ResearchPhase = 'intake' | 'query_planning' | 'search' | 'scrape_extract' | 'synthesis';
+
+export const RESEARCH_PHASES: ResearchPhase[] = [
+  'intake',
+  'query_planning',
+  'search',
+  'scrape_extract',
+  'synthesis',
+];
 
 export type EnrichmentStepStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped';
 
@@ -40,6 +55,40 @@ export type EnrichmentLog = {
   duration?: number | null;
   startedAt?: string | null;
   completedAt?: string | null;
+  createdAt: string;
+};
+
+export type ResearchQueryStatus = 'pending' | 'running' | 'completed' | 'failed' | 'no_results';
+
+export type ResearchQuery = {
+  id: string;
+  leadId: string;
+  jobId: string;
+  category: string;
+  query: string;
+  rationale?: string | null;
+  priority: number;
+  wave: number;
+  status: ResearchQueryStatus;
+  resultUrls?: string[];
+  resultSnippets?: Array<{ url: string; title: string; snippet: string }>;
+  selectedUrl?: string | null;
+  error?: string | null;
+  durationMs?: number | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt: string;
+};
+
+export type ResearchActivity = {
+  id: string;
+  leadId: string;
+  jobId: string;
+  phase: ResearchPhase;
+  type: string;
+  title: string;
+  body?: string | null;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 };
 
@@ -158,6 +207,7 @@ export type LeadRow = {
     phone?: string | null;
     linkedinUrl?: string | null;
     emailVerificationStatus?: string | null;
+    location?: string | null;
   } | null;
 };
 
@@ -166,6 +216,61 @@ export function leadName(lead: LeadRow) {
   const last = lead.contact?.lastName ?? '';
   const full = `${first} ${last}`.trim();
   return full || lead.contact?.email || 'Unnamed contact';
+}
+
+export function leadCompanyName(lead: LeadRow) {
+  const raw = (lead as LeadRow & { rawData?: Record<string, unknown> }).rawData;
+  const fromRaw =
+    typeof raw?.companyName === 'string'
+      ? raw.companyName
+      : typeof raw?.company === 'string'
+        ? raw.company
+        : '';
+  return (lead.company?.name || fromRaw || '').trim();
+}
+
+export function leadLocation(lead: LeadRow) {
+  const raw = (lead as LeadRow & { rawData?: Record<string, unknown> }).rawData;
+  const fromRaw =
+    typeof raw?.location === 'string'
+      ? raw.location
+      : [typeof raw?.city === 'string' ? raw.city : '', typeof raw?.country === 'string' ? raw.country : '']
+          .filter(Boolean)
+          .join(', ') ||
+        (typeof raw?.companyLocation === 'string' ? raw.companyLocation : '');
+  const locJson = lead.company?.location;
+  const fromLocJson =
+    locJson && typeof locJson === 'object'
+      ? [locJson.city, locJson.country].filter(Boolean).join(', ')
+      : '';
+  const fromCompany = [lead.company?.city, lead.company?.country].filter(Boolean).join(', ');
+  const fromContact = lead.contact?.location?.trim() ?? '';
+  return (fromRaw || fromLocJson || fromCompany || fromContact || '').trim();
+}
+
+export function leadHasEnrichmentInput(lead: LeadRow) {
+  return Boolean(leadCompanyName(lead) && leadLocation(lead));
+}
+
+/** Why enrichment is blocked — shown as a warning chip on lead cards. */
+export function enrichmentBlockReason(lead: LeadRow): string | null {
+  if (lead.enrichmentStatus === 'in_progress') return null;
+  if (lead.enrichmentStatus === 'completed') return null;
+  const missing: string[] = [];
+  if (!leadCompanyName(lead)) missing.push('company name');
+  if (!leadLocation(lead)) missing.push('location');
+  if (!missing.length) return null;
+  return `Missing ${missing.join(' + ')} — enrichment blocked`;
+}
+
+export function canEnrichLead(lead: LeadRow) {
+  return lead.enrichmentStatus !== 'in_progress' && leadHasEnrichmentInput(lead);
+}
+
+export function canReEnrichLead(lead: LeadRow) {
+  // Already enriched once — allow re-run even if location isn't on the list row
+  if (lead.enrichmentStatus === 'completed') return true;
+  return lead.enrichmentStatus === 'partial' && leadHasEnrichmentInput(lead);
 }
 
 export function stageMeta(stage: string) {
@@ -208,6 +313,11 @@ export const ENRICHMENT_STEP_LABELS: Record<EnrichmentStep, string> = {
   email_verification: 'Email Verification',
   ai_research: 'AI Research',
   ai_scoring: 'AI Scoring',
+  intake: 'Intake Analysis',
+  query_planning: 'Query Planning',
+  search: 'Parallel Search',
+  scrape_extract: 'Scrape & Extract',
+  synthesis: 'Synthesis',
 };
 
 export const ENRICHMENT_STEP_ICONS: Record<EnrichmentStep, string> = {
@@ -217,5 +327,41 @@ export const ENRICHMENT_STEP_ICONS: Record<EnrichmentStep, string> = {
   email_verification: '📧',
   ai_research: '🤖',
   ai_scoring: '⭐',
+  intake: '📋',
+  query_planning: '🎯',
+  search: '🔍',
+  scrape_extract: '🌐',
+  synthesis: '✨',
 };
+
+export const RESEARCH_PHASE_LABELS: Record<ResearchPhase, string> = {
+  intake: 'Intake Analysis',
+  query_planning: 'Query Planning',
+  search: 'Parallel Search',
+  scrape_extract: 'Scrape & Extract',
+  synthesis: 'Synthesis',
+};
+
+export const RESEARCH_PHASE_ICONS: Record<ResearchPhase, string> = {
+  intake: '📋',
+  query_planning: '🎯',
+  search: '🔍',
+  scrape_extract: '🌐',
+  synthesis: '✨',
+};
+
+export function queryStatusTone(status: ResearchQueryStatus) {
+  switch (status) {
+    case 'completed':
+      return 'text-emerald-600';
+    case 'running':
+      return 'text-blue-600';
+    case 'failed':
+      return 'text-rose-600';
+    case 'no_results':
+      return 'text-amber-600';
+    default:
+      return 'text-slate-500';
+  }
+}
 

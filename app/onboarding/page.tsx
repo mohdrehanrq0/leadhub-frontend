@@ -21,7 +21,13 @@ import {
 } from '@tabler/icons-react';
 
 export default function OnboardingWizard() {
-  const { activeWorkspaceId, setActiveWorkspaceId, refreshOnboardingStatus } = useAuth();
+  const {
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    refreshOnboardingStatus,
+    onboardingStep,
+    onboardingLoading,
+  } = useAuth();
   const router = useRouter();
 
   // Workspaces state
@@ -285,38 +291,71 @@ export default function OnboardingWizard() {
     }
   };
 
-  useEffect(() => {
-    if (activeWorkspaceId) {
-      loadExistingProfile();
-    }
-  }, [activeWorkspaceId]);
+  const resetWizardState = () => {
+    setStep(1);
+    setCompanyName('');
+    setWebsite('');
+    setIndustry('');
+    setTeamSize('11-50');
+    setCountry('United States');
+    setDescription('');
+    setProducts([]);
+    setServices([]);
+    setIcp(null);
+    setNiches([]);
+    setSubNicheMap({});
+    setApolloKey('');
+    setApifyKey('');
+  };
+
+  const ONBOARDING_STEP_TO_UI: Record<string, number> = {
+    company: 1,
+    icp: 2,
+    niches: 3,
+    sub_niches: 4,
+    integrations: 5,
+  };
 
   const loadExistingProfile = async () => {
     try {
       const res = await api.get('/api/onboarding');
       const profile = res.data.data;
-      if (profile) {
-        setCompanyName(profile.companyName ?? '');
-        setWebsite(profile.website ?? '');
-        setIndustry(profile.industry ?? '');
-        setTeamSize(profile.teamSize ?? '11-50');
-        setCountry(profile.country ?? 'United States');
-        setDescription(profile.description ?? '');
-        setProducts(profile.products ?? []);
-        setServices(profile.services ?? []);
-
-        if (profile.onboardingStep === 'icp') setStep(2);
-        if (profile.onboardingStep === 'niches') setStep(3);
-        if (profile.onboardingStep === 'sub_niches') setStep(4);
-        if (profile.onboardingStep === 'integrations') setStep(5);
-        if (profile.onboardingStep === 'completed') {
-          router.push('/dashboard/search');
-        }
+      if (!profile) {
+        setStep(1);
+        return;
       }
+
+      if (profile.onboardingStep === 'completed') {
+        router.replace('/dashboard/leads');
+        return;
+      }
+
+      setCompanyName(profile.companyName ?? '');
+      setWebsite(profile.website ?? '');
+      setIndustry(profile.industry ?? '');
+      setTeamSize(profile.teamSize ?? '11-50');
+      setCountry(profile.country ?? 'United States');
+      setDescription(profile.description ?? '');
+      setProducts(profile.products ?? []);
+      setServices(profile.services ?? []);
+      setStep(ONBOARDING_STEP_TO_UI[profile.onboardingStep] ?? 1);
     } catch {
       // Ignore
     }
   };
+
+  useEffect(() => {
+    if (!onboardingLoading && onboardingStep === 'completed') {
+      router.replace('/dashboard/leads');
+    }
+  }, [onboardingLoading, onboardingStep, router]);
+
+  useEffect(() => {
+    if (activeWorkspaceId) {
+      resetWizardState();
+      void loadExistingProfile();
+    }
+  }, [activeWorkspaceId]);
 
   // ─── TinyFish Prefill ──────────────────────────────────────────
   const handlePrefill = async () => {
@@ -460,7 +499,7 @@ export default function OnboardingWizard() {
       await api.post('/api/onboarding/complete');
       await refreshOnboardingStatus();
       toast.success('Onboarding complete! Welcome to LeadHub.');
-      router.push('/dashboard/search');
+      router.push('/dashboard/leads');
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? 'Failed to complete onboarding.');
     } finally {
@@ -481,6 +520,14 @@ export default function OnboardingWizard() {
       setNewService('');
     }
   };
+
+  if (onboardingLoading || onboardingStep === 'completed') {
+    return (
+      <div className="w-screen h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-background text-text flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ minHeight: '100vh' }}>

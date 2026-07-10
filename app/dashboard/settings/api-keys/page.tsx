@@ -3,7 +3,14 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
-import { IconKey, IconTrash, IconCheck, IconAlertTriangle, IconRefresh } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconKey,
+  IconRefresh,
+  IconSparkles,
+  IconTrash,
+} from '@tabler/icons-react';
 
 interface ApiKeyRecord {
   id: string;
@@ -15,22 +22,47 @@ interface ApiKeyRecord {
 }
 
 type LlmMode = 'openai' | 'gemini' | 'mix';
+type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper';
+
+interface ProviderModelOption {
+  id: string;
+  label: string;
+}
+
+const PROVIDER_LABEL: Record<Provider, string> = {
+  apollo: 'Apollo',
+  apify: 'Apify',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+  leadsnipper: 'LeadSniper',
+};
 
 export default function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [provider, setProvider] = useState<'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper'>('apollo');
+  const [provider, setProvider] = useState<Provider>('apollo');
   const [keyValue, setKeyValue] = useState('');
+  const [newKeyModels, setNewKeyModels] = useState<ProviderModelOption[]>([]);
+  const [selectedNewKeyModel, setSelectedNewKeyModel] = useState('');
+  const [fetchingNewKeyModels, setFetchingNewKeyModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [llmMode, setLlmMode] = useState<LlmMode>('openai');
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [openaiModels, setOpenaiModels] = useState<ProviderModelOption[]>([]);
+  const [geminiModels, setGeminiModels] = useState<ProviderModelOption[]>([]);
+  const [loadingModeModels, setLoadingModeModels] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
   useEffect(() => {
     void Promise.all([fetchKeys(), fetchPreferences()]);
   }, []);
+
+  useEffect(() => {
+    setNewKeyModels([]);
+    setSelectedNewKeyModel('');
+  }, [provider]);
 
   async function fetchKeys() {
     try {
@@ -44,23 +76,6 @@ export default function ApiKeysPage() {
     }
   }
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!keyValue) return;
-    setSubmitting(true);
-    try {
-      await api.post('/api/api-keys', { provider, key: keyValue });
-      toast.success('API key saved successfully.');
-      setKeyValue('');
-      fetchKeys();
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(message ?? 'Failed to save API key.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   async function fetchPreferences() {
     try {
       const res = await api.get('/api/api-keys/preferences');
@@ -70,6 +85,51 @@ export default function ApiKeysPage() {
       setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
     } catch {
       toast.error('Failed to load LLM preferences.');
+    }
+  }
+
+  async function fetchSavedProviderModels(targetProvider: 'openai' | 'gemini') {
+    try {
+      const res = await api.post('/api/api-keys/models', { provider: targetProvider });
+      return (res.data.data ?? []) as ProviderModelOption[];
+    } catch {
+      return [];
+    }
+  }
+
+  async function refreshRoutingModelLists(currentMode?: LlmMode) {
+    const mode = currentMode ?? llmMode;
+    setLoadingModeModels(true);
+    const [openai, gemini] = await Promise.all([
+      mode === 'openai' || mode === 'mix' ? fetchSavedProviderModels('openai') : Promise.resolve([]),
+      mode === 'gemini' || mode === 'mix' ? fetchSavedProviderModels('gemini') : Promise.resolve([]),
+    ]);
+    setOpenaiModels(openai);
+    setGeminiModels(gemini);
+    if (openai.length && !openai.some((m) => m.id === openaiModel)) setOpenaiModel(openai[0].id);
+    if (gemini.length && !gemini.some((m) => m.id === geminiModel)) setGeminiModel(gemini[0].id);
+    setLoadingModeModels(false);
+  }
+
+  async function fetchModelsForNewKey() {
+    if ((provider !== 'openai' && provider !== 'gemini') || keyValue.trim().length < 10) return;
+    setFetchingNewKeyModels(true);
+    try {
+      const res = await api.post('/api/api-keys/models', {
+        provider,
+        key: keyValue.trim(),
+      });
+      const models = (res.data.data ?? []) as ProviderModelOption[];
+      setNewKeyModels(models);
+      setSelectedNewKeyModel(models[0]?.id ?? '');
+      if (!models.length) toast.error(`No supported ${PROVIDER_LABEL[provider]} models found for this key.`);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? `Failed to fetch ${PROVIDER_LABEL[provider]} models.`);
+      setNewKeyModels([]);
+      setSelectedNewKeyModel('');
+    } finally {
+      setFetchingNewKeyModels(false);
     }
   }
 
@@ -83,6 +143,7 @@ export default function ApiKeysPage() {
         geminiModel,
       });
       toast.success('LLM preferences updated.');
+      await refreshRoutingModelLists(llmMode);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message ?? 'Failed to save LLM preferences.');
@@ -120,22 +181,63 @@ export default function ApiKeysPage() {
     }
   };
 
+  const handleModeChange = async (nextMode: LlmMode) => {
+    setLlmMode(nextMode);
+    await refreshRoutingModelLists(nextMode);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!keyValue.trim()) return;
+    const isLlmProvider = provider === 'openai' || provider === 'gemini';
+    if (isLlmProvider && !selectedNewKeyModel) {
+      toast.error(`Fetch and select a ${PROVIDER_LABEL[provider]} model first.`);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.post('/api/api-keys', {
+        provider,
+        key: keyValue.trim(),
+        ...(isLlmProvider ? { selectedModel: selectedNewKeyModel } : {}),
+      });
+      toast.success(`${PROVIDER_LABEL[provider]} key saved successfully.`);
+      setKeyValue('');
+      setNewKeyModels([]);
+      setSelectedNewKeyModel('');
+      await Promise.all([fetchKeys(), fetchPreferences(), refreshRoutingModelLists()]);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? 'Failed to save API key.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshRoutingModelLists();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-fade-in text-text">
-      <div>
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in text-text">
+      <div className="rounded-2xl border border-border bg-card p-6 shadow-input">
         <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-          <IconKey className="text-primary" />
+          <IconKey className="text-primary" size={24} />
           <span>Workspace API Keys</span>
         </h1>
-        <p className="text-text-200 text-sm mt-1">
-          Save credentials to authorize lead collection. Keys are encrypted at rest using AES-256-GCM.
+        <p className="text-text-200 text-sm mt-2">
+          Add provider credentials and configure conditional LLM routing. Keys are encrypted at rest using AES-256-GCM.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Form panel */}
-        <div className="md:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-xl shadow-input">
-          <h2 className="text-sm font-semibold text-text-100">Add Credentials</h2>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <div className="xl:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-2xl shadow-input">
+          <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
+            <IconKey size={16} className="text-primary" />
+            Add Credentials
+          </h2>
 
           <form onSubmit={handleSave} className="space-y-4">
             <div className="space-y-1">
@@ -143,7 +245,7 @@ export default function ApiKeysPage() {
               <select
                 id="provider"
                 value={provider}
-                onChange={(e) => setProvider(e.target.value as 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper')}
+                onChange={(e) => setProvider(e.target.value as Provider)}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
               >
                 <option value="apollo">Apollo API</option>
@@ -161,26 +263,69 @@ export default function ApiKeysPage() {
                 type="password"
                 required
                 value={keyValue}
-                onChange={(e) => setKeyValue(e.target.value)}
+                onChange={(e) => {
+                  setKeyValue(e.target.value);
+                  if (provider === 'openai' || provider === 'gemini') {
+                    setNewKeyModels([]);
+                    setSelectedNewKeyModel('');
+                  }
+                }}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
                 placeholder="sk-..."
               />
             </div>
+
+            {(provider === 'openai' || provider === 'gemini') && (
+              <div className="space-y-3 rounded-lg border border-border bg-bg-200/40 p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-text-200">{PROVIDER_LABEL[provider]} models</p>
+                  <button
+                    type="button"
+                    onClick={fetchModelsForNewKey}
+                    disabled={fetchingNewKeyModels || keyValue.trim().length < 10}
+                    className="text-[11px] px-2 py-1 rounded border border-border bg-bg-300 hover:bg-bg-300/70 text-text-200 disabled:opacity-50"
+                  >
+                    {fetchingNewKeyModels ? 'Fetching...' : 'Fetch Models'}
+                  </button>
+                </div>
+
+                {newKeyModels.length > 0 ? (
+                  <select
+                    value={selectedNewKeyModel}
+                    onChange={(e) => setSelectedNewKeyModel(e.target.value)}
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                  >
+                    {newKeyModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-[11px] text-text-300">
+                    Enter key and fetch models to select one before saving.
+                  </p>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"
               disabled={submitting}
               className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Add Key'}
+              {submitting ? 'Saving...' : `Add ${PROVIDER_LABEL[provider]} Key`}
             </button>
           </form>
         </div>
 
-        <div className="md:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-xl shadow-input">
-          <h2 className="text-sm font-semibold text-text-100">LLM Routing</h2>
-          <p className="text-[11px] text-text-300">
-            Mix mode routes simple tasks to Gemini and important scoring decisions to OpenAI.
+        <div className="xl:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-2xl shadow-input">
+          <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
+            <IconSparkles size={16} className="text-primary" />
+            LLM Routing
+          </h2>
+          <p className="text-[11px] text-text-300 leading-5">
+            Conditional routing based on use case importance. Provider model selectors are shown only for active mode.
           </p>
           <form onSubmit={savePreferences} className="space-y-4">
             <div className="space-y-1">
@@ -188,7 +333,7 @@ export default function ApiKeysPage() {
               <select
                 id="llmMode"
                 value={llmMode}
-                onChange={(e) => setLlmMode(e.target.value as LlmMode)}
+                onChange={(e) => void handleModeChange(e.target.value as LlmMode)}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
               >
                 <option value="openai">OpenAI only</option>
@@ -197,25 +342,53 @@ export default function ApiKeysPage() {
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
-              <input
-                id="openaiModel"
-                value={openaiModel}
-                onChange={(e) => setOpenaiModel(e.target.value)}
-                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-              />
-            </div>
+            {(llmMode === 'openai' || llmMode === 'mix') && (
+              <div className="space-y-1">
+                <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
+                <select
+                  id="openaiModel"
+                  value={openaiModel}
+                  onChange={(e) => setOpenaiModel(e.target.value)}
+                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                >
+                  {openaiModels.length ? (
+                    openaiModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={openaiModel}>No OpenAI key/models found</option>
+                  )}
+                </select>
+              </div>
+            )}
 
-            <div className="space-y-1">
-              <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
-              <input
-                id="geminiModel"
-                value={geminiModel}
-                onChange={(e) => setGeminiModel(e.target.value)}
-                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-              />
-            </div>
+            {(llmMode === 'gemini' || llmMode === 'mix') && (
+              <div className="space-y-1">
+                <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
+                <select
+                  id="geminiModel"
+                  value={geminiModel}
+                  onChange={(e) => setGeminiModel(e.target.value)}
+                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                >
+                  {geminiModels.length ? (
+                    geminiModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.label}
+                      </option>
+                    ))
+                  ) : (
+                    <option value={geminiModel}>No Gemini key/models found</option>
+                  )}
+                </select>
+              </div>
+            )}
+
+            {loadingModeModels && (
+              <p className="text-[11px] text-text-300">Refreshing available models...</p>
+            )}
 
             <button
               type="submit"
@@ -227,8 +400,7 @@ export default function ApiKeysPage() {
           </form>
         </div>
 
-        {/* List panel */}
-        <div className="md:col-span-1 space-y-4">
+        <div className="xl:col-span-1 space-y-4">
           {loading ? (
             <div className="space-y-3">
               <div className="h-16 skeleton" />
@@ -243,12 +415,12 @@ export default function ApiKeysPage() {
               {keys.map((key) => (
                 <div
                   key={key.id}
-                  className="bg-card p-4 border border-border rounded-xl flex items-center justify-between hover:border-primary/50 transition-all shadow-sm"
+                  className="bg-card p-4 border border-border rounded-2xl flex items-center justify-between hover:border-primary/50 transition-all shadow-sm"
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
                       <span className="text-sm font-semibold capitalize text-text-100">
-                        {key.provider === 'leadsnipper' ? 'LeadSniper' : key.provider}
+                        {PROVIDER_LABEL[key.provider]}
                       </span>
                       <span
                         className={`text-[10px] px-2 py-0.5 rounded-full flex items-center space-x-1 border ${

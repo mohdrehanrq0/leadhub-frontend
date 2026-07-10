@@ -5,22 +5,22 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../context/AuthContext';
 
 export default function RootIndex() {
-  const { user, loading, onboardingStep } = useAuth();
+  const { user, loading, onboardingStep, onboardingLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && !onboardingLoading) {
       if (user) {
         if (onboardingStep === 'completed') {
-          router.push('/dashboard/search');
-        } else {
+          router.push('/dashboard/leads');
+        } else if (onboardingStep) {
           router.push('/onboarding');
         }
       } else {
         router.push('/login');
       }
     }
-  }, [user, loading, onboardingStep]);
+  }, [user, loading, onboardingLoading, onboardingStep, router]);
 
   return (
     <div className="w-screen h-screen flex items-center justify-center bg-background">

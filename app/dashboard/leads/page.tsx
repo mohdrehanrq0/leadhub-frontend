@@ -24,6 +24,9 @@ import {
 import { useAuth } from '../../../context/AuthContext';
 import {
   apolloCategoryLabel,
+  canEnrichLead,
+  canReEnrichLead,
+  enrichmentBlockReason,
   enrichmentStatusMeta,
   leadName,
   LeadCategory,
@@ -50,6 +53,7 @@ export default function LeadsPage() {
   const [lists, setLists] = useState<LeadList[]>([]);
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
+  const [reEnriching, setReEnriching] = useState(false);
   const [hasOpenAiKey, setHasOpenAiKey] = useState<boolean | null>(null);
   const [view, setView] = useState<'table' | 'kanban'>('kanban');
   const [stage, setStage] = useState<'all' | PipelineStage>('all');
@@ -181,7 +185,8 @@ export default function LeadsPage() {
 
   const filteredLeads = leads;
   const selectedLeads = filteredLeads.filter((lead) => selected.has(lead.id));
-  const rawSelectedIds = selectedLeads.filter((lead) => lead.status === 'raw').map((lead) => lead.id);
+  const enrichableIds = selectedLeads.filter((lead) => canEnrichLead(lead) && lead.enrichmentStatus !== 'completed').map((lead) => lead.id);
+  const reEnrichableIds = selectedLeads.filter((lead) => canReEnrichLead(lead)).map((lead) => lead.id);
   const allSelected = filteredLeads.length > 0 && filteredLeads.every((lead) => selected.has(lead.id));
 
   const toggleLead = (id: string) => {
@@ -202,32 +207,59 @@ export default function LeadsPage() {
     });
   };
 
-  const handleEnrich = async () => {
-    if (rawSelectedIds.length === 0) {
-      toast.error('Select at least one raw lead to enrich.');
-      return;
-    }
+  const startEnrichment = async (leadIds: string[], reEnrich: boolean) => {
+    if (leadIds.length === 0) return;
     if (hasOpenAiKey === false) {
       toast.error(
-        'OpenAI API key required. Add it in Settings › API Keys to use AI enrichment.',
+        'AI API key required. Add OpenAI or Gemini in Settings › API Keys.',
         { duration: 6000, icon: <IconKey size={16} /> },
       );
       return;
     }
 
+    if (reEnrich) {
+      const confirmed = window.confirm(
+        `Re-run research on ${leadIds.length} lead(s)? This starts a fresh research agent run and keeps prior query history.`,
+      );
+      if (!confirmed) return;
+    }
+
     try {
-      setEnriching(true);
-      const res = await api.post('/api/leads/enrich', { leadIds: rawSelectedIds });
+      if (reEnrich) setReEnriching(true);
+      else setEnriching(true);
+
+      const res = await api.post('/api/leads/enrich', { leadIds, reEnrich });
+      const count = res.data.data?.leadCount ?? leadIds.length;
+      const skipped = res.data.data?.skippedCount ?? 0;
       toast.success(
-        `Enrichment started for ${res.data.data?.leadCount ?? rawSelectedIds.length} leads. Each lead will be processed individually.`,
+        reEnrich
+          ? `Re-enrichment started for ${count} lead(s).${skipped ? ` ${skipped} skipped.` : ''}`
+          : `Enrichment started for ${count} lead(s).${skipped ? ` ${skipped} skipped.` : ''}`,
       );
       setSelected(new Set());
       await refreshLeads();
     } catch (err) {
-      toast.error(errorMessage(err, 'Failed to start enrichment.'));
+      toast.error(errorMessage(err, reEnrich ? 'Failed to start re-enrichment.' : 'Failed to start enrichment.'));
     } finally {
       setEnriching(false);
+      setReEnriching(false);
     }
+  };
+
+  const handleEnrich = () => {
+    if (enrichableIds.length === 0) {
+      toast.error('Select leads that are not enriched yet (need company name + location).');
+      return;
+    }
+    void startEnrichment(enrichableIds, false);
+  };
+
+  const handleReEnrich = () => {
+    if (reEnrichableIds.length === 0) {
+      toast.error('Select enriched leads to re-run research (not currently in progress).');
+      return;
+    }
+    void startEnrichment(reEnrichableIds, true);
   };
 
   const patchLead = async (leadId: string, payload: Record<string, unknown>) => {
@@ -393,9 +425,13 @@ export default function LeadsPage() {
       {selected.size > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
           <span className="font-black">{selected.size} selected</span>
-          <button onClick={handleEnrich} disabled={enriching || rawSelectedIds.length === 0} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 font-bold text-white disabled:opacity-40">
+          <button onClick={handleEnrich} disabled={enriching || reEnriching || enrichableIds.length === 0} className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-2 font-bold text-white disabled:opacity-40">
             {enriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconSparkles size={14} />}
-            Enrich raw ({rawSelectedIds.length})
+            Enrich ({enrichableIds.length})
+          </button>
+          <button onClick={handleReEnrich} disabled={enriching || reEnriching || reEnrichableIds.length === 0} className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-800 disabled:opacity-40">
+            {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
+            Re-enrich ({reEnrichableIds.length})
           </button>
           <select value={bulkStage} onChange={(event) => setBulkStage(event.target.value as PipelineStage)} className="h-9 rounded-lg border border-blue-200 bg-white px-2 font-semibold">
             {PIPELINE_STAGES.map((item) => <option key={item.value} value={item.value}>Move to {item.label}</option>)}
@@ -490,6 +526,18 @@ export default function LeadsPage() {
                         <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold capitalize text-slate-600">{lead.source}</span>
                         {lead.apolloCategory && <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">{apolloCategoryLabel(lead.apolloCategory)}</span>}
                         {(() => { const em = enrichmentStatusMeta(lead.enrichmentStatus); return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${em.tone}`}>{em.icon} {em.label}</span>; })()}
+                        {(() => {
+                          const block = enrichmentBlockReason(lead);
+                          if (!block) return null;
+                          return (
+                            <span
+                              className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800"
+                              title={block}
+                            >
+                              ⚠ {block}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
                         <span className="truncate">{lead.company?.domain || lead.contact?.email || 'No domain'}</span>
@@ -573,13 +621,21 @@ export default function LeadsPage() {
                     <td className="border-b border-slate-100 p-4">
                       {(() => {
                         const em = enrichmentStatusMeta(lead.enrichmentStatus);
+                        const block = enrichmentBlockReason(lead);
                         return (
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-bold text-[10px] ${em.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}
-                            title={lead.enrichmentError ?? undefined}
-                          >
-                            {em.icon} {em.label}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex w-fit items-center gap-1 rounded-full border px-2 py-1 font-bold text-[10px] ${em.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}
+                              title={lead.enrichmentError ?? undefined}
+                            >
+                              {em.icon} {em.label}
+                            </span>
+                            {block && (
+                              <span className="inline-flex w-fit max-w-[180px] items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-800" title={block}>
+                                ⚠ {block}
+                              </span>
+                            )}
+                          </div>
                         );
                       })()}
                     </td>

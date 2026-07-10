@@ -30,7 +30,7 @@ function errorMessage(err: unknown, fallback: string) {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, activeWorkspaceId, setActiveWorkspaceId, logout, onboardingStep } = useAuth();
+  const { user, loading, activeWorkspaceId, setActiveWorkspaceId, logout, onboardingStep, onboardingLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
 
@@ -60,10 +60,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [user]);
 
   useEffect(() => {
-    if (!loading && user && onboardingStep && onboardingStep !== 'completed') {
+    if (!loading && !onboardingLoading && user && onboardingStep && onboardingStep !== 'completed') {
       router.push('/onboarding');
     }
-  }, [user, loading, onboardingStep, router]);
+  }, [user, loading, onboardingLoading, onboardingStep, router]);
 
   const [showCreateWsModal, setShowCreateWsModal] = useState(false);
   const [newWsName, setNewWsName] = useState('');
@@ -87,7 +87,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
   };
 
-  if (loading || !user || !onboardingStep || onboardingStep !== 'completed') {
+  if (loading || onboardingLoading || !user || !onboardingStep || onboardingStep !== 'completed') {
     return (
       <div className="w-screen h-screen flex items-center justify-center bg-zinc-950">
         <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
