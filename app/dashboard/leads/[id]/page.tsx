@@ -13,10 +13,8 @@ import {
   IconChevronUp,
   IconExternalLink,
   IconLoader2,
-  IconMail,
   IconNotes,
   IconSparkles,
-  IconUser,
   IconX,
   IconRefresh,
 } from '@tabler/icons-react';
@@ -171,30 +169,25 @@ const ENRICHMENT_STEP_MARKETING: Partial<Record<EnrichmentStep, { title: string;
 
 const stepsOrder: EnrichmentStep[] = [...RESEARCH_PHASES];
 
-// ─── Confidence badge ─────────────────────────────────────────────
+// ─── Enrichment JSON viewer ───────────────────────────────────────
 
-function ConfidenceBadge({ value }: { value: number }) {
-  const tone =
-    value >= 80 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
-    value >= 60 ? 'bg-amber-100 text-amber-800 border-amber-200' :
-    'bg-slate-100 text-slate-600 border-slate-200';
+function EnrichmentJson({ data, emptyLabel }: { data: unknown; emptyLabel: string }) {
+  if (data == null) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
+        <p className="text-sm font-bold text-slate-700">{emptyLabel}</p>
+      </div>
+    );
+  }
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>
-      {value}% confidence
-    </span>
-  );
-}
-
-function FieldMetaBadge({ field }: { field?: CanonicalLeadProfile['fields'][string] }) {
-  if (!field) return null;
-  const tone =
-    field.status === 'found' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
-    field.status === 'inferred' ? 'border-violet-200 bg-violet-50 text-violet-700' :
-    'border-slate-200 bg-slate-50 text-slate-500';
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${tone}`}>
-      {field.source} · {field.confidence}% · {field.status.replace('_', ' ')}
-    </span>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-950 shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-800 px-4 py-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">JSON</span>
+      </div>
+      <pre className="max-h-[70vh] overflow-auto p-4 text-[11px] leading-relaxed text-emerald-300 font-mono whitespace-pre-wrap wrap-break-word">
+        {JSON.stringify(data, null, 2)}
+      </pre>
+    </div>
   );
 }
 
@@ -433,7 +426,6 @@ export default function LeadDetailPage() {
       ? RESEARCH_PHASE_MARKETING[runningStepLog.step as (typeof RESEARCH_PHASES)[number]]
       : ENRICHMENT_STEP_MARKETING[runningStepLog.step]
     : null;
-  const profileField = (key: string) => canonicalProfile?.fields?.[key];
 
   // ─── Render ─────────────────────────────────────────────────────
 
@@ -471,17 +463,19 @@ export default function LeadDetailPage() {
       !lead.company?.domain &&
       !lead.company?.website &&
       lead.researchSuggestions?.identityValidated === false);
-  const showCompanyUnableToFind = (label: string, val: unknown) => {
-    if (val) return false;
-    if (!enrichmentDone) return false;
-    if (['Domain', 'Website', 'LinkedIn', 'Industry', 'Size', 'Founded'].includes(label)) return true;
-    return false;
-  };
-  const companyFieldValue = (label: string, val: unknown) => {
-    if (companyNotFound && ['Industry', 'Size', 'Founded', 'Domain', 'Website', 'LinkedIn'].includes(label)) {
-      return null;
-    }
-    return val;
+
+  const enrichProfileJson = {
+    enrichmentStatus: lead.enrichmentStatus,
+    enrichmentError: lead.enrichmentError ?? null,
+    scores: {
+      icpScore: lead.icpScore ?? null,
+      intentScore: lead.intentScore ?? null,
+      confidence: lead.confidence ?? null,
+    },
+    company: lead.company ?? null,
+    contact: lead.contact ?? null,
+    researchSuggestions: lead.researchSuggestions ?? null,
+    canonicalProfile: canonicalProfile ?? null,
   };
 
   return (
@@ -747,414 +741,30 @@ export default function LeadDetailPage() {
             ))}
           </div>
 
-          {/* ── Tab: Verified Facts ── */}
+          {/* ── Tab: Verified Facts (enrichment profile JSON) ── */}
           {activeTab === 'verified' && (
-            <div className="space-y-4">
-              {/* Company */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <IconBuilding size={16} className="text-blue-600" />
-                  <h2 className="text-sm font-black text-slate-950">Company Profile</h2>
-                  {lead.company?.domain && (
-                    <a href={`https://${lead.company.domain}`} target="_blank" rel="noreferrer" className="ml-auto text-xs text-blue-600 hover:underline inline-flex items-center gap-1">
-                      Visit <IconExternalLink size={12} />
-                    </a>
-                  )}
-                </div>
-                {((lead.researchSuggestions?.unableToFind?.length ?? 0) > 0 ||
-                  (lead.researchSuggestions?.gapsRemaining?.length ?? 0) > 0 ||
-                  companyNotFound) &&
-                  enrichmentDone && (
-                  <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Unable to find</p>
-                    <p className="mt-0.5 text-xs text-amber-900">
-                      {companyNotFound
-                        ? 'Company — no reliable public match for this name/location'
-                        : (lead.researchSuggestions?.unableToFind ?? lead.researchSuggestions?.gapsRemaining ?? []).join(' · ')}
-                    </p>
-                    <p className="mt-1 text-[10px] text-amber-700/80">
-                      {companyNotFound
-                        ? 'Correct the company name or location, then re-enrich.'
-                        : 'Retried with discovered website/domain anchors; still no reliable public match.'}
-                    </p>
-                  </div>
-                )}
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    ['Name', lead.company?.name, 'company.identity.companyName'],
-                    ['Domain', companyFieldValue('Domain', lead.company?.domain), 'company.identity.website'],
-                    ['Website', companyFieldValue('Website', lead.company?.website), 'company.identity.website'],
-                    ['Industry', companyFieldValue('Industry', lead.company?.industry), 'company.profile.industry'],
-                    ['Size', companyFieldValue('Size', lead.company?.size), 'company.profile.companySize'],
-                    ['Founded', companyFieldValue('Founded', lead.company?.foundedYear?.toString()), 'company.profile.foundedYear'],
-                    ['Location', [lead.company?.location?.city, lead.company?.location?.country].filter(Boolean).join(', '), 'company.profile.headquarters'],
-                    ['LinkedIn', companyFieldValue('LinkedIn', (lead.company?.socialLinks as Record<string, string>)?.linkedin), 'company.social.linkedin'],
-                  ].map(([label, val, fieldKey]) =>
-                    val ? (
-                    <div key={label as string} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-800 wrap-break-word">{val as string}</p>
-                      <div className="mt-2"><FieldMetaBadge field={profileField(fieldKey as string)} /></div>
-                    </div>
-                    ) : showCompanyUnableToFind(label as string, val) ? (
-                    <div key={label as string} className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
-                    </div>
-                    ) : null,
-                  )}
-                </div>
-                {!companyNotFound && lead.company?.description && (
-                  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</p>
-                    <p className="mt-0.5 text-sm text-slate-700">{lead.company.description}</p>
-                  </div>
-                )}
-                {companyNotFound && enrichmentDone && (
-                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
-                  </div>
-                )}
-                {!companyNotFound && (lead.company?.technologies?.length ?? 0) > 0 && (
-                  <div className="mt-3">
-                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tech Stack</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {lead.company!.technologies!.map((t) => (
-                        <span key={t} className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t}</span>
-                      ))}
-                    </div>
-                    <div className="mt-2"><FieldMetaBadge field={profileField('company.technology.techStack')} /></div>
-                  </div>
-                )}
-                {(['products', 'services'] as const).map((key) => {
-                  if (companyNotFound) return null;
-                  const values = lead.company?.[key] ?? [];
-                  if (!values.length) return null;
-                  const fieldKey = key === 'products' ? 'company.products.products' : 'company.products.services';
-                  return (
-                    <div key={key} className="mt-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{key}</p>
-                        <FieldMetaBadge field={profileField(fieldKey)} />
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {values.map((value) => (
-                          <span key={value} className="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700">{value}</span>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-                {(lead.company?.sourceHistory?.length ?? 0) > 0 && (
-                  <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Source History</p>
-                    <ul className="mt-2 space-y-1">
-                      {lead.company!.sourceHistory!.slice(-3).map((entry, index) => (
-                        <li key={`${entry.source}-${entry.at}-${index}`} className="text-[11px] text-slate-600">
-                          <span className="font-bold">{entry.source}</span> found {entry.fields.join(', ') || 'no fields'} on {formatDate(entry.at)}.
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-
-              {/* Contact */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <IconUser size={16} className="text-violet-600" />
-                  <h2 className="text-sm font-black text-slate-950">Contact Details</h2>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {[
-                    [
-                      'Name',
-                      [lead.contact?.firstName, lead.contact?.lastName]
-                        .filter((p) => p && p !== 'Unknown' && p !== 'Unnamed')
-                        .join(' '),
-                      'contact.profile.fullName',
-                    ],
-                    ['Role', lead.contact?.role, 'contact.profile.jobTitle'],
-                    ['Phone', lead.contact?.phone, 'contact.profile.phone'],
-                    ['LinkedIn', lead.contact?.linkedinUrl, 'contact.profile.linkedinProfile'],
-                  ].map(([label, val, fieldKey]) =>
-                    val ? (
-                    <div key={label as string} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-800 wrap-break-word">{val as string}</p>
-                      <div className="mt-2"><FieldMetaBadge field={profileField(fieldKey as string)} /></div>
-                    </div>
-                    ) : (lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial') &&
-                      ['Name', 'LinkedIn'].includes(label as string) ? (
-                    <div key={label as string} className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
-                    </div>
-                    ) : null,
-                  )}
-                </div>
-                {lead.contact?.email ? (
-                  <div className="mt-3 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <IconMail size={15} className="text-slate-500" />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Primary email</p>
-                      <p className="mt-0.5 text-sm font-semibold text-slate-800">{lead.contact.email}</p>
-                      <div className="mt-2"><FieldMetaBadge field={profileField('contact.profile.email')} /></div>
-                      {Array.isArray((lead.contact as { otherEmails?: string[] }).otherEmails) &&
-                        ((lead.contact as { otherEmails?: string[] }).otherEmails?.length ?? 0) > 0 && (
-                        <div className="mt-2">
-                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Other valid emails</p>
-                          <ul className="mt-1 space-y-0.5">
-                            {(lead.contact as { otherEmails: string[] }).otherEmails.map((e) => (
-                              <li key={e} className="text-xs text-slate-600">{e}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                    {lead.contact.emailVerificationStatus && (
-                      <span className={`rounded-full border px-2 py-1 text-[10px] font-bold capitalize ${
-                        lead.contact.emailVerificationStatus === 'valid' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' :
-                        lead.contact.emailVerificationStatus === 'invalid' ? 'border-rose-200 bg-rose-50 text-rose-700' :
-                        lead.contact.emailVerificationStatus === 'catch_all' ? 'border-amber-200 bg-amber-50 text-amber-700' :
-                        'border-slate-200 bg-slate-50 text-slate-600'
-                      }`}>{lead.contact.emailVerificationStatus.replace('_', ' ')}</span>
-                    )}
-                  </div>
-                ) : (lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial') ? (
-                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
-                  </div>
-                ) : null}
-              </div>
-            </div>
+            <EnrichmentJson
+              data={lead.enrichmentStatus === 'not_started' ? null : enrichProfileJson}
+              emptyLabel={
+                lead.enrichmentStatus === 'not_started'
+                  ? 'Not enriched yet. Run enrichment to see the profile JSON.'
+                  : 'No enrichment profile data.'
+              }
+            />
           )}
 
-          {/* ── Tab: AI Intelligence ── */}
+          {/* ── Tab: AI Intelligence (JSON) ── */}
           {activeTab === 'ai' && (
-            <div className="space-y-4">
-              {companyNotFound && enrichmentDone ? (
-                <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/50 p-10 text-center">
-                  <IconBrain size={32} className="mx-auto mb-3 text-amber-400" />
-                  <p className="font-bold text-slate-700">Unable to find company</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    No reliable company identity was found, so AI summaries and scores were not generated.
-                    Correct the company name or location, then re-enrich.
-                  </p>
-                </div>
-              ) : !aiIntelligence ? (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                  <IconBrain size={32} className="mx-auto mb-3 text-slate-300" />
-                  <p className="font-bold text-slate-700">No AI Intelligence yet</p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    {lead.enrichmentStatus === 'not_started'
-                      ? 'Select this lead and click "Enrich" to generate AI insights.'
-                      : lead.enrichmentStatus === 'in_progress'
-                      ? 'AI research is running. The panel will update automatically.'
-                      : 'Enrichment finished but AI steps may have been skipped. Check the Enrichment Timeline.'}
-                  </p>
-                </div>
-              ) : (
-                <>
-                  {/* Scores */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      { label: 'ICP Score', val: aiIntelligence.icpScore },
-                      { label: 'Intent Score', val: aiIntelligence.intentScore },
-                      { label: 'Confidence', val: aiIntelligence.overallConfidence },
-                    ].map(({ label, val }) => (
-                      <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 text-center shadow-sm">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-                        <p className="mt-1 text-2xl font-black text-slate-950">{val ?? '—'}%</p>
-                        {scoreBar(val)}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Company Summary */}
-                  {aiIntelligence.companySummary?.value && (
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-blue-800">Company Summary</h3>
-                        <ConfidenceBadge value={aiIntelligence.companySummary.confidence} />
-                      </div>
-                      <p className="text-sm text-slate-700 leading-relaxed">{aiIntelligence.companySummary.value}</p>
-                    </div>
-                  )}
-                  {aiIntelligence.personSummary?.value && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Person Summary</h3>
-                        <ConfidenceBadge value={aiIntelligence.personSummary.confidence} />
-                      </div>
-                      <p className="text-sm text-slate-700 leading-relaxed">{aiIntelligence.personSummary.value}</p>
-                    </div>
-                  )}
-
-                  {(aiIntelligence.buyingIntent?.value || aiIntelligence.productFit?.value) && (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {aiIntelligence.buyingIntent?.value && (
-                        <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
-                          <div className="mb-2 flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase tracking-wider text-amber-800">Buying Intent</h3>
-                            <ConfidenceBadge value={aiIntelligence.buyingIntent.confidence} />
-                          </div>
-                          <p className="text-2xl font-black text-amber-900">{aiIntelligence.buyingIntent.score}%</p>
-                          <p className="mt-1 text-xs text-slate-700">{aiIntelligence.buyingIntent.value}</p>
-                        </div>
-                      )}
-                      {aiIntelligence.productFit?.value && (
-                        <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
-                          <div className="mb-2 flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase tracking-wider text-blue-800">Product Fit</h3>
-                            <ConfidenceBadge value={aiIntelligence.productFit.confidence} />
-                          </div>
-                          <p className="text-2xl font-black text-blue-900">{aiIntelligence.productFit.score}%</p>
-                          <p className="mt-1 text-xs text-slate-700">{aiIntelligence.productFit.value}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Pain Points + Buying Signals */}
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {aiIntelligence.painPoints?.value?.length ? (
-                      <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h3 className="text-xs font-black uppercase tracking-wider text-rose-800">Pain Points</h3>
-                          <ConfidenceBadge value={aiIntelligence.painPoints.confidence} />
-                        </div>
-                        <ul className="space-y-1.5">
-                          {aiIntelligence.painPoints.value.map((p, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                              <span className="mt-0.5 shrink-0 text-rose-400">•</span>{p}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                    {aiIntelligence.buyingSignals?.value?.length ? (
-                      <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
-                        <div className="mb-3 flex items-center justify-between">
-                          <h3 className="text-xs font-black uppercase tracking-wider text-emerald-800">Buying Signals</h3>
-                          <ConfidenceBadge value={aiIntelligence.buyingSignals.confidence} />
-                        </div>
-                        <ul className="space-y-1.5">
-                          {aiIntelligence.buyingSignals.value.map((s, i) => (
-                            <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                              <span className="mt-0.5 shrink-0 text-emerald-500">✓</span>{s}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {(aiIntelligence.likelyChallenges?.value?.length ||
-                    aiIntelligence.growthOpportunities?.value?.length ||
-                    aiIntelligence.recentActivity?.value?.length) ? (
-                    <div className="grid gap-4 md:grid-cols-3">
-                      {[
-                        { title: 'Likely Challenges', field: aiIntelligence.likelyChallenges, tone: 'border-rose-100 bg-rose-50/40 text-rose-800' },
-                        { title: 'Growth Opportunities', field: aiIntelligence.growthOpportunities, tone: 'border-emerald-100 bg-emerald-50/40 text-emerald-800' },
-                        { title: 'Recent Activity', field: aiIntelligence.recentActivity, tone: 'border-sky-100 bg-sky-50/40 text-sky-800' },
-                      ].map(({ title, field, tone }) => field?.value?.length ? (
-                        <div key={title} className={`rounded-2xl border p-4 ${tone}`}>
-                          <div className="mb-3 flex items-center justify-between">
-                            <h3 className="text-xs font-black uppercase tracking-wider">{title}</h3>
-                            <ConfidenceBadge value={field.confidence} />
-                          </div>
-                          <ul className="space-y-1.5">
-                            {field.value.map((item, i) => (
-                              <li key={i} className="text-xs text-slate-700">{item}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null)}
-                    </div>
-                  ) : null}
-
-                  {/* Outreach Angle + Insights */}
-                  {aiIntelligence.recommendedOutreachAngle?.value && (
-                    <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
-                      <div className="mb-2 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-violet-800">Recommended Outreach Angle</h3>
-                        <ConfidenceBadge value={aiIntelligence.recommendedOutreachAngle.confidence} />
-                      </div>
-                      <p className="text-sm text-slate-700">{aiIntelligence.recommendedOutreachAngle.value}</p>
-                    </div>
-                  )}
-                  {aiIntelligence.outreachInsights?.value?.length ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Outreach Insights</h3>
-                        <ConfidenceBadge value={aiIntelligence.outreachInsights.confidence} />
-                      </div>
-                      <ul className="space-y-1.5">
-                        {aiIntelligence.outreachInsights.value.map((ins, i) => (
-                          <li key={i} className="flex items-start gap-2 text-xs text-slate-700">
-                            <span className="mt-0.5 shrink-0 text-blue-500">→</span>{ins}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-
-                  {aiIntelligence.personaAnalysis?.value && (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="mb-3 flex items-center justify-between">
-                        <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Persona Analysis</h3>
-                        <ConfidenceBadge value={aiIntelligence.personaAnalysis.confidence} />
-                      </div>
-                      <dl className="grid gap-2 sm:grid-cols-2">
-                        {Object.entries(aiIntelligence.personaAnalysis.value).map(([key, value]) => (
-                          <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                            <dt className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{key}</dt>
-                            <dd className="mt-1 text-xs text-slate-700">
-                              {Array.isArray(value) ? value.join(', ') : String(value)}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  )}
-
-                  {/* Email Copy */}
-                  {(aiIntelligence.suggestedEmailOpening?.value || aiIntelligence.suggestedCta?.value) && (
-                    <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 space-y-3">
-                      <h3 className="text-xs font-black uppercase tracking-wider text-amber-800">Suggested Copy</h3>
-                      {aiIntelligence.suggestedEmailOpening?.value && (
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Opening</p>
-                          <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedEmailOpening.value}</p>
-                        </div>
-                      )}
-                      {aiIntelligence.suggestedCta?.value && (
-                        <div>
-                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Call To Action</p>
-                          <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedCta.value}</p>
-                        </div>
-                      )}
-                      {aiIntelligence.personalizationNotes?.value?.length ? (
-                        <div>
-                          <div className="mb-1 flex items-center justify-between">
-                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Personalization Notes</p>
-                            <ConfidenceBadge value={aiIntelligence.personalizationNotes.confidence} />
-                          </div>
-                          <ul className="space-y-1">
-                            {aiIntelligence.personalizationNotes.value.map((note, i) => (
-                              <li key={i} className="text-xs text-slate-700">{note}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <EnrichmentJson
+              data={aiIntelligence}
+              emptyLabel={
+                lead.enrichmentStatus === 'not_started'
+                  ? 'Select this lead and click "Enrich" to generate AI insights.'
+                  : lead.enrichmentStatus === 'in_progress'
+                  ? 'AI research is running. The panel will update automatically.'
+                  : 'No AI intelligence data yet.'
+              }
+            />
           )}
 
           {/* ── Tab: My Data ── */}
