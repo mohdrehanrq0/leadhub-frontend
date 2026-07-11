@@ -203,6 +203,7 @@ export type LeadRow = {
     firstName?: string | null;
     lastName?: string | null;
     email?: string | null;
+    otherEmails?: string[] | null;
     role?: string | null;
     phone?: string | null;
     linkedinUrl?: string | null;

@@ -59,6 +59,9 @@ type LeadDetail = LeadRow & {
     gapsRemaining?: string[];
     unableToFind?: string[];
     sources?: string[];
+    identityValidated?: boolean;
+    identityRejected?: boolean;
+    companyNotFound?: boolean;
   };
   lists?: LeadList[];
   activities?: Array<{
@@ -227,7 +230,9 @@ export default function LeadDetailPage() {
   const [aiIntelligence, setAiIntelligence] = useState<AiIntelligenceData | null>(null);
   const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
   const [showJourney, setShowJourney] = useState(true);
+  const [researchGoal, setResearchGoal] = useState('general');
   const [reEnriching, setReEnriching] = useState(false);
+
   const sseRef = useRef<EventSource | null>(null);
 
   // ─── Data loading ───────────────────────────────────────────────
@@ -357,7 +362,11 @@ export default function LeadDetailPage() {
 
     try {
       setReEnriching(true);
-      await api.post('/api/leads/enrich', { leadIds: [lead.id], reEnrich: isReEnrich });
+      await api.post('/api/leads/enrich', {
+        leadIds: [lead.id],
+        reEnrich: isReEnrich,
+        researchGoal: researchGoal || 'general',
+      });
       toast.success(isReEnrich ? 'Re-enrichment started.' : 'Enrichment started.');
       setShowJourney(true);
       setResearchActivities([]);
@@ -448,6 +457,32 @@ export default function LeadDetailPage() {
   const enrichMeta = enrichmentStatusMeta(lead.enrichmentStatus);
   const enrichBlock = enrichmentBlockReason(lead);
   const contactName = [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ') || lead.contact?.email || 'Unnamed';
+  const enrichmentDone =
+    lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial';
+  const companyNotFound =
+    lead.researchSuggestions?.companyNotFound === true ||
+    lead.researchSuggestions?.identityRejected === true ||
+    (lead.researchSuggestions?.identityValidated === false &&
+      (lead.researchSuggestions?.gapsRemaining ?? lead.researchSuggestions?.unableToFind ?? []).some(
+        (g) => g === 'company_not_found' || g === 'missing_valid_company_domain',
+      )) ||
+    // Legacy runs: no domain/website and identity never locked → treat as company not found
+    (enrichmentDone &&
+      !lead.company?.domain &&
+      !lead.company?.website &&
+      lead.researchSuggestions?.identityValidated === false);
+  const showCompanyUnableToFind = (label: string, val: unknown) => {
+    if (val) return false;
+    if (!enrichmentDone) return false;
+    if (['Domain', 'Website', 'LinkedIn', 'Industry', 'Size', 'Founded'].includes(label)) return true;
+    return false;
+  };
+  const companyFieldValue = (label: string, val: unknown) => {
+    if (companyNotFound && ['Industry', 'Size', 'Founded', 'Domain', 'Website', 'LinkedIn'].includes(label)) {
+      return null;
+    }
+    return val;
+  };
 
   return (
     <div className="space-y-6 animate-fade-in text-text">
@@ -489,21 +524,40 @@ export default function LeadDetailPage() {
           {/* Quick scores + enrich actions */}
           <div className="flex flex-col items-end gap-3 shrink-0">
             {(canEnrichLead(lead) || canReEnrichLead(lead)) && lead.enrichmentStatus !== 'in_progress' && (
-              <button
-                type="button"
-                onClick={() => void handleReEnrich()}
-                disabled={reEnriching}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
-              >
-                {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
-                {lead.enrichmentStatus === 'completed' ? 'Re-enrich' : 'Run enrichment'}
-              </button>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <select
+                  value={researchGoal}
+                  onChange={(e) => setResearchGoal(e.target.value)}
+                  className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700"
+                  title="Research goal steers which decision-maker roles we search"
+                >
+                  <option value="general">Goal: General</option>
+                  <option value="marketing">Goal: Marketing</option>
+                  <option value="sales">Goal: Sales</option>
+                  <option value="engineering">Goal: Engineering</option>
+                  <option value="AI">Goal: AI</option>
+                  <option value="automation">Goal: Automation</option>
+                  <option value="security">Goal: Security</option>
+                  <option value="finance">Goal: Finance</option>
+                  <option value="HR">Goal: HR</option>
+                  <option value="operations">Goal: Operations</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void handleReEnrich()}
+                  disabled={reEnriching}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+                >
+                  {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
+                  {lead.enrichmentStatus === 'completed' ? 'Re-enrich' : 'Run enrichment'}
+                </button>
+              </div>
             )}
             <div className="flex gap-4">
-            {[{ label: 'ICP', val: lead.icpScore }, { label: 'Intent', val: lead.intentScore }, { label: 'Confidence', val: lead.confidence }].map(({ label, val }) => (
+            {[{ label: 'ICP', val: companyNotFound ? null : lead.icpScore }, { label: 'Intent', val: companyNotFound ? null : lead.intentScore }, { label: 'Confidence', val: companyNotFound ? null : lead.confidence }].map(({ label, val }) => (
               <div key={label} className="w-24 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-black text-slate-950">{val ?? 0}%</p>
+                <p className="mt-1 text-xl font-black text-slate-950">{val == null ? '—' : `${val}%`}</p>
                 {scoreBar(val)}
               </div>
             ))}
@@ -708,28 +762,33 @@ export default function LeadDetailPage() {
                   )}
                 </div>
                 {((lead.researchSuggestions?.unableToFind?.length ?? 0) > 0 ||
-                  (lead.researchSuggestions?.gapsRemaining?.length ?? 0) > 0) &&
-                  (lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial') && (
+                  (lead.researchSuggestions?.gapsRemaining?.length ?? 0) > 0 ||
+                  companyNotFound) &&
+                  enrichmentDone && (
                   <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Unable to find</p>
                     <p className="mt-0.5 text-xs text-amber-900">
-                      {(lead.researchSuggestions?.unableToFind ?? lead.researchSuggestions?.gapsRemaining ?? []).join(' · ')}
+                      {companyNotFound
+                        ? 'Company — no reliable public match for this name/location'
+                        : (lead.researchSuggestions?.unableToFind ?? lead.researchSuggestions?.gapsRemaining ?? []).join(' · ')}
                     </p>
                     <p className="mt-1 text-[10px] text-amber-700/80">
-                      Retried with discovered website/domain anchors; still no reliable public match.
+                      {companyNotFound
+                        ? 'Correct the company name or location, then re-enrich.'
+                        : 'Retried with discovered website/domain anchors; still no reliable public match.'}
                     </p>
                   </div>
                 )}
                 <div className="grid gap-3 sm:grid-cols-2">
                   {[
                     ['Name', lead.company?.name, 'company.identity.companyName'],
-                    ['Domain', lead.company?.domain, 'company.identity.website'],
-                    ['Website', lead.company?.website, 'company.identity.website'],
-                    ['Industry', lead.company?.industry, 'company.profile.industry'],
-                    ['Size', lead.company?.size, 'company.profile.companySize'],
-                    ['Founded', lead.company?.foundedYear?.toString(), 'company.profile.foundedYear'],
+                    ['Domain', companyFieldValue('Domain', lead.company?.domain), 'company.identity.website'],
+                    ['Website', companyFieldValue('Website', lead.company?.website), 'company.identity.website'],
+                    ['Industry', companyFieldValue('Industry', lead.company?.industry), 'company.profile.industry'],
+                    ['Size', companyFieldValue('Size', lead.company?.size), 'company.profile.companySize'],
+                    ['Founded', companyFieldValue('Founded', lead.company?.foundedYear?.toString()), 'company.profile.foundedYear'],
                     ['Location', [lead.company?.location?.city, lead.company?.location?.country].filter(Boolean).join(', '), 'company.profile.headquarters'],
-                    ['LinkedIn', (lead.company?.socialLinks as Record<string, string>)?.linkedin, 'company.social.linkedin'],
+                    ['LinkedIn', companyFieldValue('LinkedIn', (lead.company?.socialLinks as Record<string, string>)?.linkedin), 'company.social.linkedin'],
                   ].map(([label, val, fieldKey]) =>
                     val ? (
                     <div key={label as string} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -737,8 +796,7 @@ export default function LeadDetailPage() {
                       <p className="mt-0.5 text-sm font-semibold text-slate-800 wrap-break-word">{val as string}</p>
                       <div className="mt-2"><FieldMetaBadge field={profileField(fieldKey as string)} /></div>
                     </div>
-                    ) : (lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial') &&
-                      ['Domain', 'Website', 'LinkedIn'].includes(label as string) ? (
+                    ) : showCompanyUnableToFind(label as string, val) ? (
                     <div key={label as string} className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
                       <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
@@ -746,13 +804,19 @@ export default function LeadDetailPage() {
                     ) : null,
                   )}
                 </div>
-                {lead.company?.description && (
+                {!companyNotFound && lead.company?.description && (
                   <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</p>
                     <p className="mt-0.5 text-sm text-slate-700">{lead.company.description}</p>
                   </div>
                 )}
-                {(lead.company?.technologies?.length ?? 0) > 0 && (
+                {companyNotFound && enrichmentDone && (
+                  <div className="mt-3 rounded-xl border border-dashed border-slate-200 bg-slate-50/60 p-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Description</p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-400">Unable to find</p>
+                  </div>
+                )}
+                {!companyNotFound && (lead.company?.technologies?.length ?? 0) > 0 && (
                   <div className="mt-3">
                     <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Tech Stack</p>
                     <div className="flex flex-wrap gap-1.5">
@@ -764,6 +828,7 @@ export default function LeadDetailPage() {
                   </div>
                 )}
                 {(['products', 'services'] as const).map((key) => {
+                  if (companyNotFound) return null;
                   const values = lead.company?.[key] ?? [];
                   if (!values.length) return null;
                   const fieldKey = key === 'products' ? 'company.products.products' : 'company.products.services';
@@ -833,9 +898,20 @@ export default function LeadDetailPage() {
                   <div className="mt-3 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
                     <IconMail size={15} className="text-slate-500" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Email</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Primary email</p>
                       <p className="mt-0.5 text-sm font-semibold text-slate-800">{lead.contact.email}</p>
                       <div className="mt-2"><FieldMetaBadge field={profileField('contact.profile.email')} /></div>
+                      {Array.isArray((lead.contact as { otherEmails?: string[] }).otherEmails) &&
+                        ((lead.contact as { otherEmails?: string[] }).otherEmails?.length ?? 0) > 0 && (
+                        <div className="mt-2">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Other valid emails</p>
+                          <ul className="mt-1 space-y-0.5">
+                            {(lead.contact as { otherEmails: string[] }).otherEmails.map((e) => (
+                              <li key={e} className="text-xs text-slate-600">{e}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                     {lead.contact.emailVerificationStatus && (
                       <span className={`rounded-full border px-2 py-1 text-[10px] font-bold capitalize ${
@@ -859,7 +935,16 @@ export default function LeadDetailPage() {
           {/* ── Tab: AI Intelligence ── */}
           {activeTab === 'ai' && (
             <div className="space-y-4">
-              {!aiIntelligence ? (
+              {companyNotFound && enrichmentDone ? (
+                <div className="rounded-2xl border border-dashed border-amber-200 bg-amber-50/50 p-10 text-center">
+                  <IconBrain size={32} className="mx-auto mb-3 text-amber-400" />
+                  <p className="font-bold text-slate-700">Unable to find company</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    No reliable company identity was found, so AI summaries and scores were not generated.
+                    Correct the company name or location, then re-enrich.
+                  </p>
+                </div>
+              ) : !aiIntelligence ? (
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
                   <IconBrain size={32} className="mx-auto mb-3 text-slate-300" />
                   <p className="font-bold text-slate-700">No AI Intelligence yet</p>
@@ -889,7 +974,7 @@ export default function LeadDetailPage() {
                   </div>
 
                   {/* Company Summary */}
-                  {aiIntelligence.companySummary && (
+                  {aiIntelligence.companySummary?.value && (
                     <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5">
                       <div className="mb-2 flex items-center justify-between">
                         <h3 className="text-xs font-black uppercase tracking-wider text-blue-800">Company Summary</h3>
@@ -898,7 +983,7 @@ export default function LeadDetailPage() {
                       <p className="text-sm text-slate-700 leading-relaxed">{aiIntelligence.companySummary.value}</p>
                     </div>
                   )}
-                  {aiIntelligence.personSummary && (
+                  {aiIntelligence.personSummary?.value && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="mb-2 flex items-center justify-between">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Person Summary</h3>
@@ -908,9 +993,9 @@ export default function LeadDetailPage() {
                     </div>
                   )}
 
-                  {(aiIntelligence.buyingIntent || aiIntelligence.productFit) && (
+                  {(aiIntelligence.buyingIntent?.value || aiIntelligence.productFit?.value) && (
                     <div className="grid gap-4 md:grid-cols-2">
-                      {aiIntelligence.buyingIntent && (
+                      {aiIntelligence.buyingIntent?.value && (
                         <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4">
                           <div className="mb-2 flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase tracking-wider text-amber-800">Buying Intent</h3>
@@ -920,7 +1005,7 @@ export default function LeadDetailPage() {
                           <p className="mt-1 text-xs text-slate-700">{aiIntelligence.buyingIntent.value}</p>
                         </div>
                       )}
-                      {aiIntelligence.productFit && (
+                      {aiIntelligence.productFit?.value && (
                         <div className="rounded-2xl border border-blue-100 bg-blue-50/40 p-4">
                           <div className="mb-2 flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase tracking-wider text-blue-800">Product Fit</h3>
@@ -935,7 +1020,7 @@ export default function LeadDetailPage() {
 
                   {/* Pain Points + Buying Signals */}
                   <div className="grid gap-4 md:grid-cols-2">
-                    {aiIntelligence.painPoints && (
+                    {aiIntelligence.painPoints?.value?.length ? (
                       <div className="rounded-2xl border border-rose-100 bg-rose-50/40 p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <h3 className="text-xs font-black uppercase tracking-wider text-rose-800">Pain Points</h3>
@@ -949,8 +1034,8 @@ export default function LeadDetailPage() {
                           ))}
                         </ul>
                       </div>
-                    )}
-                    {aiIntelligence.buyingSignals && (
+                    ) : null}
+                    {aiIntelligence.buyingSignals?.value?.length ? (
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
                         <div className="mb-3 flex items-center justify-between">
                           <h3 className="text-xs font-black uppercase tracking-wider text-emerald-800">Buying Signals</h3>
@@ -964,16 +1049,18 @@ export default function LeadDetailPage() {
                           ))}
                         </ul>
                       </div>
-                    )}
+                    ) : null}
                   </div>
 
-                  {(aiIntelligence.likelyChallenges || aiIntelligence.growthOpportunities || aiIntelligence.recentActivity) && (
+                  {(aiIntelligence.likelyChallenges?.value?.length ||
+                    aiIntelligence.growthOpportunities?.value?.length ||
+                    aiIntelligence.recentActivity?.value?.length) ? (
                     <div className="grid gap-4 md:grid-cols-3">
                       {[
                         { title: 'Likely Challenges', field: aiIntelligence.likelyChallenges, tone: 'border-rose-100 bg-rose-50/40 text-rose-800' },
                         { title: 'Growth Opportunities', field: aiIntelligence.growthOpportunities, tone: 'border-emerald-100 bg-emerald-50/40 text-emerald-800' },
                         { title: 'Recent Activity', field: aiIntelligence.recentActivity, tone: 'border-sky-100 bg-sky-50/40 text-sky-800' },
-                      ].map(({ title, field, tone }) => field ? (
+                      ].map(({ title, field, tone }) => field?.value?.length ? (
                         <div key={title} className={`rounded-2xl border p-4 ${tone}`}>
                           <div className="mb-3 flex items-center justify-between">
                             <h3 className="text-xs font-black uppercase tracking-wider">{title}</h3>
@@ -987,10 +1074,10 @@ export default function LeadDetailPage() {
                         </div>
                       ) : null)}
                     </div>
-                  )}
+                  ) : null}
 
                   {/* Outreach Angle + Insights */}
-                  {aiIntelligence.recommendedOutreachAngle && (
+                  {aiIntelligence.recommendedOutreachAngle?.value && (
                     <div className="rounded-2xl border border-violet-100 bg-violet-50/40 p-4">
                       <div className="mb-2 flex items-center justify-between">
                         <h3 className="text-xs font-black uppercase tracking-wider text-violet-800">Recommended Outreach Angle</h3>
@@ -999,7 +1086,7 @@ export default function LeadDetailPage() {
                       <p className="text-sm text-slate-700">{aiIntelligence.recommendedOutreachAngle.value}</p>
                     </div>
                   )}
-                  {aiIntelligence.outreachInsights && (
+                  {aiIntelligence.outreachInsights?.value?.length ? (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Outreach Insights</h3>
@@ -1013,9 +1100,9 @@ export default function LeadDetailPage() {
                         ))}
                       </ul>
                     </div>
-                  )}
+                  ) : null}
 
-                  {aiIntelligence.personaAnalysis && (
+                  {aiIntelligence.personaAnalysis?.value && (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="mb-3 flex items-center justify-between">
                         <h3 className="text-xs font-black uppercase tracking-wider text-slate-700">Persona Analysis</h3>
@@ -1035,22 +1122,22 @@ export default function LeadDetailPage() {
                   )}
 
                   {/* Email Copy */}
-                  {(aiIntelligence.suggestedEmailOpening || aiIntelligence.suggestedCta) && (
+                  {(aiIntelligence.suggestedEmailOpening?.value || aiIntelligence.suggestedCta?.value) && (
                     <div className="rounded-2xl border border-amber-100 bg-amber-50/40 p-4 space-y-3">
                       <h3 className="text-xs font-black uppercase tracking-wider text-amber-800">Suggested Copy</h3>
-                      {aiIntelligence.suggestedEmailOpening && (
+                      {aiIntelligence.suggestedEmailOpening?.value && (
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Email Opening</p>
                           <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedEmailOpening.value}</p>
                         </div>
                       )}
-                      {aiIntelligence.suggestedCta && (
+                      {aiIntelligence.suggestedCta?.value && (
                         <div>
                           <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Call To Action</p>
                           <p className="text-sm text-slate-700 italic">{aiIntelligence.suggestedCta.value}</p>
                         </div>
                       )}
-                      {aiIntelligence.personalizationNotes && (
+                      {aiIntelligence.personalizationNotes?.value?.length ? (
                         <div>
                           <div className="mb-1 flex items-center justify-between">
                             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Personalization Notes</p>
@@ -1062,7 +1149,7 @@ export default function LeadDetailPage() {
                             ))}
                           </ul>
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </>
