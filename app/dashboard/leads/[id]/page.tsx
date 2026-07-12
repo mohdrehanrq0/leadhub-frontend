@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   IconActivity,
   IconArrowLeft,
@@ -15,6 +15,7 @@ import {
   IconLoader2,
   IconNotes,
   IconSparkles,
+  IconTrash,
   IconX,
   IconRefresh,
 } from '@tabler/icons-react';
@@ -191,6 +192,245 @@ function EnrichmentJson({ data, emptyLabel }: { data: unknown; emptyLabel: strin
   );
 }
 
+function ChipList({ items, tone = 'slate' }: { items: string[]; tone?: 'slate' | 'emerald' | 'rose' | 'amber' }) {
+  if (!items.length) return <p className="text-xs text-slate-400">—</p>;
+  const tones = {
+    slate: 'border-slate-200 bg-slate-50 text-slate-700',
+    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    rose: 'border-rose-200 bg-rose-50 text-rose-800',
+    amber: 'border-amber-200 bg-amber-50 text-amber-800',
+  };
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {items.map((item) => (
+        <li key={item} className={`rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}>
+          {item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function OutreachSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function AiOutreachPanel({ data }: { data: AiIntelligenceData }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const icp = data.icpBreakdown;
+  const intent = data.intentBreakdown;
+  const conf = data.confidenceBreakdown;
+  const vars = data.emailVariables;
+
+  return (
+    <div className="space-y-4">
+      {/* Score breakdowns */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <OutreachSection title={`ICP Score · ${icp?.score ?? data.icpScore ?? '—'}%`}>
+          {icp ? (
+            <div className="space-y-2">
+              <div>
+                <p className="text-[10px] font-bold text-emerald-700 mb-1">Matched</p>
+                <ChipList items={icp.matched.map((m) => `✓ ${m}`)} tone="emerald" />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-rose-700 mb-1">Missing</p>
+                <ChipList items={icp.missing.map((m) => `✗ ${m}`)} tone="rose" />
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm font-black text-slate-900">{data.icpScore == null ? '—' : `${data.icpScore}%`}</p>
+          )}
+        </OutreachSection>
+
+        <OutreachSection title={`Intent · ${intent?.score ?? data.intentScore ?? '—'}%`}>
+          {intent?.contributions?.length ? (
+            <ul className="space-y-1">
+              {intent.contributions.slice(0, 8).map((c) => (
+                <li key={`${c.signal}-${c.delta}`} className="flex justify-between gap-2 text-xs text-slate-700">
+                  <span className="truncate">{c.signal}</span>
+                  <span className="font-bold text-slate-950 shrink-0">+{c.delta}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm font-black text-slate-900">{data.intentScore == null ? '—' : `${data.intentScore}%`}</p>
+          )}
+        </OutreachSection>
+
+        <OutreachSection title={`Confidence · ${conf?.overall ?? data.overallConfidence ?? '—'}%`}>
+          {conf ? (
+            <ul className="space-y-1 text-xs text-slate-700">
+              {([
+                ['Company', conf.company],
+                ['Person', conf.person],
+                ['Email', conf.email],
+                ['Buying Intent', conf.buyingIntent],
+                ['Pain Points', conf.painPoints],
+              ] as const).map(([label, val]) => (
+                <li key={label} className="flex justify-between gap-2">
+                  <span>{label}</span>
+                  <span className="font-bold text-slate-950">{val}%</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm font-black text-slate-900">{data.overallConfidence == null ? '—' : `${data.overallConfidence}%`}</p>
+          )}
+        </OutreachSection>
+      </div>
+
+      {/* Summaries */}
+      {(data.companySummary?.value || data.personSummary?.value) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.companySummary?.value && (
+            <OutreachSection title="Company Summary">
+              <p className="text-sm text-slate-800 leading-relaxed">{data.companySummary.value}</p>
+            </OutreachSection>
+          )}
+          {data.personSummary?.value && (
+            <OutreachSection title="Person Summary">
+              <p className="text-sm text-slate-800 leading-relaxed">{data.personSummary.value}</p>
+            </OutreachSection>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Best Outreach Angle">
+          <p className="text-sm font-semibold text-slate-900">
+            {data.bestOutreachAngle?.value || data.recommendedOutreachAngle?.value || '—'}
+          </p>
+        </OutreachSection>
+        <OutreachSection title="Growth Stage">
+          <p className="text-sm font-semibold text-slate-900 capitalize">{data.growthStage?.replace(/_/g, ' ') || '—'}</p>
+        </OutreachSection>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Pain Points">
+          <ChipList items={data.painPoints?.value ?? []} tone="amber" />
+        </OutreachSection>
+        <OutreachSection title="Likely Objections">
+          <ChipList items={data.outreachObjections ?? []} tone="rose" />
+        </OutreachSection>
+      </div>
+
+      <OutreachSection title="Personalization Snippets">
+        {(data.personalizationSnippets ?? []).length ? (
+          <ul className="space-y-1.5">
+            {(data.personalizationSnippets ?? []).map((s) => (
+              <li key={s} className="text-sm text-slate-800 border-l-2 border-slate-300 pl-2">{s}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">—</p>
+        )}
+      </OutreachSection>
+
+      {vars && (
+        <OutreachSection title="Email Variables">
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(['hook', 'problem', 'benefit', 'cta', 'proof', 'competitor', 'trigger'] as const).map((key) => (
+              <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{`{{${key}}}`}</p>
+                <p className="mt-0.5 text-xs text-slate-800">{vars[key] || '—'}</p>
+              </div>
+            ))}
+          </div>
+        </OutreachSection>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Recent Company Events">
+          <ChipList items={(data.recentCompanyEvents ?? []).map((e) => e.label)} />
+        </OutreachSection>
+        <OutreachSection title="Website CTAs">
+          <ChipList items={data.websiteCtas ?? []} tone="emerald" />
+        </OutreachSection>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Competitors">
+          <ChipList items={data.competitors ?? []} />
+        </OutreachSection>
+        <OutreachSection title="Ideal Buyer Persona">
+          <ChipList items={data.idealBuyerPersona ?? []} />
+        </OutreachSection>
+      </div>
+
+      <OutreachSection title="Existing Tools">
+        {(data.existingTools ?? []).length ? (
+          <ul className="space-y-2">
+            {(data.existingTools ?? []).map((g) => (
+              <li key={g.category}>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{g.category}</p>
+                <ChipList items={g.tools} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">—</p>
+        )}
+      </OutreachSection>
+
+      {(data.techChanges ?? []).length > 0 && (
+        <OutreachSection title="Tech Changes">
+          <ChipList items={data.techChanges ?? []} tone="amber" />
+        </OutreachSection>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Company LinkedIn Posts">
+          {(data.companyLinkedInPosts ?? []).length ? (
+            <ul className="space-y-2">
+              {(data.companyLinkedInPosts ?? []).map((p) => (
+                <li key={p.url ?? p.text} className="text-xs text-slate-700">
+                  <p>{p.text}</p>
+                  {p.topics?.length ? <ChipList items={p.topics} /> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-400">—</p>
+          )}
+        </OutreachSection>
+        <OutreachSection title="Person LinkedIn Posts">
+          {(data.personLinkedInPosts ?? []).length ? (
+            <ul className="space-y-2">
+              {(data.personLinkedInPosts ?? []).map((p) => (
+                <li key={p.url ?? p.text} className="text-xs text-slate-700">
+                  <p>{p.text}</p>
+                  {p.topics?.length ? <ChipList items={p.topics} /> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-slate-400">—</p>
+          )}
+        </OutreachSection>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Debug</p>
+        <button
+          type="button"
+          onClick={() => setShowRaw((v) => !v)}
+          className="text-xs font-bold text-slate-500 hover:text-slate-900"
+        >
+          {showRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+        </button>
+      </div>
+      {showRaw && <EnrichmentJson data={data} emptyLabel="No AI intelligence data yet." />}
+    </div>
+  );
+}
+
 // ─── Step status icon ─────────────────────────────────────────────
 
 function StepStatusIcon({ status }: { status: string }) {
@@ -205,6 +445,7 @@ function StepStatusIcon({ status }: { status: string }) {
 
 export default function LeadDetailPage() {
   const { activeWorkspaceId } = useAuth();
+  const router = useRouter();
   const { id } = useParams() as { id: string };
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
@@ -212,6 +453,7 @@ export default function LeadDetailPage() {
   const [lists, setLists] = useState<LeadList[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [notes, setNotes] = useState('');
   const [listToAdd, setListToAdd] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('verified');
@@ -398,6 +640,35 @@ export default function LeadDetailPage() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!lead || deleting) return;
+    if (lead.enrichmentStatus === 'in_progress') {
+      toast.error('Cannot delete a lead while enrichment is in progress. Wait for it to finish.');
+      return;
+    }
+    const label =
+      [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ') ||
+      lead.contact?.email ||
+      lead.company?.name ||
+      'this lead';
+    const ok = window.confirm(
+      `Permanently delete ${label}? This cannot be undone.`,
+    );
+    if (!ok) return;
+
+    try {
+      setDeleting(true);
+      sseRef.current?.close();
+      sseRef.current = null;
+      await api.delete(`/api/leads/${id}`);
+      toast.success('Lead deleted.');
+      router.push('/dashboard/leads');
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to delete lead.'));
+      setDeleting(false);
+    }
+  };
+
   // ─── Helpers ────────────────────────────────────────────────────
 
   const formatDate = (v?: string | null) =>
@@ -517,36 +788,52 @@ export default function LeadDetailPage() {
 
           {/* Quick scores + enrich actions */}
           <div className="flex flex-col items-end gap-3 shrink-0">
-            {(canEnrichLead(lead) || canReEnrichLead(lead)) && lead.enrichmentStatus !== 'in_progress' && (
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <select
-                  value={researchGoal}
-                  onChange={(e) => setResearchGoal(e.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700"
-                  title="Research goal steers which decision-maker roles we search"
-                >
-                  <option value="general">Goal: General</option>
-                  <option value="marketing">Goal: Marketing</option>
-                  <option value="sales">Goal: Sales</option>
-                  <option value="engineering">Goal: Engineering</option>
-                  <option value="AI">Goal: AI</option>
-                  <option value="automation">Goal: Automation</option>
-                  <option value="security">Goal: Security</option>
-                  <option value="finance">Goal: Finance</option>
-                  <option value="HR">Goal: HR</option>
-                  <option value="operations">Goal: Operations</option>
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void handleReEnrich()}
-                  disabled={reEnriching}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
-                >
-                  {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
-                  {lead.enrichmentStatus === 'completed' ? 'Re-enrich' : 'Run enrichment'}
-                </button>
-              </div>
-            )}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {(canEnrichLead(lead) || canReEnrichLead(lead)) && lead.enrichmentStatus !== 'in_progress' && (
+                <>
+                  <select
+                    value={researchGoal}
+                    onChange={(e) => setResearchGoal(e.target.value)}
+                    className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700"
+                    title="Research goal steers which decision-maker roles we search"
+                  >
+                    <option value="general">Goal: General</option>
+                    <option value="marketing">Goal: Marketing</option>
+                    <option value="sales">Goal: Sales</option>
+                    <option value="engineering">Goal: Engineering</option>
+                    <option value="AI">Goal: AI</option>
+                    <option value="automation">Goal: Automation</option>
+                    <option value="security">Goal: Security</option>
+                    <option value="finance">Goal: Finance</option>
+                    <option value="HR">Goal: HR</option>
+                    <option value="operations">Goal: Operations</option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => void handleReEnrich()}
+                    disabled={reEnriching || deleting}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+                  >
+                    {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
+                    {lead.enrichmentStatus === 'completed' ? 'Re-enrich' : 'Run enrichment'}
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting || lead.enrichmentStatus === 'in_progress'}
+                title={
+                  lead.enrichmentStatus === 'in_progress'
+                    ? 'Wait for enrichment to finish before deleting'
+                    : 'Delete this lead permanently'
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deleting ? <IconLoader2 size={14} className="animate-spin" /> : <IconTrash size={14} />}
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
             <div className="flex gap-4">
             {[{ label: 'ICP', val: companyNotFound ? null : lead.icpScore }, { label: 'Intent', val: companyNotFound ? null : lead.intentScore }, { label: 'Confidence', val: companyNotFound ? null : lead.confidence }].map(({ label, val }) => (
               <div key={label} className="w-24 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
@@ -728,7 +1015,7 @@ export default function LeadDetailPage() {
           <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
             {([
               { id: 'verified', label: 'Verified Facts', icon: <IconBuilding size={14} /> },
-              { id: 'ai', label: 'AI Intelligence', icon: <IconBrain size={14} /> },
+              { id: 'ai', label: 'Outreach', icon: <IconBrain size={14} /> },
               { id: 'mydata', label: 'My Data', icon: <IconNotes size={14} /> },
             ] as { id: Tab; label: string; icon: React.ReactNode }[]).map((tab) => (
               <button
@@ -753,18 +1040,22 @@ export default function LeadDetailPage() {
             />
           )}
 
-          {/* ── Tab: AI Intelligence (JSON) ── */}
+          {/* ── Tab: Outreach (AI intelligence cards) ── */}
           {activeTab === 'ai' && (
-            <EnrichmentJson
-              data={aiIntelligence}
-              emptyLabel={
-                lead.enrichmentStatus === 'not_started'
-                  ? 'Select this lead and click "Enrich" to generate AI insights.'
-                  : lead.enrichmentStatus === 'in_progress'
-                  ? 'AI research is running. The panel will update automatically.'
-                  : 'No AI intelligence data yet.'
-              }
-            />
+            aiIntelligence ? (
+              <AiOutreachPanel data={aiIntelligence} />
+            ) : (
+              <EnrichmentJson
+                data={null}
+                emptyLabel={
+                  lead.enrichmentStatus === 'not_started'
+                    ? 'Select this lead and click "Enrich" to generate outreach insights.'
+                    : lead.enrichmentStatus === 'in_progress'
+                    ? 'AI research is running. The panel will update automatically.'
+                    : 'No AI intelligence data yet.'
+                }
+              />
+            )
           )}
 
           {/* ── Tab: My Data ── */}

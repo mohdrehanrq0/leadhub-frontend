@@ -140,6 +140,9 @@ export default function CampaignsPage() {
               placeholder="Quick question about {{companyName}}"
               className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-xs text-text-100 focus:outline-none focus:border-primary"
             />
+            <p className="text-[10px] text-text-300 mt-1">
+              Merge fields: {'{{companyName}}'}, {'{{contactName}}'}, {'{{hook}}'}, {'{{problem}}'}, {'{{benefit}}'}, {'{{cta}}'}, {'{{proof}}'}, {'{{competitor}}'}, {'{{trigger}}'}
+            </p>
           </div>
 
           <div className="space-y-1">
@@ -148,7 +151,7 @@ export default function CampaignsPage() {
               required
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Hi {{contactName}}, noticed that you're running things at {{companyName}}..."
+              placeholder="Hi {{contactName}}, {{hook}} — {{problem}}. {{benefit}} {{cta}}"
               className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-xs h-32 text-text-100 focus:outline-none focus:border-primary"
             />
           </div>

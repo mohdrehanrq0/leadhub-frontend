@@ -114,6 +114,37 @@ export type AiIntelligenceData = {
   outreachInsights?: AiIntelligenceField<string[]>;
   suggestedEmailOpening?: AiIntelligenceField<string>;
   suggestedCta?: AiIntelligenceField<string>;
+  icpBreakdown?: { score: number; matched: string[]; missing: string[] } | null;
+  intentBreakdown?: { score: number; contributions: Array<{ signal: string; delta: number }> } | null;
+  confidenceBreakdown?: {
+    company: number;
+    person: number;
+    email: number;
+    buyingIntent: number;
+    painPoints: number;
+    overall: number;
+  } | null;
+  recentCompanyEvents?: Array<{ type: string; label: string; dateHint?: string; sourceUrl?: string }> | null;
+  companyLinkedInPosts?: Array<{ text: string; topics: string[]; engagementHint?: string | null; url?: string }> | null;
+  personLinkedInPosts?: Array<{ text: string; topics: string[]; engagementHint?: string | null; url?: string }> | null;
+  techChanges?: string[] | null;
+  competitors?: string[] | null;
+  existingTools?: Array<{ category: string; tools: string[] }> | null;
+  websiteCtas?: string[] | null;
+  idealBuyerPersona?: string[] | null;
+  growthStage?: string | null;
+  outreachObjections?: string[] | null;
+  bestOutreachAngle?: AiIntelligenceField<string>;
+  personalizationSnippets?: string[] | null;
+  emailVariables?: {
+    hook: string;
+    problem: string;
+    benefit: string;
+    cta: string;
+    proof: string;
+    competitor: string;
+    trigger: string;
+  } | null;
   icpScore?: number | null;
   intentScore?: number | null;
   overallConfidence?: number | null;
