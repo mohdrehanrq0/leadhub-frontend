@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
 import {
@@ -37,10 +38,20 @@ const PROVIDER_LABEL: Record<Provider, string> = {
   leadsnipper: 'LeadSniper',
 };
 
-export default function ApiKeysPage() {
+const VALID_PROVIDERS: Provider[] = ['apollo', 'apify', 'openai', 'gemini', 'leadsnipper'];
+
+function ApiKeysPageInner() {
+  const searchParams = useSearchParams();
+  const providerFromQuery = searchParams.get('provider');
+
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [provider, setProvider] = useState<Provider>('apollo');
+  const [provider, setProvider] = useState<Provider>(() => {
+    if (providerFromQuery && VALID_PROVIDERS.includes(providerFromQuery as Provider)) {
+      return providerFromQuery as Provider;
+    }
+    return 'apollo';
+  });
   const [keyValue, setKeyValue] = useState('');
   const [newKeyModels, setNewKeyModels] = useState<ProviderModelOption[]>([]);
   const [selectedNewKeyModel, setSelectedNewKeyModel] = useState('');
@@ -58,6 +69,12 @@ export default function ApiKeysPage() {
   useEffect(() => {
     void Promise.all([fetchKeys(), fetchPreferences()]);
   }, []);
+
+  useEffect(() => {
+    if (providerFromQuery && VALID_PROVIDERS.includes(providerFromQuery as Provider)) {
+      setProvider(providerFromQuery as Provider);
+    }
+  }, [providerFromQuery]);
 
   useEffect(() => {
     setNewKeyModels([]);
@@ -474,5 +491,19 @@ export default function ApiKeysPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ApiKeysPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="w-full flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <ApiKeysPageInner />
+    </Suspense>
   );
 }

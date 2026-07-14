@@ -10,6 +10,8 @@ interface User {
   firstName?: string;
   lastName?: string;
   emailVerifiedAt?: string;
+  /** LeadHub product/platform admin — not workspace admin. */
+  isPlatformAdmin?: boolean;
 }
 
 interface AuthContextType {

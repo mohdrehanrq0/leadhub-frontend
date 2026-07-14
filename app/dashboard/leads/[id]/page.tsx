@@ -30,10 +30,12 @@ import {
   CanonicalLeadProfile,
   ENRICHMENT_STEP_ICONS,
   ENRICHMENT_STEP_LABELS,
+  enrichmentFromLead,
   EnrichmentLog,
   EnrichmentStep,
   enrichmentStatusMeta,
   enrichmentBlockReason,
+  enrichmentDisabledReason,
   LeadCategory,
   LeadList,
   LeadRow,
@@ -444,7 +446,8 @@ function StepStatusIcon({ status }: { status: string }) {
 // ─── Main Page ────────────────────────────────────────────────────
 
 export default function LeadDetailPage() {
-  const { activeWorkspaceId } = useAuth();
+  const { activeWorkspaceId, user } = useAuth();
+  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const router = useRouter();
   const { id } = useParams() as { id: string };
 
@@ -465,7 +468,6 @@ export default function LeadDetailPage() {
   const [aiIntelligence, setAiIntelligence] = useState<AiIntelligenceData | null>(null);
   const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
   const [showJourney, setShowJourney] = useState(true);
-  const [researchGoal, setResearchGoal] = useState('general');
   const [reEnriching, setReEnriching] = useState(false);
 
   const sseRef = useRef<EventSource | null>(null);
@@ -600,7 +602,6 @@ export default function LeadDetailPage() {
       await api.post('/api/leads/enrich', {
         leadIds: [lead.id],
         reEnrich: isReEnrich,
-        researchGoal: researchGoal || 'general',
       });
       toast.success(isReEnrich ? 'Re-enrichment started.' : 'Enrichment started.');
       setShowJourney(true);
@@ -719,6 +720,9 @@ export default function LeadDetailPage() {
 
   const enrichMeta = enrichmentStatusMeta(lead.enrichmentStatus);
   const enrichBlock = enrichmentBlockReason(lead);
+  const enrichDisabledMsg = enrichmentDisabledReason(lead);
+  const canRunEnrich =
+    (canEnrichLead(lead) || canReEnrichLead(lead)) && lead.enrichmentStatus !== 'in_progress';
   const contactName = [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ') || lead.contact?.email || 'Unnamed';
   const enrichmentDone =
     lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial';
@@ -735,6 +739,39 @@ export default function LeadDetailPage() {
       !lead.company?.website &&
       lead.researchSuggestions?.identityValidated === false);
 
+  const enrichment = enrichmentFromLead(lead);
+  const companyForJson = lead.company
+    ? (() => {
+        const { sourceHistory: _pages, location, ...rest } = lead.company as typeof lead.company & {
+          sourceHistory?: unknown;
+          location?: unknown;
+        };
+        const loc =
+          location && typeof location === 'object' && Object.keys(location as object).length > 0
+            ? location
+            : undefined;
+        return { ...rest, ...(loc ? { location: loc } : {}) };
+      })()
+    : null;
+
+  const profileFields = canonicalProfile?.fields
+    ? Object.fromEntries(
+        Object.entries(canonicalProfile.fields).filter(([, field]) => {
+          const value = field?.value;
+          if (value === null || value === undefined || value === '') return false;
+          if (Array.isArray(value) && value.length === 0) return false;
+          if (
+            typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.keys(value as object).length === 0
+          ) {
+            return false;
+          }
+          return true;
+        }),
+      )
+    : null;
+
   const enrichProfileJson = {
     enrichmentStatus: lead.enrichmentStatus,
     enrichmentError: lead.enrichmentError ?? null,
@@ -743,10 +780,27 @@ export default function LeadDetailPage() {
       intentScore: lead.intentScore ?? null,
       confidence: lead.confidence ?? null,
     },
-    company: lead.company ?? null,
-    contact: lead.contact ?? null,
+    company: companyForJson,
+    contact: lead.contact
+      ? {
+          ...lead.contact,
+          otherEmails: lead.contact.otherEmails ?? [],
+        }
+      : null,
+    people: enrichment?.people ?? [],
+    contacts: enrichment?.contacts ?? [],
+    emails: enrichment?.emails
+      ? {
+          primary: enrichment.emails.primary,
+          secondary: enrichment.emails.secondary,
+          backup: enrichment.emails.backup,
+          alternatives: enrichment.emails.alternatives,
+          validated: enrichment.emails.validated,
+        }
+      : null,
     researchSuggestions: lead.researchSuggestions ?? null,
-    canonicalProfile: canonicalProfile ?? null,
+    fields: profileFields,
+    enrichmentUpdatedAt: enrichment?.updatedAt ?? null,
   };
 
   return (
@@ -789,34 +843,30 @@ export default function LeadDetailPage() {
           {/* Quick scores + enrich actions */}
           <div className="flex flex-col items-end gap-3 shrink-0">
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {(canEnrichLead(lead) || canReEnrichLead(lead)) && lead.enrichmentStatus !== 'in_progress' && (
+              {lead.enrichmentStatus === 'in_progress' ? (
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-800">
+                  <IconLoader2 size={14} className="animate-spin" />
+                  Enrichment in progress…
+                </span>
+              ) : (
                 <>
-                  <select
-                    value={researchGoal}
-                    onChange={(e) => setResearchGoal(e.target.value)}
-                    className="rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-[11px] font-semibold text-slate-700"
-                    title="Research goal steers which decision-maker roles we search"
-                  >
-                    <option value="general">Goal: General</option>
-                    <option value="marketing">Goal: Marketing</option>
-                    <option value="sales">Goal: Sales</option>
-                    <option value="engineering">Goal: Engineering</option>
-                    <option value="AI">Goal: AI</option>
-                    <option value="automation">Goal: Automation</option>
-                    <option value="security">Goal: Security</option>
-                    <option value="finance">Goal: Finance</option>
-                    <option value="HR">Goal: HR</option>
-                    <option value="operations">Goal: Operations</option>
-                  </select>
                   <button
                     type="button"
                     onClick={() => void handleReEnrich()}
-                    disabled={reEnriching || deleting}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+                    disabled={!canRunEnrich || reEnriching || deleting}
+                    title={canRunEnrich ? undefined : (enrichDisabledMsg ?? undefined)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
-                    {lead.enrichmentStatus === 'completed' ? 'Re-enrich' : 'Run enrichment'}
+                    {lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial'
+                      ? 'Re-enrich'
+                      : 'Run enrichment'}
                   </button>
+                  {!canRunEnrich && enrichDisabledMsg && (
+                    <span className="max-w-[240px] text-right text-[11px] font-semibold leading-snug text-amber-700">
+                      {enrichDisabledMsg}
+                    </span>
+                  )}
                 </>
               )}
               <button
@@ -847,8 +897,8 @@ export default function LeadDetailPage() {
         </div>
       </div>
 
-      {/* ── Research Agent Console ───────────────────────────── */}
-      {lead.enrichmentStatus !== 'not_started' && (
+      {/* ── Research Agent Console (LeadHub platform admin only) ── */}
+      {isPlatformAdmin && lead.enrichmentStatus !== 'not_started' && (
         <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-linear-to-b from-slate-900 to-slate-950 p-6 shadow-2xl text-white">
           <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -1166,7 +1216,8 @@ export default function LeadDetailPage() {
 
         {/* ── Sidebar ──────────────────────────────────────────── */}
         <div className="space-y-4">
-          {/* Enrichment Timeline */}
+          {/* Enrichment status — simple for workspace users; full timeline for platform admin */}
+          {isPlatformAdmin ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -1223,6 +1274,29 @@ export default function LeadDetailPage() {
               </ol>
             )}
           </div>
+          ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-xs font-black uppercase tracking-wider text-slate-800">Enrichment</h2>
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}>
+                {enrichMeta.icon} {enrichMeta.label}
+              </span>
+            </div>
+            {lead.enrichmentStatus === 'in_progress' ? (
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Enrichment is in progress. Verified Facts and Outreach will update automatically when it finishes.
+              </p>
+            ) : lead.enrichmentStatus === 'not_started' ? (
+              <p className="text-xs text-slate-500">Not enriched yet. Click Run enrichment when ready.</p>
+            ) : lead.enrichmentStatus === 'failed' ? (
+              <p className="text-xs text-rose-600">Enrichment failed. You can try running it again.</p>
+            ) : (
+              <p className="text-xs text-slate-600">
+                Enrichment finished. Review Verified Facts, Outreach, and My Data.
+              </p>
+            )}
+          </div>
+          )}
 
           {/* Quick info */}
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -167,7 +167,8 @@ export type CanonicalLeadProfile = {
   companyId?: string | null;
   contactId?: string | null;
   fields: Record<string, EnrichedProfileField>;
-  registry: Array<{
+  /** @deprecated Removed from API — kept optional for older responses */
+  registry?: Array<{
     key: string;
     label: string;
     entityType: 'company' | 'contact' | 'lead';
@@ -243,6 +244,53 @@ export type LeadRow = {
   } | null;
 };
 
+export type EnrichmentPersonSnapshot = {
+  rank: string;
+  fullName: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  role: string | null;
+  linkedinUrl: string | null;
+  email: string | null;
+  otherEmails: string[];
+  emailVerificationStatus: string | null;
+  seniority: string | null;
+  department: string | null;
+  confidence: number | null;
+  decisionMaker: boolean;
+};
+
+export type EnrichmentSnapshot = {
+  people: EnrichmentPersonSnapshot[];
+  contacts: Array<{
+    rank: string;
+    displayName: string | null;
+    role: string | null;
+    linkedinUrl: string | null;
+    score: number | null;
+  }>;
+  emails: {
+    primary: string | null;
+    secondary: string | null;
+    backup: string | null;
+    alternatives: string[];
+    validated: Array<{
+      email: string;
+      priority: string;
+      status: string;
+      confidence: number;
+      assignedTo: string | null;
+    }>;
+  };
+  updatedAt: string;
+};
+
+export function enrichmentFromLead(lead: LeadRow & { rawData?: Record<string, unknown> }): EnrichmentSnapshot | null {
+  const raw = lead.rawData?.enrichment;
+  if (!raw || typeof raw !== 'object') return null;
+  return raw as EnrichmentSnapshot;
+}
+
 export function leadName(lead: LeadRow) {
   const first = lead.contact?.firstName ?? '';
   const last = lead.contact?.lastName ?? '';
@@ -303,6 +351,22 @@ export function canReEnrichLead(lead: LeadRow) {
   // Already enriched once — allow re-run even if location isn't on the list row
   if (lead.enrichmentStatus === 'completed') return true;
   return lead.enrichmentStatus === 'partial' && leadHasEnrichmentInput(lead);
+}
+
+/** User-facing reason when the enrich button cannot be used (detail header, etc.). */
+export function enrichmentDisabledReason(lead: LeadRow): string | null {
+  if (lead.enrichmentStatus === 'in_progress') {
+    return 'Enrichment is already in progress.';
+  }
+  if (canEnrichLead(lead) || canReEnrichLead(lead)) return null;
+
+  const missing: string[] = [];
+  if (!leadCompanyName(lead)) missing.push('company name');
+  if (!leadLocation(lead)) missing.push('location');
+  if (missing.length) {
+    return `Add ${missing.join(' and ')} to enable enrichment.`;
+  }
+  return 'Enrichment is not available for this lead yet.';
 }
 
 export function stageMeta(stage: string) {

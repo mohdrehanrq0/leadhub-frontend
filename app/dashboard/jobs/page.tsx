@@ -25,8 +25,43 @@ interface JobRecord {
   error?: string;
   createdAt: string;
   prompt?: string;
-  result?: { message?: string };
-  payload?: { leadIds?: string[] };
+  result?: { message?: string; sourcesRun?: string[]; skippedDuplicates?: number };
+  payload?: {
+    leadIds?: string[];
+    sources?: {
+      useApollo?: boolean;
+      useApify?: boolean;
+      apolloCount?: number;
+      apifyCount?: number;
+    };
+  };
+}
+
+function typeLabel(type: string) {
+  switch (type) {
+    case 'lead_search':
+      return 'Lead Search';
+    case 'leads_finder':
+      return 'Lead Search (legacy)';
+    case 'lead_enrichment':
+      return 'Enrichment';
+    case 'provider_sync':
+      return 'Provider Sync';
+    default:
+      return type;
+  }
+}
+
+function sourcesFromJob(job: JobRecord): string {
+  const s = job.payload?.sources;
+  if (!s) {
+    if (job.result?.sourcesRun?.length) return job.result.sourcesRun.join(' + ');
+    return '—';
+  }
+  const parts: string[] = [];
+  if (s.useApollo) parts.push(`Apollo×${s.apolloCount ?? '?'}`);
+  if (s.useApify) parts.push(`Apify×${s.apifyCount ?? '?'}`);
+  return parts.length ? parts.join(' · ') : '—';
 }
 
 export default function JobsPage() {
@@ -43,7 +78,7 @@ export default function JobsPage() {
   const fetchJobs = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/api/jobs');
+      const res = await api.get('/api/jobs?limit=50');
       setJobs(res.data.data ?? []);
     } catch {
       toast.error('Failed to load jobs list.');
@@ -61,7 +96,11 @@ export default function JobsPage() {
             <span>Search Jobs Queue</span>
           </h1>
           <p className="text-text-200 text-sm mt-1">
-            Inspect running and completed lead intelligence runs in this workspace.
+            Running and completed jobs — type, sources, prompt, and date. For browsing past searches, use{' '}
+            <a href="/dashboard/search/history" className="text-primary hover:underline">
+              Search History
+            </a>
+            .
           </p>
         </div>
         <button
@@ -199,7 +238,7 @@ function JobRow({ job: initialJob }: { job: JobRecord }) {
         <div className="space-y-1.5 flex-1 pr-4 min-w-0">
           <div className="flex items-center space-x-2">
             <span className="text-[10px] font-semibold font-mono text-text-300 flex-shrink-0 bg-bg-300 px-1.5 py-0.5 rounded">
-              ID: {job.id.slice(0, 8)}
+              {typeLabel(job.type)}
             </span>
             <span className="text-sm font-bold text-text-100 truncate block">
               {job.type === 'lead_enrichment'
@@ -213,9 +252,12 @@ function JobRow({ job: initialJob }: { job: JobRecord }) {
               <IconClock size={12} />
               <span>{new Date(job.createdAt).toLocaleString()}</span>
             </span>
+            {job.type !== 'lead_enrichment' && (
+              <span>Sources: <strong className="text-text-200">{sourcesFromJob(job)}</strong></span>
+            )}
             {job.totalLeadsFound !== undefined && (
               <span>
-                Leads Found: <strong className="text-text-200">{job.totalLeadsFound}</strong>
+                Leads: <strong className="text-text-200">{job.totalLeadsFound}</strong>
               </span>
             )}
           </div>
@@ -256,6 +298,14 @@ function JobRow({ job: initialJob }: { job: JobRecord }) {
                   `AI enrichment of ${job.totalLeadsFound ?? job.payload?.leadIds?.length ?? 0} selected leads — 6-step pipeline: identity resolution → company fetch → contact enrichment → email verification → AI research → AI scoring.`)
                 : `"${job.prompt || 'No search query prompt provided.'}"`}
             </div>
+            {(job.type === 'lead_search' || job.type === 'leads_finder') && (
+              <a
+                href={`/dashboard/search?reopen=${job.id}`}
+                className="inline-flex mt-2 text-[11px] font-semibold text-primary hover:underline"
+              >
+                Reopen in Lead Search →
+              </a>
+            )}
           </div>
 
           {/* Stepper Pipeline */}

@@ -27,7 +27,7 @@ export default function LeadListDetailPage() {
       setLoading(true);
       const [listsRes, leadsRes] = await Promise.all([
         api.get('/api/lists'),
-        api.get(`/api/lists/${id}/leads?limit=500`),
+        api.get(`/api/lists/${id}/leads?limit=100`),
       ]);
       setList((listsRes.data.data ?? []).find((item: LeadList) => item.id === id) ?? null);
       setLeads(leadsRes.data.data ?? []);
