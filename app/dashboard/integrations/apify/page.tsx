@@ -24,9 +24,15 @@ const STEPS = [
   },
   {
     title: 'Confirm actor access',
-    body: 'Leads Finder uses the actor code_crafter/leads-finder. Ensure your Apify account can run Store actors and has enough credits for the fetch size you plan to request.',
+    body: 'Lead Search can run two Apify Store actors: code_crafter/leads-finder (~$1.50/1k) and microworlds/leads-finder (~$1.00/1k, verified emails). Ensure your account can run Store actors and has enough credits for the fetch sizes you plan.',
     href: 'https://apify.com/code_crafter/leads-finder',
-    linkLabel: 'View leads-finder actor',
+    linkLabel: 'View code_crafter actor',
+  },
+  {
+    title: 'Optional: microworlds actor',
+    body: 'When you enable “Apify · microworlds” in Lead Search, LeadHub calls microworlds/leads-finder with verified-email filters. Same Apify API token covers both actors.',
+    href: 'https://apify.com/microworlds/leads-finder',
+    linkLabel: 'View microworlds actor',
   },
   {
     title: 'Paste & test in LeadHub',
@@ -54,9 +60,10 @@ export default function ApifyIntegrationGuidePage() {
         </div>
         <h1 className="text-2xl font-bold text-text-100">Connect Apify to LeadHub</h1>
         <p className="text-sm text-text-200 leading-relaxed">
-          Lead Finder needs a valid Apify API key on your workspace. Follow these steps to create a token,
-          save it in LeadHub, and start fetching leads. This page does not store your key — paste it only
-          on the API Keys settings page.
+          Lead Search needs a valid Apify API key on your workspace. One token unlocks both
+          code_crafter/leads-finder and microworlds/leads-finder. Follow these steps to create a
+          token, save it in LeadHub, and start fetching leads. This page does not store your key —
+          paste it only on the API Keys settings page.
         </p>
         <div className="flex flex-wrap gap-2 pt-1">
           <a

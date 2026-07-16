@@ -222,15 +222,39 @@ function OutreachSection({ title, children }: { title: string; children: React.R
   );
 }
 
-function AiOutreachPanel({ data }: { data: AiIntelligenceData }) {
+function AiOutreachPanel({
+  data,
+  identityNote,
+}: {
+  data: AiIntelligenceData;
+  identityNote?: string | null;
+}) {
   const [showRaw, setShowRaw] = useState(false);
   const icp = data.icpBreakdown;
   const intent = data.intentBreakdown;
   const conf = data.confidenceBreakdown;
   const vars = data.emailVariables;
+  const hasNarrative =
+    Boolean(data.companySummary?.value) ||
+    Boolean(data.personSummary?.value) ||
+    Boolean(data.bestOutreachAngle?.value || data.recommendedOutreachAngle?.value) ||
+    (data.painPoints?.value?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4">
+      {identityNote && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+          {identityNote}
+        </div>
+      )}
+      {!hasNarrative && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          No outreach narrative was generated for this lead
+          {identityNote ? ' (company identity could not be locked).' : '.'} Score cards below show what was saved
+          (including 0% when synthesis abstained).
+        </div>
+      )}
+
       {/* Score breakdowns */}
       <div className="grid gap-4 md:grid-cols-3">
         <OutreachSection title={`ICP Score · ${icp?.score ?? data.icpScore ?? '—'}%`}>
@@ -246,7 +270,9 @@ function AiOutreachPanel({ data }: { data: AiIntelligenceData }) {
               </div>
             </div>
           ) : (
-            <p className="text-sm font-black text-slate-900">{data.icpScore == null ? '—' : `${data.icpScore}%`}</p>
+            <p className="text-sm font-black text-slate-900">
+              {data.icpScore == null ? 'Not scored' : `${data.icpScore}%`}
+            </p>
           )}
         </OutreachSection>
 
@@ -261,7 +287,9 @@ function AiOutreachPanel({ data }: { data: AiIntelligenceData }) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm font-black text-slate-900">{data.intentScore == null ? '—' : `${data.intentScore}%`}</p>
+            <p className="text-sm font-black text-slate-900">
+              {data.intentScore == null ? 'Not scored' : `${data.intentScore}%`}
+            </p>
           )}
         </OutreachSection>
 
@@ -282,7 +310,9 @@ function AiOutreachPanel({ data }: { data: AiIntelligenceData }) {
               ))}
             </ul>
           ) : (
-            <p className="text-sm font-black text-slate-900">{data.overallConfidence == null ? '—' : `${data.overallConfidence}%`}</p>
+            <p className="text-sm font-black text-slate-900">
+              {data.overallConfidence == null ? 'Not scored' : `${data.overallConfidence}%`}
+            </p>
           )}
         </OutreachSection>
       </div>
@@ -739,7 +769,24 @@ export default function LeadDetailPage() {
       !lead.company?.website &&
       lead.researchSuggestions?.identityValidated === false);
 
+  const identityUnvalidated =
+    lead.researchSuggestions?.identityValidated === false ||
+    companyNotFound ||
+    (enrichmentDone &&
+      Array.isArray(lead.researchSuggestions?.gapsRemaining) &&
+      lead.researchSuggestions.gapsRemaining.includes('company_identity_unvalidated'));
+
+  const identityNote = companyNotFound
+    ? 'Company identity could not be locked — ICP/intent narrative was abstained so we do not invent a company profile. Contact/email facts from enrichment may still appear under Verify.'
+    : identityUnvalidated
+      ? 'Company identity was not fully validated — treat outreach scores as low-confidence.'
+      : null;
+
   const enrichment = enrichmentFromLead(lead);
+  const verifyHasPeople = (enrichment?.people?.length ?? 0) > 0;
+  const verifyHasEmails = Boolean(
+    enrichment?.emails?.primary || (enrichment?.emails?.validated?.length ?? 0) > 0,
+  );
   const companyForJson = lead.company
     ? (() => {
         const { sourceHistory: _pages, location, ...rest } = lead.company as typeof lead.company & {
@@ -885,11 +932,13 @@ export default function LeadDetailPage() {
               </button>
             </div>
             <div className="flex gap-4">
-            {[{ label: 'ICP', val: companyNotFound ? null : lead.icpScore }, { label: 'Intent', val: companyNotFound ? null : lead.intentScore }, { label: 'Confidence', val: companyNotFound ? null : lead.confidence }].map(({ label, val }) => (
+            {[{ label: 'ICP', val: lead.icpScore }, { label: 'Intent', val: lead.intentScore }, { label: 'Confidence', val: lead.confidence }].map(({ label, val }) => (
               <div key={label} className="w-24 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-black text-slate-950">{val == null ? '—' : `${val}%`}</p>
-                {scoreBar(val)}
+                <p className="mt-1 text-xl font-black text-slate-950">
+                  {!enrichmentDone && val == null ? '—' : `${val ?? 0}%`}
+                </p>
+                {scoreBar(enrichmentDone || val != null ? (val ?? 0) : null)}
               </div>
             ))}
             </div>
@@ -1080,20 +1129,33 @@ export default function LeadDetailPage() {
 
           {/* ── Tab: Verified Facts (enrichment profile JSON) ── */}
           {activeTab === 'verified' && (
-            <EnrichmentJson
-              data={lead.enrichmentStatus === 'not_started' ? null : enrichProfileJson}
-              emptyLabel={
-                lead.enrichmentStatus === 'not_started'
-                  ? 'Not enriched yet. Run enrichment to see the profile JSON.'
-                  : 'No enrichment profile data.'
-              }
-            />
+            <div className="space-y-3">
+              {identityNote && (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+                  {identityNote}
+                </div>
+              )}
+              {enrichmentDone && !verifyHasPeople && !verifyHasEmails && (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  Enrichment finished but no people/emails were retained in the Verify snapshot.
+                  Re-enrich to refresh, or check Research Agent logs for identity/synthesis failures.
+                </div>
+              )}
+              <EnrichmentJson
+                data={lead.enrichmentStatus === 'not_started' ? null : enrichProfileJson}
+                emptyLabel={
+                  lead.enrichmentStatus === 'not_started'
+                    ? 'Not enriched yet. Run enrichment to see the profile JSON.'
+                    : 'No enrichment profile data was saved for this lead.'
+                }
+              />
+            </div>
           )}
 
           {/* ── Tab: Outreach (AI intelligence cards) ── */}
           {activeTab === 'ai' && (
             aiIntelligence ? (
-              <AiOutreachPanel data={aiIntelligence} />
+              <AiOutreachPanel data={aiIntelligence} identityNote={identityNote} />
             ) : (
               <EnrichmentJson
                 data={null}
@@ -1102,7 +1164,9 @@ export default function LeadDetailPage() {
                     ? 'Select this lead and click "Enrich" to generate outreach insights.'
                     : lead.enrichmentStatus === 'in_progress'
                     ? 'AI research is running. The panel will update automatically.'
-                    : 'No AI intelligence data yet.'
+                    : identityNote
+                      ? `${identityNote} No AI intelligence row was saved — re-enrich after fixing company name/location/website.`
+                      : 'No AI intelligence data was saved (synthesis may have failed). Re-enrich to regenerate ICP, intent, and outreach cards.'
                 }
               />
             )

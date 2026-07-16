@@ -33,8 +33,10 @@ interface ClarifyingQuestion {
 interface SourceRecommendation {
   useApollo: boolean;
   useApify: boolean;
+  useMicroworlds: boolean;
   apolloCount: number;
   apifyCount: number;
+  microworldsCount: number;
   reason: string;
 }
 
@@ -46,6 +48,17 @@ interface LeadsFinderInput {
   email_status: string[];
   fetch_count: number;
   size: string[];
+}
+
+interface MicroworldsLeadsFinderInput {
+  company_industry: string[];
+  company_not_locations: string[];
+  contact_job_titles: string[];
+  contact_location: string[];
+  email_status: string[];
+  contact_email_exclude_catch_all_domains: boolean;
+  company_num_employees_range: string[];
+  max_result: number;
 }
 
 interface ApolloSearchFilters {
@@ -71,6 +84,13 @@ interface CostEstimate {
     usdPerLead: number;
     note: string;
   };
+  microworlds?: {
+    enabled: boolean;
+    leadCount: number;
+    estimatedUsd: number;
+    usdPerLead: number;
+    note: string;
+  };
   totalEstimatedUsd: number;
 }
 
@@ -82,6 +102,7 @@ interface LeadsFinderJob {
   ready: boolean;
   clarifyingQuestions: ClarifyingQuestion[];
   actorInput: Partial<LeadsFinderInput>;
+  microworldsInput?: Partial<MicroworldsLeadsFinderInput>;
   apolloFilters: Partial<ApolloSearchFilters>;
   sources: SourceRecommendation;
   costEstimate?: CostEstimate;
@@ -100,6 +121,9 @@ interface ApolloCreditsInfo {
   valid: boolean;
   fetchCreditCostUsd: number;
   note: string;
+  leadCreditsRemaining?: number | null;
+  leadCreditsAllowance?: number | null;
+  leadCreditsUsed?: number | null;
   peopleSearchDayLeft: number | null;
   peopleSearchDayLimit: number | null;
   error?: string;
@@ -119,6 +143,7 @@ interface ProviderCredits {
   apify: ApifyCreditsInfo;
   pricing: {
     apifyLeadsFinderUsdPerLead: number;
+    microworldsLeadsFinderUsdPerLead?: number;
     apolloFetchCreditCostUsd: number;
   };
 }
@@ -192,6 +217,22 @@ function defaultActorInput(partial?: Partial<LeadsFinderInput>): LeadsFinderInpu
   };
 }
 
+function defaultMicroworldsInput(
+  partial?: Partial<MicroworldsLeadsFinderInput>,
+): MicroworldsLeadsFinderInput {
+  return {
+    company_industry: partial?.company_industry ?? [],
+    company_not_locations: partial?.company_not_locations ?? [],
+    contact_job_titles: partial?.contact_job_titles ?? [],
+    contact_location: partial?.contact_location ?? [],
+    email_status: ['verified'],
+    contact_email_exclude_catch_all_domains:
+      partial?.contact_email_exclude_catch_all_domains !== false,
+    company_num_employees_range: partial?.company_num_employees_range ?? [],
+    max_result: partial?.max_result ?? 50,
+  };
+}
+
 function defaultApolloFilters(partial?: Partial<ApolloSearchFilters>): ApolloSearchFilters {
   return {
     titles: partial?.titles ?? [],
@@ -200,6 +241,18 @@ function defaultApolloFilters(partial?: Partial<ApolloSearchFilters>): ApolloSea
     organizationLocations: partial?.organizationLocations ?? [],
     personSeniorities: partial?.personSeniorities ?? [],
     estimatedCount: partial?.estimatedCount ?? 50,
+  };
+}
+
+function normalizeUiSources(partial?: Partial<SourceRecommendation>): SourceRecommendation {
+  return {
+    useApollo: partial?.useApollo ?? true,
+    useApify: partial?.useApify ?? true,
+    useMicroworlds: partial?.useMicroworlds ?? false,
+    apolloCount: partial?.apolloCount ?? 50,
+    apifyCount: partial?.apifyCount ?? 50,
+    microworldsCount: partial?.microworldsCount ?? 0,
+    reason: partial?.reason ?? '',
   };
 }
 
@@ -225,11 +278,16 @@ export default function SearchPageInner() {
   const [sources, setSources] = useState<SourceRecommendation>({
     useApollo: true,
     useApify: true,
+    useMicroworlds: false,
     apolloCount: 50,
     apifyCount: 50,
+    microworldsCount: 0,
     reason: '',
   });
   const [actorInput, setActorInput] = useState<LeadsFinderInput>(defaultActorInput());
+  const [microworldsInput, setMicroworldsInput] = useState<MicroworldsLeadsFinderInput>(
+    defaultMicroworldsInput(),
+  );
   const [apolloFilters, setApolloFilters] = useState<ApolloSearchFilters>(defaultApolloFilters());
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
 
@@ -251,8 +309,9 @@ export default function SearchPageInner() {
     setLiveJob(data);
     setPhase(phaseFromJob(data));
     setPrompt(data.prompt ?? '');
-    setSources(data.sources);
+    setSources(normalizeUiSources(data.sources));
     setActorInput(defaultActorInput(data.actorInput));
+    setMicroworldsInput(defaultMicroworldsInput(data.microworldsInput));
     setApolloFilters(defaultApolloFilters(data.apolloFilters));
     if (data.costEstimate) setCostEstimate(data.costEstimate);
     if (data.clarifyingQuestions.length) {
@@ -279,8 +338,10 @@ export default function SearchPageInner() {
       const res = await api.post('/api/api-keys/credits/estimate', {
         useApollo: src.useApollo,
         useApify: src.useApify,
+        useMicroworlds: src.useMicroworlds,
         apolloCount: src.apolloCount,
         apifyCount: src.apifyCount,
+        microworldsCount: src.microworldsCount,
       });
       setCostEstimate(res.data.data);
     } catch {
@@ -421,11 +482,12 @@ export default function SearchPageInner() {
       const res = await api.patch(`/api/leads-finder/${job.jobId}/input`, {
         sources,
         actorInput,
+        microworldsInput,
         apolloFilters,
       });
       applyJob(res.data.data);
-      if (res.data.fingerprintCollision) {
-        toast.warning('This Apify input matches a previous run. Adjust filters to get fresh leads.');
+      if (res.data.fingerprintCollision || res.data.microworldsFingerprintCollision) {
+        toast.warning('An Apify input matches a previous run. Adjust filters to get fresh leads.');
       } else {
         toast.success('Plan saved.');
       }
@@ -443,6 +505,7 @@ export default function SearchPageInner() {
       const res = await api.post(`/api/leads-finder/${job.jobId}/run`, {
         sources,
         actorInput,
+        microworldsInput,
         apolloFilters,
       });
       applyJob(res.data.data);
@@ -490,11 +553,17 @@ export default function SearchPageInner() {
       if (!credits?.apify.valid) {
         next.useApify = false;
         next.apifyCount = 0;
+        next.useMicroworlds = false;
+        next.microworldsCount = 0;
       }
       if (next.useApollo && next.apolloCount === 0) next.apolloCount = 50;
       if (next.useApify && next.apifyCount === 0) next.apifyCount = 50;
+      if (next.useMicroworlds && next.microworldsCount === 0) next.microworldsCount = 50;
       if (next.useApify) {
         setActorInput((a) => ({ ...a, fetch_count: next.apifyCount }));
+      }
+      if (next.useMicroworlds) {
+        setMicroworldsInput((a) => ({ ...a, max_result: next.microworldsCount }));
       }
       if (next.useApollo) {
         setApolloFilters((f) => ({ ...f, estimatedCount: next.apolloCount }));
@@ -562,7 +631,18 @@ export default function SearchPageInner() {
               </span>
             </div>
             <p className="text-xs text-text-200 mt-2">
-              Fetch cost: <strong className="text-text-100">${credits?.pricing.apolloFetchCreditCostUsd ?? 0}</strong> Apollo credits
+              Lead credits left:{' '}
+              <strong className="text-text-100">
+                {credits?.apollo.leadCreditsRemaining != null
+                  ? credits.apollo.leadCreditsRemaining.toLocaleString()
+                  : '—'}
+              </strong>
+              {credits?.apollo.leadCreditsAllowance != null && (
+                <span className="text-text-300">
+                  {' '}
+                  / {credits.apollo.leadCreditsAllowance.toLocaleString()} allowance
+                </span>
+              )}
             </p>
             <p className="text-xs text-text-300 mt-1">
               Day search left:{' '}
@@ -570,6 +650,9 @@ export default function SearchPageInner() {
                 ? `${credits.apollo.peopleSearchDayLeft}${credits.apollo.peopleSearchDayLimit != null ? ` / ${credits.apollo.peopleSearchDayLimit}` : ''}`
                 : '—'}
             </p>
+            {credits?.apollo.note && (
+              <p className="text-[10px] text-text-300 mt-1">{credits.apollo.note}</p>
+            )}
             {credits?.apollo.error && (
               <p className="text-[10px] text-text-300 mt-1 italic">{credits.apollo.error}</p>
             )}
@@ -589,7 +672,11 @@ export default function SearchPageInner() {
               )}
             </p>
             <p className="text-xs text-text-300 mt-1">
-              ≈ ${((credits?.pricing.apifyLeadsFinderUsdPerLead ?? 0.0015) * 1000).toFixed(2)} per 1,000 leads (leads-finder actor)
+              code_crafter ≈ $
+              {((credits?.pricing.apifyLeadsFinderUsdPerLead ?? 0.0015) * 1000).toFixed(2)}
+              /1k · microworlds ≈ $
+              {((credits?.pricing.microworldsLeadsFinderUsdPerLead ?? 0.001) * 1000).toFixed(2)}
+              /1k
             </p>
             {credits?.apify.error && (
               <p className="text-[10px] text-text-300 mt-1 italic">{credits.apify.error}</p>
@@ -750,7 +837,7 @@ export default function SearchPageInner() {
           <div className="bg-card border border-border rounded-xl p-6 shadow-input space-y-5">
             <h2 className="text-lg font-bold text-text-100">Review sources & cost</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${sources.useApollo ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
                 <input
                   type="checkbox"
@@ -784,7 +871,7 @@ export default function SearchPageInner() {
                   className="mt-1"
                 />
                 <div className="flex-1 space-y-2">
-                  <span className="text-sm font-semibold text-text-100">Apify (leads-finder)</span>
+                  <span className="text-sm font-semibold text-text-100">Apify · code_crafter</span>
                   {sources.useApify && (
                     <input
                       type="number"
@@ -795,6 +882,33 @@ export default function SearchPageInner() {
                       className="w-full bg-bg-300 border border-border rounded px-2 py-1 text-xs text-text-100"
                     />
                   )}
+                  <p className="text-[10px] text-text-300">≈ $1.50 / 1,000 leads</p>
+                </div>
+              </label>
+
+              <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${sources.useMicroworlds ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
+                <input
+                  type="checkbox"
+                  checked={sources.useMicroworlds}
+                  disabled={!credits?.apify.valid}
+                  onChange={(e) => updateSources({ useMicroworlds: e.target.checked })}
+                  className="mt-1"
+                />
+                <div className="flex-1 space-y-2">
+                  <span className="text-sm font-semibold text-text-100">Apify · microworlds</span>
+                  {sources.useMicroworlds && (
+                    <input
+                      type="number"
+                      min={1}
+                      max={50000}
+                      value={sources.microworldsCount}
+                      onChange={(e) =>
+                        updateSources({ microworldsCount: Number(e.target.value) || 0 })
+                      }
+                      className="w-full bg-bg-300 border border-border rounded px-2 py-1 text-xs text-text-100"
+                    />
+                  )}
+                  <p className="text-[10px] text-text-300">≈ $1.00 / 1,000 leads · verified emails</p>
                 </div>
               </label>
             </div>
@@ -812,7 +926,13 @@ export default function SearchPageInner() {
                   )}
                   {costEstimate.apify.enabled && (
                     <span className="text-text-200">
-                      Apify: {costEstimate.apify.leadCount} leads · {formatUsd(costEstimate.apify.estimatedUsd)}
+                      code_crafter: {costEstimate.apify.leadCount} leads · {formatUsd(costEstimate.apify.estimatedUsd)}
+                    </span>
+                  )}
+                  {costEstimate.microworlds?.enabled && (
+                    <span className="text-text-200">
+                      microworlds: {costEstimate.microworlds.leadCount} leads ·{' '}
+                      {formatUsd(costEstimate.microworlds.estimatedUsd)}
                     </span>
                   )}
                   <span className="font-semibold text-text-100">
@@ -863,7 +983,7 @@ export default function SearchPageInner() {
 
           {/* Apify filters */}
           {sources.useApify && (
-            <FilterSection title="Apify filters (leads-finder actor)">
+            <FilterSection title="Apify filters (code_crafter/leads-finder)">
               <FilterField
                 label="Contact job titles"
                 value={toCsv(actorInput.contact_job_title)}
@@ -939,6 +1059,85 @@ export default function SearchPageInner() {
             </FilterSection>
           )}
 
+          {/* Microworlds filters */}
+          {sources.useMicroworlds && (
+            <FilterSection title="Apify filters (microworlds/leads-finder)">
+              <FilterField
+                label="Contact job titles"
+                value={toCsv(microworldsInput.contact_job_titles)}
+                onChange={(v) =>
+                  setMicroworldsInput((a) => ({ ...a, contact_job_titles: fromCsv(v) }))
+                }
+              />
+              <FilterField
+                label="Contact locations"
+                value={toCsv(microworldsInput.contact_location)}
+                onChange={(v) =>
+                  setMicroworldsInput((a) => ({ ...a, contact_location: fromCsv(v) }))
+                }
+              />
+              <FilterField
+                label="Company industries"
+                value={toCsv(microworldsInput.company_industry)}
+                onChange={(v) =>
+                  setMicroworldsInput((a) => ({ ...a, company_industry: fromCsv(v) }))
+                }
+              />
+              <FilterField
+                label="Company not locations (exclude HQ)"
+                value={toCsv(microworldsInput.company_not_locations)}
+                onChange={(v) =>
+                  setMicroworldsInput((a) => ({ ...a, company_not_locations: fromCsv(v) }))
+                }
+              />
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-text-300 uppercase tracking-wider">
+                  Company size
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {COMPANY_SIZE_OPTIONS.map((size) => {
+                    const selected = microworldsInput.company_num_employees_range.includes(size);
+                    return (
+                      <button
+                        key={size}
+                        type="button"
+                        onClick={() =>
+                          setMicroworldsInput((a) => ({
+                            ...a,
+                            company_num_employees_range: selected
+                              ? a.company_num_employees_range.filter((s) => s !== size)
+                              : [...a.company_num_employees_range, size],
+                          }))
+                        }
+                        className={`text-[10px] px-2 py-1 rounded border cursor-pointer ${
+                          selected
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-border text-text-300'
+                        }`}
+                      >
+                        {size}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-text-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={microworldsInput.contact_email_exclude_catch_all_domains}
+                  onChange={(e) =>
+                    setMicroworldsInput((a) => ({
+                      ...a,
+                      contact_email_exclude_catch_all_domains: e.target.checked,
+                    }))
+                  }
+                />
+                Exclude catch-all email domains
+              </label>
+              <p className="text-[10px] text-text-300">Email status fixed to verified for this actor.</p>
+            </FilterSection>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -952,7 +1151,10 @@ export default function SearchPageInner() {
             <button
               type="button"
               onClick={() => void handleRun()}
-              disabled={running || (!sources.useApollo && !sources.useApify)}
+              disabled={
+                running ||
+                (!sources.useApollo && !sources.useApify && !sources.useMicroworlds)
+              }
               className="inline-flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50 cursor-pointer"
             >
               {running ? <IconLoader2 size={16} className="animate-spin" /> : <IconPlayerPlay size={16} />}
