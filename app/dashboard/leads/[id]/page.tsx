@@ -13,6 +13,7 @@ import {
   IconChevronUp,
   IconExternalLink,
   IconLoader2,
+  IconMail,
   IconNotes,
   IconSparkles,
   IconTrash,
@@ -80,6 +81,83 @@ function errorMessage(err: unknown, fallback: string) {
     return response?.data?.message ?? fallback;
   }
   return fallback;
+}
+
+function verificationTone(status?: string | null) {
+  if (status === 'valid') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (status === 'invalid' || status === 'disposable') return 'border-rose-200 bg-rose-50 text-rose-700';
+  if (status === 'catch_all') return 'border-amber-200 bg-amber-50 text-amber-700';
+  return 'border-slate-200 bg-slate-50 text-slate-600';
+}
+
+function foundEmailForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrichmentFromLead>) {
+  const fromContact = lead.contact?.email?.trim();
+  if (fromContact) {
+    return {
+      email: fromContact,
+      status: lead.contact?.emailVerificationStatus ?? null,
+    };
+  }
+
+  const fromPrimary = enrichment?.emails?.primary?.trim();
+  if (fromPrimary) {
+    const person = enrichment?.people?.find((p) => p.email === fromPrimary);
+    return {
+      email: fromPrimary,
+      status: person?.emailVerificationStatus ?? lead.contact?.emailVerificationStatus ?? null,
+    };
+  }
+
+  const fromValidated = enrichment?.emails?.validated?.find((v) => v.email?.trim())?.email?.trim();
+  if (fromValidated) {
+    const person = enrichment?.people?.find((p) => p.email === fromValidated);
+    return {
+      email: fromValidated,
+      status: person?.emailVerificationStatus ?? null,
+    };
+  }
+
+  const fromPerson = enrichment?.people?.find((p) => p.email?.trim());
+  if (fromPerson?.email) {
+    return {
+      email: fromPerson.email.trim(),
+      status: fromPerson.emailVerificationStatus ?? null,
+    };
+  }
+
+  return null;
+}
+
+function allEmailsForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrichmentFromLead>) {
+  const byEmail = new Map<string, string | null>();
+  const primary = lead.contact?.email?.trim().toLowerCase();
+
+  const add = (raw: string | null | undefined, status?: string | null) => {
+    const email = raw?.trim().toLowerCase();
+    if (!email) return;
+    if (!byEmail.has(email)) {
+      byEmail.set(email, status ?? null);
+    }
+  };
+
+  add(lead.contact?.email, lead.contact?.emailVerificationStatus);
+  for (const e of lead.contact?.otherEmails ?? []) {
+    const validated = enrichment?.emails?.validated?.find((v) => v.email?.toLowerCase() === e.toLowerCase());
+    add(e, validated?.status ?? null);
+  }
+  for (const v of enrichment?.emails?.validated ?? []) {
+    add(v.email, v.status);
+  }
+
+  const ordered: Array<{ email: string; status: string | null; isPrimary: boolean }> = [];
+  if (primary && byEmail.has(primary)) {
+    ordered.push({ email: primary, status: byEmail.get(primary) ?? null, isPrimary: true });
+    byEmail.delete(primary);
+  }
+  for (const [email, status] of byEmail) {
+    ordered.push({ email, status, isPrimary: false });
+  }
+  return ordered;
 }
 
 type Tab = 'verified' | 'ai' | 'mydata';
@@ -783,6 +861,8 @@ export default function LeadDetailPage() {
       : null;
 
   const enrichment = enrichmentFromLead(lead);
+  const foundEmail = foundEmailForLead(lead, enrichment);
+  const allEmails = allEmailsForLead(lead, enrichment);
   const verifyHasPeople = (enrichment?.people?.length ?? 0) > 0;
   const verifyHasEmails = Boolean(
     enrichment?.emails?.primary || (enrichment?.emails?.validated?.length ?? 0) > 0,
@@ -872,6 +952,33 @@ export default function LeadDetailPage() {
             <div>
               <h1 className="text-2xl font-black tracking-tight text-slate-950">{contactName}</h1>
               <p className="mt-0.5 text-sm text-slate-600">{lead.contact?.role ?? 'No role'} at {lead.company?.name ?? 'Unknown company'}</p>
+              {allEmails.length > 0 && (
+                <div className="mt-1.5 flex flex-col gap-1.5">
+                  {allEmails.map((entry) => (
+                    <div key={entry.email} className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={`mailto:${entry.email}`}
+                        className={`inline-flex items-center gap-1.5 font-mono text-sm font-semibold hover:underline ${entry.isPrimary ? 'text-blue-700' : 'text-slate-700'}`}
+                      >
+                        <IconMail size={14} className="shrink-0" />
+                        {entry.email}
+                        {entry.isPrimary && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700">
+                            primary
+                          </span>
+                        )}
+                      </a>
+                      {entry.status && (
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${verificationTone(entry.status)}`}
+                        >
+                          {entry.status.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${stageMeta(lead.pipelineStage).tone}`}>
                   {stageMeta(lead.pipelineStage).label}
