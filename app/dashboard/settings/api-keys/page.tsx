@@ -15,7 +15,7 @@ import {
 
 interface ApiKeyRecord {
   id: string;
-  provider: 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper';
+  provider: 'apollo' | 'apify' | 'openai' | 'gemini' | 'reoon' | 'leadsnipper';
   maskedKey: string;
   isValid: boolean;
   lastTestedAt?: string;
@@ -23,22 +23,23 @@ interface ApiKeyRecord {
 }
 
 type LlmMode = 'openai' | 'gemini' | 'mix';
-type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'leadsnipper';
+type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'reoon';
 
 interface ProviderModelOption {
   id: string;
   label: string;
 }
 
-const PROVIDER_LABEL: Record<Provider, string> = {
+const PROVIDER_LABEL: Record<Provider | 'leadsnipper', string> = {
   apollo: 'Apollo',
   apify: 'Apify',
   openai: 'OpenAI',
   gemini: 'Gemini',
+  reoon: 'Reoon',
   leadsnipper: 'LeadSniper',
 };
 
-const VALID_PROVIDERS: Provider[] = ['apollo', 'apify', 'openai', 'gemini', 'leadsnipper'];
+const VALID_PROVIDERS: Provider[] = ['apollo', 'apify', 'openai', 'gemini', 'reoon'];
 
 function ApiKeysPageInner() {
   const searchParams = useSearchParams();
@@ -315,7 +316,7 @@ function ApiKeysPageInner() {
                 <option value="apify">Apify Platform</option>
                 <option value="openai">OpenAI Platform</option>
                 <option value="gemini">Gemini Platform</option>
-                <option value="leadsnipper">LeadSniper API</option>
+                <option value="reoon">Reoon Email Verification</option>
               </select>
             </div>
 
@@ -334,7 +335,13 @@ function ApiKeysPageInner() {
                   }
                 }}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-                placeholder="sk-..."
+                placeholder={
+                  provider === 'openai'
+                    ? 'sk-...'
+                    : provider === 'reoon'
+                      ? 'Your Reoon API key'
+                      : 'Paste API key'
+                }
               />
             </div>
 

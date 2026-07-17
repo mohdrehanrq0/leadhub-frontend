@@ -15,6 +15,7 @@ import {
   IconKey,
   IconCopyOff,
   IconX,
+  IconCoin,
 } from '@tabler/icons-react';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -67,7 +68,9 @@ export default function LeadsPage() {
   const [enriching, setEnriching] = useState(false);
   const [reEnriching, setReEnriching] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [hasOpenAiKey, setHasOpenAiKey] = useState<boolean | null>(null);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [stage, setStage] = useState<'all' | PipelineStage>('all');
   const [priority, setPriority] = useState<'all' | 'hot' | 'warm' | 'cold' | 'unknown'>('all');
@@ -213,6 +216,15 @@ export default function LeadsPage() {
     }
   }
 
+  async function fetchCreditBalance() {
+    try {
+      const res = await api.get('/api/credits/balance');
+      setCreditBalance(res.data.data?.available ?? 0);
+    } catch {
+      setCreditBalance(null);
+    }
+  }
+
   useEffect(() => {
     if (!activeWorkspaceId) return;
 
@@ -248,6 +260,7 @@ export default function LeadsPage() {
     void run();
     void fetchMeta();
     void fetchApiKeyStatus();
+    void fetchCreditBalance();
 
     return () => {
       cancelled = true;
@@ -383,9 +396,25 @@ export default function LeadsPage() {
       return;
     }
 
+    if (creditBalance !== null && creditBalance < leadIds.length) {
+      toast.error(
+        `Need ${leadIds.length} enrichment credit(s), have ${creditBalance}. Buy more on Billing.`,
+        {
+          duration: 7000,
+          action: {
+            label: 'Billing',
+            onClick: () => {
+              window.location.href = '/dashboard/billing';
+            },
+          },
+        },
+      );
+      return;
+    }
+
     if (reEnrich) {
       const confirmed = window.confirm(
-        `Re-run research on ${leadIds.length} lead(s)? This starts a fresh research agent run and keeps prior query history.`,
+        `Re-run research on ${leadIds.length} lead(s)? This uses up to ${leadIds.length} credit(s) (only charged on success).`,
       );
       if (!confirmed) return;
     }
@@ -409,9 +438,10 @@ export default function LeadsPage() {
       );
       setSelected(new Set());
       setMatchAll(false);
-      await refreshLeads();
+      await Promise.all([refreshLeads(), fetchCreditBalance()]);
     } catch (err) {
       toast.error(errorMessage(err, reEnrich ? 'Failed to start re-enrichment.' : 'Failed to start enrichment.'));
+      void fetchCreditBalance();
     } finally {
       setEnriching(false);
       setReEnriching(false);
@@ -489,6 +519,81 @@ export default function LeadsPage() {
     }
   };
 
+  const handleExport = async (format: 'csv' | 'xlsx') => {
+    const leadIds = Array.from(selected);
+    if (leadIds.length === 0) {
+      toast.error('Select at least one lead.');
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const res = await api.post(
+        '/api/leads/export',
+        { leadIds, format },
+        { responseType: 'blob' },
+      );
+
+      const contentType =
+        (res.headers['content-type'] as string | undefined) ??
+        (format === 'xlsx'
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'text/csv; charset=utf-8');
+
+      // If the server returned JSON error as blob, surface it
+      if (contentType.includes('application/json')) {
+        const text = await (res.data as Blob).text();
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          throw new Error(parsed.message ?? 'Export failed.');
+        } catch (err) {
+          if (err instanceof Error && err.message !== 'Export failed.') throw err;
+          throw new Error('Export failed.');
+        }
+      }
+
+      const disposition = (res.headers['content-disposition'] as string | undefined) ?? '';
+      const match = /filename="?([^"]+)"?/i.exec(disposition);
+      const filename =
+        match?.[1] ??
+        `leadhub-leads-${new Date().toISOString().slice(0, 10)}.${format === 'xlsx' ? 'xlsx' : 'csv'}`;
+
+      const blob = new Blob([res.data], { type: contentType });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${leadIds.length.toLocaleString()} lead(s) as ${format.toUpperCase()}.`);
+    } catch (err) {
+      let message = 'Export failed.';
+      if (typeof err === 'object' && err && 'response' in err) {
+        const response = (err as { response?: { data?: unknown; status?: number } }).response;
+        const data = response?.data;
+        if (data instanceof Blob) {
+          try {
+            const text = await data.text();
+            const parsed = JSON.parse(text) as { message?: string };
+            message = parsed.message ?? message;
+          } catch {
+            // keep fallback
+          }
+        } else if (data && typeof data === 'object' && 'message' in data) {
+          message = String((data as { message?: string }).message ?? message);
+        }
+      } else if (err instanceof Error && err.message) {
+        message = err.message;
+      }
+      toast.error(message);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const createCategory = async () => {
     const name = window.prompt('Category name');
     if (!name?.trim()) return;
@@ -531,6 +636,15 @@ export default function LeadsPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {creditBalance !== null && (
+              <Link
+                href="/dashboard/billing"
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <IconCoin size={15} className="text-primary" />
+                {creditBalance.toLocaleString()} credits
+              </Link>
+            )}
             {hasOpenAiKey === false && (
               <Link
                 href="/dashboard/settings/api-keys"
@@ -604,9 +718,13 @@ export default function LeadsPage() {
         enriching={enriching}
         reEnriching={reEnriching}
         deleting={deleting}
+        exporting={exporting}
+        creditBalance={creditBalance}
         onEnrich={handleEnrich}
         onReEnrich={handleReEnrich}
         onDelete={() => void handleDelete()}
+        onExportCsv={() => void handleExport('csv')}
+        onExportXlsx={() => void handleExport('xlsx')}
         bulkStage={bulkStage}
         onBulkStageChange={setBulkStage}
         onApplyStage={() => void applyBulk({ pipelineStage: bulkStage })}
