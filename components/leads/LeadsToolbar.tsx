@@ -5,6 +5,7 @@ import { IconLayoutKanban, IconSearch, IconTable } from '@tabler/icons-react';
 import { LeadFilterChips } from './LeadFilterChips';
 import type { ExtraFilterChip } from './filterTypes';
 import { PIPELINE_STAGES, type LeadCategory, type LeadList, type PipelineStage } from './types';
+import { APOLLO_UI_ENABLED } from '../../lib/features';
 
 type Props = {
   query: string;
@@ -31,7 +32,9 @@ type Props = {
   totalCount: number;
 };
 
-const SOURCE_OPTIONS = ['all', 'apollo', 'apify', 'google_maps', 'csv', 'manual'];
+const SOURCE_OPTIONS = APOLLO_UI_ENABLED
+  ? ['all', 'apollo', 'apify', 'google_maps', 'csv', 'manual']
+  : ['all', 'apify', 'google_maps', 'csv', 'manual'];
 
 export function LeadsToolbar(props: Props) {
   const {

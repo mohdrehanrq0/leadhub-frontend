@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import api from '../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { toast } from 'sonner';
 import {
   IconBriefcase,
@@ -59,7 +60,7 @@ function sourcesFromJob(job: JobRecord): string {
     return '—';
   }
   const parts: string[] = [];
-  if (s.useApollo) parts.push(`Apollo×${s.apolloCount ?? '?'}`);
+  if (APOLLO_UI_ENABLED && s.useApollo) parts.push(`Apollo×${s.apolloCount ?? '?'}`);
   if (s.useApify) parts.push(`Apify×${s.apifyCount ?? '?'}`);
   return parts.length ? parts.join(' · ') : '—';
 }
@@ -179,7 +180,7 @@ function JobRow({ job: initialJob }: { job: JobRecord }) {
   const searchStages = [
     { key: 'queued', label: 'Queued' },
     { key: 'planning', label: 'AI Strategy Planning' },
-    { key: 'collecting', label: 'Collecting & Saving Apollo Contacts' },
+    { key: 'collecting', label: APOLLO_UI_ENABLED ? 'Collecting & Saving Apollo Contacts' : 'Collecting leads' },
     { key: 'merging', label: 'Merging & Deduplicating' },
     { key: 'completed', label: 'Leads Ready' },
   ];

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import api from '../../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { toast } from 'sonner';
 import {
   IconHistory,
@@ -62,7 +63,7 @@ export default function SearchHistoryPage() {
 
   const sourcesLabel = (row: HistoryRow) => {
     const parts: string[] = [];
-    if (row.sources?.useApollo) parts.push(`Apollo (${row.sources.apolloCount ?? '?'})`);
+    if (APOLLO_UI_ENABLED && row.sources?.useApollo) parts.push(`Apollo (${row.sources.apolloCount ?? '?'})`);
     if (row.sources?.useApify) parts.push(`Apify (${row.sources.apifyCount ?? '?'})`);
     return parts.length ? parts.join(' + ') : '—';
   };

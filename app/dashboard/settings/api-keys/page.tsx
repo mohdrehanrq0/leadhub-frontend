@@ -3,6 +3,7 @@
 import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import api from '../../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { toast } from 'sonner';
 import {
   IconAlertTriangle,
@@ -39,7 +40,9 @@ const PROVIDER_LABEL: Record<Provider | 'leadsnipper', string> = {
   leadsnipper: 'LeadSniper',
 };
 
-const VALID_PROVIDERS: Provider[] = ['apollo', 'apify', 'openai', 'gemini', 'reoon'];
+const VALID_PROVIDERS: Provider[] = APOLLO_UI_ENABLED
+  ? ['apollo', 'apify', 'openai', 'gemini', 'reoon']
+  : ['apify', 'openai', 'gemini', 'reoon'];
 
 function ApiKeysPageInner() {
   const searchParams = useSearchParams();
@@ -51,7 +54,7 @@ function ApiKeysPageInner() {
     if (providerFromQuery && VALID_PROVIDERS.includes(providerFromQuery as Provider)) {
       return providerFromQuery as Provider;
     }
-    return 'apollo';
+    return 'apify';
   });
   const [keyValue, setKeyValue] = useState('');
   const [newKeyModels, setNewKeyModels] = useState<ProviderModelOption[]>([]);
@@ -312,7 +315,7 @@ function ApiKeysPageInner() {
                 onChange={(e) => setProvider(e.target.value as Provider)}
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
               >
-                <option value="apollo">Apollo API</option>
+                {APOLLO_UI_ENABLED && <option value="apollo">Apollo API</option>}
                 <option value="apify">Apify Platform</option>
                 <option value="openai">OpenAI Platform</option>
                 <option value="gemini">Gemini Platform</option>
@@ -482,7 +485,9 @@ function ApiKeysPageInner() {
             </div>
           ) : (
             <div className="space-y-3">
-              {keys.map((key) => (
+              {keys
+                .filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo')
+                .map((key) => (
                 <div
                   key={key.id}
                   className="bg-card p-4 border border-border rounded-2xl flex items-center justify-between hover:border-primary/50 transition-all shadow-sm"

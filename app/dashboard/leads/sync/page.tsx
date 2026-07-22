@@ -13,6 +13,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { FieldMappingPanel } from '../../../../components/leads/FieldMappingPanel';
 import {
   ImportDestinationFields,
@@ -280,7 +281,9 @@ export default function LeadSyncPage() {
 
       <section className="rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#ede9fe,transparent_28%),linear-gradient(135deg,#fff,#f8fafc)] p-6 shadow-sm">
         <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Provider Sync</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Sync Apollo and Apify with field mapping.</h1>
+        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
+          {APOLLO_UI_ENABLED ? 'Sync Apollo and Apify with field mapping.' : 'Sync Apify with field mapping.'}
+        </h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
           Preview integration data, review auto-detected field mapping, adjust mappings if needed, then import enrichment-ready leads.
         </p>
@@ -292,7 +295,8 @@ export default function LeadSyncPage() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid gap-6 ${APOLLO_UI_ENABLED ? 'lg:grid-cols-2' : ''}`}>
+        {APOLLO_UI_ENABLED && (
         <section className="rounded-3xl border border-blue-100 bg-white p-5 shadow-sm">
           <ProviderHeader
             icon={<IconSparkles size={22} />}
@@ -330,6 +334,7 @@ export default function LeadSyncPage() {
             Open Apollo Sync
           </button>
         </section>
+        )}
 
         <section className="rounded-3xl border border-violet-100 bg-white p-5 shadow-sm">
           <ProviderHeader
@@ -357,7 +362,7 @@ export default function LeadSyncPage() {
         </section>
       </div>
 
-      {apolloModalOpen && (
+      {APOLLO_UI_ENABLED && apolloModalOpen && (
         <ApolloModal
           preview={apolloPreview}
           loading={loading}

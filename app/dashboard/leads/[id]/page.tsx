@@ -22,6 +22,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { useAuth } from '../../../../context/AuthContext';
 import {
   apolloCategoryLabel,
@@ -1616,16 +1617,20 @@ export default function LeadDetailPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h3 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Lead Info</h3>
             <dl className="space-y-2 text-xs">
-              {[
-                ['Source', lead.source],
-                ['Status', lead.status],
-                ['Apollo', apolloCategoryLabel(lead.apolloCategory) ?? '—'],
-                ['Created', formatDate(lead.createdAt)],
-                ['Enriched', formatDate(lead.enrichmentCompletedAt)],
-              ].map(([k, v]) => (
-                <div key={k as string} className="flex items-center justify-between gap-2">
+              {(
+                [
+                  ['Source', lead.source],
+                  ['Status', lead.status],
+                  ...(APOLLO_UI_ENABLED
+                    ? ([['Apollo', apolloCategoryLabel(lead.apolloCategory) ?? '—']] as const)
+                    : []),
+                  ['Created', formatDate(lead.createdAt)],
+                  ['Enriched', formatDate(lead.enrichmentCompletedAt)],
+                ] as Array<[string, string]>
+              ).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-2">
                   <dt className="text-slate-400 capitalize">{k}</dt>
-                  <dd className="font-bold text-slate-800 capitalize truncate">{v as string}</dd>
+                  <dd className="font-bold text-slate-800 capitalize truncate">{v}</dd>
                 </div>
               ))}
             </dl>

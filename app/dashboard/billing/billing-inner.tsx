@@ -12,6 +12,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { useAuth } from '../../../context/AuthContext';
 import {
   detectDisplayCurrency,
@@ -160,7 +161,7 @@ export default function BillingPage() {
         </h1>
         <p className="mt-1 text-sm text-text-200">
           1 enrichment = 1 credit. Credits are charged only when enrichment finishes successfully.
-          Bring your own Apollo, Apify, OpenAI/Gemini, and Reoon keys.
+          Bring your own {APOLLO_UI_ENABLED ? 'Apollo, ' : ''}Apify, OpenAI/Gemini, and Reoon keys.
         </p>
       </div>
 

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../lib/features';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -475,7 +476,9 @@ export default function OnboardingWizard() {
       try {
         const keysRes = await api.get('/api/api-keys');
         const validKeys = (keysRes.data.data ?? []).filter(
-          (k: any) => k.isValid && ['apollo', 'apify'].includes(k.provider)
+          (k: any) =>
+            k.isValid &&
+            (k.provider === 'apify' || (APOLLO_UI_ENABLED && k.provider === 'apollo')),
         );
         if (validKeys.length > 0) {
           hasKey = true;
@@ -484,13 +487,17 @@ export default function OnboardingWizard() {
         // ignore
       }
 
-      if (!hasKey && !apolloKey && !apifyKey) {
-        toast.error('Please configure at least one API Provider (Apollo or Apify) to complete onboarding.');
+      if (!hasKey && !(APOLLO_UI_ENABLED && apolloKey) && !apifyKey) {
+        toast.error(
+          APOLLO_UI_ENABLED
+            ? 'Please configure at least one API Provider (Apollo or Apify) to complete onboarding.'
+            : 'Please configure an Apify API key to complete onboarding.',
+        );
         setSavingKeys(false);
         return;
       }
 
-      if (apolloKey) {
+      if (APOLLO_UI_ENABLED && apolloKey) {
         await api.post('/api/api-keys', { provider: 'apollo', key: apolloKey });
       }
       if (apifyKey) {
@@ -1368,6 +1375,7 @@ export default function OnboardingWizard() {
             </div>
 
             <div className="space-y-4 max-w-lg">
+              {APOLLO_UI_ENABLED && (
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-text-200">Apollo API Key</label>
                 <input
@@ -1378,6 +1386,7 @@ export default function OnboardingWizard() {
                   className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
                 />
               </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-text-200">Apify API Token</label>

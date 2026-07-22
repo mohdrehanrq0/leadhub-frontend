@@ -3,6 +3,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import api from '../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { toast } from 'sonner';
 import {
   IconUsers,
@@ -615,7 +616,9 @@ export default function LeadsPage() {
     }
   };
 
-  const sourceOptions = ['all', 'apollo', 'apify', 'google_maps', 'csv', 'manual'];
+  const sourceOptions = APOLLO_UI_ENABLED
+    ? ['all', 'apollo', 'apify', 'google_maps', 'csv', 'manual']
+    : ['all', 'apify', 'google_maps', 'csv', 'manual'];
   const totalScore = (lead: LeadRow) =>
     Math.round(((lead.icpScore ?? 0) + (lead.intentScore ?? 0) + (lead.confidence ?? 0)) / 3);
 
@@ -675,7 +678,7 @@ export default function LeadsPage() {
               href="/dashboard/leads/sync"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              <IconRefresh size={15} /> Apollo / Apify Sync
+              <IconRefresh size={15} /> Apify Sync
             </Link>
             <Link
               href="/dashboard/leads/lists"
@@ -848,7 +851,7 @@ export default function LeadsPage() {
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold capitalize text-slate-600">
                               {lead.source}
                             </span>
-                            {lead.apolloCategory && (
+                            {APOLLO_UI_ENABLED && lead.apolloCategory && (
                               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
                                 {apolloCategoryLabel(lead.apolloCategory)}
                               </span>

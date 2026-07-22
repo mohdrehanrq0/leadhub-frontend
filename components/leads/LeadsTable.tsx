@@ -22,6 +22,7 @@ import {
   priorityTone,
   type LeadRow,
 } from './types';
+import { APOLLO_UI_ENABLED } from '../../lib/features';
 
 type Props = {
   leads: LeadRow[];
@@ -133,7 +134,13 @@ function renderLeadCell(
       );
     }
     case 'source':
-      return <span className="capitalize">{apolloCategoryLabel(lead.apolloCategory) || lead.source}</span>;
+      return (
+        <span className="capitalize">
+          {APOLLO_UI_ENABLED
+            ? apolloCategoryLabel(lead.apolloCategory) || lead.source
+            : lead.source}
+        </span>
+      );
     case 'category':
       return lead.category ? (
         <span className="rounded-full border border-slate-200 bg-white px-2 py-1 font-bold text-slate-700">

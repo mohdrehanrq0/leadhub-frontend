@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import api from '../../../lib/api';
+import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { toast } from 'sonner';
 import { useAuth } from '../../../context/AuthContext';
 import {
@@ -68,6 +69,7 @@ interface ApolloSearchFilters {
   organizationLocations: string[];
   personSeniorities: string[];
   estimatedCount: number;
+  revealEmails: boolean;
 }
 
 interface CostEstimate {
@@ -75,6 +77,8 @@ interface CostEstimate {
     enabled: boolean;
     leadCount: number;
     estimatedCreditCostUsd: number;
+    estimatedLeadCredits?: number;
+    revealEmails?: boolean;
     note: string;
   };
   apify: {
@@ -155,7 +159,7 @@ type Phase = 'prompt' | 'clarify' | 'review' | 'running' | 'completed' | 'failed
 const SAMPLE_PROMPTS = [
   'Find VP Sales at Series B SaaS companies in California with 50–200 employees and validated emails.',
   'Marketing directors at fintech startups in London and Berlin, mid-market companies.',
-  'CTOs and engineering leaders at healthcare companies in Texas using Apollo and Apify.',
+  'CTOs and engineering leaders at healthcare companies in Texas using Apify.',
   'HR directors at retail brands in New York with 500+ employees.',
 ];
 
@@ -241,15 +245,16 @@ function defaultApolloFilters(partial?: Partial<ApolloSearchFilters>): ApolloSea
     organizationLocations: partial?.organizationLocations ?? [],
     personSeniorities: partial?.personSeniorities ?? [],
     estimatedCount: partial?.estimatedCount ?? 50,
+    revealEmails: partial?.revealEmails ?? false,
   };
 }
 
 function normalizeUiSources(partial?: Partial<SourceRecommendation>): SourceRecommendation {
   return {
-    useApollo: partial?.useApollo ?? true,
+    useApollo: APOLLO_UI_ENABLED ? (partial?.useApollo ?? true) : false,
     useApify: partial?.useApify ?? true,
     useMicroworlds: partial?.useMicroworlds ?? false,
-    apolloCount: partial?.apolloCount ?? 50,
+    apolloCount: APOLLO_UI_ENABLED ? (partial?.apolloCount ?? 50) : 0,
     apifyCount: partial?.apifyCount ?? 50,
     microworldsCount: partial?.microworldsCount ?? 0,
     reason: partial?.reason ?? '',
@@ -276,10 +281,10 @@ export default function SearchPageInner() {
   const [phase, setPhase] = useState<Phase>('prompt');
 
   const [sources, setSources] = useState<SourceRecommendation>({
-    useApollo: true,
+    useApollo: false,
     useApify: true,
     useMicroworlds: false,
-    apolloCount: 50,
+    apolloCount: 0,
     apifyCount: 50,
     microworldsCount: 0,
     reason: '',
@@ -302,7 +307,9 @@ export default function SearchPageInner() {
   const [liveJob, setLiveJob] = useState<LeadsFinderJob | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
 
-  const providerReady = Boolean(credits?.apollo.valid || credits?.apify.valid);
+  const providerReady = Boolean(
+    (APOLLO_UI_ENABLED && credits?.apollo.valid) || credits?.apify.valid,
+  );
 
   const applyJob = useCallback((data: LeadsFinderJob) => {
     setJob(data);
@@ -333,15 +340,16 @@ export default function SearchPageInner() {
     }
   }, []);
 
-  const fetchCostEstimate = useCallback(async (src: SourceRecommendation) => {
+  const fetchCostEstimate = useCallback(async (src: SourceRecommendation, revealEmails: boolean) => {
     try {
       const res = await api.post('/api/api-keys/credits/estimate', {
-        useApollo: src.useApollo,
+        useApollo: APOLLO_UI_ENABLED && src.useApollo,
         useApify: src.useApify,
         useMicroworlds: src.useMicroworlds,
-        apolloCount: src.apolloCount,
+        apolloCount: APOLLO_UI_ENABLED ? src.apolloCount : 0,
         apifyCount: src.apifyCount,
         microworldsCount: src.microworldsCount,
+        revealEmails: APOLLO_UI_ENABLED && revealEmails,
       });
       setCostEstimate(res.data.data);
     } catch {
@@ -370,9 +378,12 @@ export default function SearchPageInner() {
 
   useEffect(() => {
     if (phase !== 'review') return;
-    const timer = setTimeout(() => void fetchCostEstimate(sources), 300);
+    const timer = setTimeout(
+      () => void fetchCostEstimate(sources, apolloFilters.revealEmails),
+      300,
+    );
     return () => clearTimeout(timer);
-  }, [phase, sources, fetchCostEstimate]);
+  }, [phase, sources, apolloFilters.revealEmails, fetchCostEstimate]);
 
   // SSE progress while running
   useEffect(() => {
@@ -440,7 +451,11 @@ export default function SearchPageInner() {
       return;
     }
     if (!providerReady) {
-      toast.error('Connect a valid Apollo or Apify API key first.');
+      toast.error(
+        APOLLO_UI_ENABLED
+          ? 'Connect a valid Apollo or Apify API key first.'
+          : 'Connect a valid Apify API key first.',
+      );
       return;
     }
     setPlanning(true);
@@ -480,10 +495,14 @@ export default function SearchPageInner() {
     setSaving(true);
     try {
       const res = await api.patch(`/api/leads-finder/${job.jobId}/input`, {
-        sources,
+        sources: {
+          ...sources,
+          useApollo: APOLLO_UI_ENABLED && sources.useApollo,
+          apolloCount: APOLLO_UI_ENABLED ? sources.apolloCount : 0,
+        },
         actorInput,
         microworldsInput,
-        apolloFilters,
+        apolloFilters: APOLLO_UI_ENABLED ? apolloFilters : defaultApolloFilters(),
       });
       applyJob(res.data.data);
       if (res.data.fingerprintCollision || res.data.microworldsFingerprintCollision) {
@@ -503,10 +522,14 @@ export default function SearchPageInner() {
     setRunning(true);
     try {
       const res = await api.post(`/api/leads-finder/${job.jobId}/run`, {
-        sources,
+        sources: {
+          ...sources,
+          useApollo: APOLLO_UI_ENABLED && sources.useApollo,
+          apolloCount: APOLLO_UI_ENABLED ? sources.apolloCount : 0,
+        },
         actorInput,
         microworldsInput,
-        apolloFilters,
+        apolloFilters: APOLLO_UI_ENABLED ? apolloFilters : defaultApolloFilters(),
       });
       applyJob(res.data.data);
       setPhase('running');
@@ -546,7 +569,7 @@ export default function SearchPageInner() {
   function updateSources(patch: Partial<SourceRecommendation>) {
     setSources((prev) => {
       const next = { ...prev, ...patch };
-      if (!credits?.apollo.valid) {
+      if (!APOLLO_UI_ENABLED || !credits?.apollo.valid) {
         next.useApollo = false;
         next.apolloCount = 0;
       }
@@ -556,7 +579,7 @@ export default function SearchPageInner() {
         next.useMicroworlds = false;
         next.microworldsCount = 0;
       }
-      if (next.useApollo && next.apolloCount === 0) next.apolloCount = 50;
+      if (APOLLO_UI_ENABLED && next.useApollo && next.apolloCount === 0) next.apolloCount = 50;
       if (next.useApify && next.apifyCount === 0) next.apifyCount = 50;
       if (next.useMicroworlds && next.microworldsCount === 0) next.microworldsCount = 50;
       if (next.useApify) {
@@ -565,7 +588,7 @@ export default function SearchPageInner() {
       if (next.useMicroworlds) {
         setMicroworldsInput((a) => ({ ...a, max_result: next.microworldsCount }));
       }
-      if (next.useApollo) {
+      if (APOLLO_UI_ENABLED && next.useApollo) {
         setApolloFilters((f) => ({ ...f, estimatedCount: next.apolloCount }));
       }
       return next;
@@ -594,7 +617,7 @@ export default function SearchPageInner() {
             Lead Search
           </h1>
           <p className="text-text-200 text-sm mt-1">
-            Describe who you want to reach. AI plans Apollo + Apify sources, you review filters, then fetch leads.
+            Describe who you want to reach. AI plans Apify sources, you review filters, then fetch leads.
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -622,7 +645,8 @@ export default function SearchPageInner() {
           <span className="text-[10px] font-bold text-text-300 uppercase tracking-wider">Provider credits</span>
           {creditsLoading && <IconLoader2 size={14} className="animate-spin text-text-300" />}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className={`grid grid-cols-1 gap-3 ${APOLLO_UI_ENABLED ? 'sm:grid-cols-2' : ''}`}>
+          {APOLLO_UI_ENABLED && (
           <div className={`rounded-lg border p-3 ${credits?.apollo.valid ? 'border-success/30 bg-success/5' : 'border-border bg-bg-300/30'}`}>
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-text-100">Apollo</span>
@@ -657,6 +681,7 @@ export default function SearchPageInner() {
               <p className="text-[10px] text-text-300 mt-1 italic">{credits.apollo.error}</p>
             )}
           </div>
+          )}
 
           <div className={`rounded-lg border p-3 ${credits?.apify.valid ? 'border-success/30 bg-success/5' : 'border-border bg-bg-300/30'}`}>
             <div className="flex items-center justify-between">
@@ -690,13 +715,21 @@ export default function SearchPageInner() {
         <div className="rounded-xl border border-warning/30 bg-warning/5 p-4 flex gap-3">
           <IconAlertTriangle className="text-warning flex-shrink-0 mt-0.5" size={20} />
           <div className="space-y-2 text-sm">
-            <p className="font-semibold text-text-100">Connect Apollo or Apify to search</p>
+            <p className="font-semibold text-text-100">
+              {APOLLO_UI_ENABLED ? 'Connect Apollo or Apify to search' : 'Connect Apify to search'}
+            </p>
             <p className="text-text-200">
-              Lead Search needs at least one valid provider key. Add and test your keys, or follow the Apify setup guide.
+              {APOLLO_UI_ENABLED
+                ? 'Lead Search needs at least one valid provider key. Add and test your keys, or follow the Apify setup guide.'
+                : 'Lead Search needs a valid Apify API key. Add and test your key, or follow the Apify setup guide.'}
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
-                href="/dashboard/settings/api-keys?provider=apollo"
+                href={
+                  APOLLO_UI_ENABLED
+                    ? '/dashboard/settings/api-keys?provider=apollo'
+                    : '/dashboard/settings/api-keys?provider=apify'
+                }
                 className="inline-flex items-center gap-1.5 text-xs bg-primary text-white px-3 py-1.5 rounded-lg hover:opacity-90"
               >
                 <IconKey size={14} />
@@ -837,7 +870,8 @@ export default function SearchPageInner() {
           <div className="bg-card border border-border rounded-xl p-6 shadow-input space-y-5">
             <h2 className="text-lg font-bold text-text-100">Review sources & cost</h2>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className={`grid grid-cols-1 gap-4 ${APOLLO_UI_ENABLED ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+              {APOLLO_UI_ENABLED && (
               <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${sources.useApollo ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
                 <input
                   type="checkbox"
@@ -858,9 +892,14 @@ export default function SearchPageInner() {
                       className="w-full bg-bg-300 border border-border rounded px-2 py-1 text-xs text-text-100"
                     />
                   )}
-                  <p className="text-[10px] text-text-300">$0 Apollo wallet credits for people search</p>
+                  <p className="text-[10px] text-text-300">
+                    {apolloFilters.revealEmails
+                      ? `≈ ${sources.apolloCount} Apollo lead credits to reveal emails`
+                      : 'Search only — no lead credits unless Reveal emails is on'}
+                  </p>
                 </div>
               </label>
+              )}
 
               <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer ${sources.useApify ? 'border-primary/30 bg-primary/5' : 'border-border'}`}>
                 <input
@@ -919,9 +958,12 @@ export default function SearchPageInner() {
               <div className="rounded-lg border border-border bg-bg-300/30 p-4 space-y-2">
                 <p className="text-[10px] font-bold text-text-300 uppercase tracking-wider">Estimated cost</p>
                 <div className="flex flex-wrap gap-4 text-sm">
-                  {costEstimate.apollo.enabled && (
+                  {APOLLO_UI_ENABLED && costEstimate.apollo.enabled && (
                     <span className="text-text-200">
-                      Apollo: {costEstimate.apollo.leadCount} leads · {formatUsd(costEstimate.apollo.estimatedCreditCostUsd)}
+                      Apollo: {costEstimate.apollo.leadCount} leads
+                      {costEstimate.apollo.revealEmails
+                        ? ` · ≈ ${costEstimate.apollo.estimatedLeadCredits ?? costEstimate.apollo.leadCount} lead credits`
+                        : ` · ${formatUsd(costEstimate.apollo.estimatedCreditCostUsd)}`}
                     </span>
                   )}
                   {costEstimate.apify.enabled && (
@@ -951,7 +993,7 @@ export default function SearchPageInner() {
           </div>
 
           {/* Apollo filters */}
-          {sources.useApollo && (
+          {APOLLO_UI_ENABLED && sources.useApollo && (
             <FilterSection title="Apollo filters">
               <FilterField
                 label="Job titles (comma-separated)"
@@ -978,6 +1020,35 @@ export default function SearchPageInner() {
                 value={toCsv(apolloFilters.personSeniorities)}
                 onChange={(v) => setApolloFilters((f) => ({ ...f, personSeniorities: fromCsv(v) }))}
               />
+              <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={apolloFilters.revealEmails}
+                  onChange={(e) =>
+                    setApolloFilters((f) => ({ ...f, revealEmails: e.target.checked }))
+                  }
+                  className="mt-1"
+                />
+                <div className="space-y-1">
+                  <span className="text-sm font-semibold text-text-100">
+                    Reveal emails (uses Apollo lead credits)
+                  </span>
+                  <p className="text-[11px] text-text-300">
+                    Off by default — search returns net-new people without unlocking emails.
+                    Turn on to call Apollo enrichment (~1 lead credit per person).
+                    {credits?.apollo.leadCreditsRemaining != null && (
+                      <>
+                        {' '}
+                        You have{' '}
+                        <span className="font-semibold text-text-200">
+                          {credits.apollo.leadCreditsRemaining}
+                        </span>{' '}
+                        lead credits remaining.
+                      </>
+                    )}
+                  </p>
+                </div>
+              </label>
             </FilterSection>
           )}
 
@@ -1153,7 +1224,7 @@ export default function SearchPageInner() {
               onClick={() => void handleRun()}
               disabled={
                 running ||
-                (!sources.useApollo && !sources.useApify && !sources.useMicroworlds)
+                (!sources.useApify && !sources.useMicroworlds && !(APOLLO_UI_ENABLED && sources.useApollo))
               }
               className="inline-flex items-center gap-2 bg-primary text-white text-sm font-medium px-5 py-2.5 rounded-lg hover:opacity-90 disabled:opacity-50 cursor-pointer"
             >
