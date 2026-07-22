@@ -300,6 +300,24 @@ function OutreachSection({ title, children }: { title: string; children: React.R
   );
 }
 
+function buyingSignalLabels(
+  value: AiIntelligenceData['buyingSignals'],
+): string[] {
+  const raw = value?.value;
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => {
+    if (typeof item === 'string') return item;
+    if (item && typeof item === 'object' && 'signal' in item) {
+      const s = item as { signal: string; date?: string; impact?: string };
+      const bits = [s.signal];
+      if (s.date) bits.push(s.date);
+      if (s.impact) bits.push(s.impact);
+      return bits.join(' · ');
+    }
+    return '';
+  }).filter(Boolean);
+}
+
 function AiOutreachPanel({
   data,
   identityNote,
@@ -308,15 +326,51 @@ function AiOutreachPanel({
   identityNote?: string | null;
 }) {
   const [showRaw, setShowRaw] = useState(false);
+  const [copied, setCopied] = useState(false);
   const icp = data.icpBreakdown;
   const intent = data.intentBreakdown;
   const conf = data.confidenceBreakdown;
-  const vars = data.emailVariables;
+
+  const emailOpener =
+    data.emailOpener?.value || data.suggestedEmailOpening?.value || '';
+  const emailOpenerContext = data.emailOpenerContext?.value || '';
+  const suggestedCta = data.suggestedCta?.value || '';
+  const whyNow = data.whyNow;
+  const news =
+    data.companyNewsAndSignals?.length
+      ? data.companyNewsAndSignals
+      : (data.recentCompanyEvents ?? []).map((e) => ({
+          type: e.type,
+          label: e.label,
+          date: e.dateHint ?? 'date_unknown',
+          sourceUrl: e.sourceUrl,
+          relevanceScore: 50,
+          ageCategory: 'last_90d',
+        }));
+  const hiring = data.hiringIntelligence;
+  const achievements = data.recentAchievements ?? [];
+  const buyingLabels = buyingSignalLabels(data.buyingSignals);
+  const outreachAngle =
+    data.recommendedOutreachAngle?.value || data.bestOutreachAngle?.value || '';
+
   const hasNarrative =
+    Boolean(emailOpener) ||
     Boolean(data.companySummary?.value) ||
     Boolean(data.personSummary?.value) ||
-    Boolean(data.bestOutreachAngle?.value || data.recommendedOutreachAngle?.value) ||
-    (data.painPoints?.value?.length ?? 0) > 0;
+    Boolean(outreachAngle) ||
+    (data.painPoints?.value?.length ?? 0) > 0 ||
+    (whyNow?.length ?? 0) > 0;
+
+  const copyOpener = async () => {
+    if (!emailOpener) return;
+    try {
+      await navigator.clipboard.writeText(emailOpener);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -333,7 +387,224 @@ function AiOutreachPanel({
         </div>
       )}
 
-      {/* Score breakdowns */}
+      {/* 1. Email Opener + CTA */}
+      <OutreachSection title="Email Opener">
+        {emailOpener ? (
+          <div className="space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-slate-900 leading-relaxed whitespace-pre-wrap flex-1">
+                {emailOpener}
+              </p>
+              <button
+                type="button"
+                onClick={copyOpener}
+                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50"
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+            {emailOpenerContext ? (
+              <p className="text-xs text-slate-500 border-t border-slate-100 pt-2">
+                <span className="font-bold text-slate-600">Why this opener: </span>
+                {emailOpenerContext}
+              </p>
+            ) : null}
+            {suggestedCta ? (
+              <p className="text-sm text-slate-800">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">CTA · </span>
+                {suggestedCta}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">—</p>
+        )}
+      </OutreachSection>
+
+      {/* 2. Why Now */}
+      <OutreachSection title="Why Now">
+        {whyNow && whyNow.length > 0 ? (
+          <ul className="space-y-2">
+            {whyNow.map((w) => (
+              <li
+                key={`${w.triggerType}-${w.date}-${w.description.slice(0, 40)}`}
+                className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <span className="text-slate-900">{w.triggerType}</span>
+                  <span>· {w.priority}</span>
+                  <span>· {w.date}</span>
+                  {w.source ? <span>· {w.source}</span> : null}
+                </div>
+                <p className="mt-1 text-sm text-slate-800">{w.description}</p>
+                {w.impact ? (
+                  <p className="mt-0.5 text-xs text-slate-500">{w.impact}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-600">
+            No strong recent triggers; outreach based on fit, not timing.
+          </p>
+        )}
+      </OutreachSection>
+
+      {/* 3. Summaries */}
+      {(data.companySummary?.value || data.personSummary?.value) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.companySummary?.value && (
+            <OutreachSection title="Company Summary">
+              <p className="text-sm text-slate-800 leading-relaxed">{data.companySummary.value}</p>
+            </OutreachSection>
+          )}
+          {data.personSummary?.value && (
+            <OutreachSection title="Person Summary">
+              <p className="text-sm text-slate-800 leading-relaxed">{data.personSummary.value}</p>
+            </OutreachSection>
+          )}
+        </div>
+      )}
+
+      {/* 4. Company News */}
+      <OutreachSection title="Company News & Signals">
+        {news.length ? (
+          <ul className="space-y-2">
+            {news.slice(0, 5).map((n) => (
+              <li
+                key={`${n.label}-${n.date}`}
+                className="flex flex-col gap-0.5 border-l-2 border-slate-300 pl-2"
+              >
+                <p className="text-sm font-semibold text-slate-900">{n.label}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  {n.type} · {n.date}
+                  {'relevanceScore' in n && n.relevanceScore != null
+                    ? ` · relevance ${n.relevanceScore}`
+                    : ''}
+                </p>
+                {'summary' in n && n.summary ? (
+                  <p className="text-xs text-slate-600">{n.summary}</p>
+                ) : null}
+                {'relevance' in n && n.relevance ? (
+                  <p className="text-xs text-slate-500">{n.relevance}</p>
+                ) : null}
+                {n.sourceUrl ? (
+                  <a
+                    href={n.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] font-bold text-blue-600 hover:underline"
+                  >
+                    Source
+                  </a>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-slate-400">No meaningful news in the last 90 days.</p>
+        )}
+      </OutreachSection>
+
+      {/* 5. Hiring */}
+      <OutreachSection title="Hiring Intelligence">
+        {hiring && (hiring.isHiring || hiring.roles.length > 0) ? (
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-slate-600">
+              {hiring.isHiring ? 'Actively hiring' : 'Hiring signals'}
+              {hiring.roles.length === 0
+                ? ' — no dated role titles found'
+                : ` · ${hiring.roles.length} role(s)`}
+            </p>
+            {hiring.roles.length > 0 ? (
+              <ul className="space-y-1.5">
+                {hiring.roles.map((r) => (
+                  <li
+                    key={`${r.title}-${r.posted ?? ''}`}
+                    className="text-sm text-slate-800"
+                  >
+                    <span className="font-semibold">{r.title}</span>
+                    {r.department ? ` · ${r.department}` : ''}
+                    {r.location ? ` · ${r.location}` : ''}
+                    {r.posted ? (
+                      <span className="text-xs text-slate-500"> · posted {r.posted}</span>
+                    ) : null}
+                    {r.reason ? (
+                      <p className="text-xs text-slate-500">{r.reason}</p>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <p className="text-xs text-slate-400">No recent hiring signals.</p>
+        )}
+      </OutreachSection>
+
+      {/* 6. Achievements */}
+      {achievements.length > 0 && (
+        <OutreachSection title="Recent Achievements">
+          <ul className="space-y-1.5">
+            {achievements.map((a) => (
+              <li key={`${a.title}-${a.date ?? ''}`} className="text-sm text-slate-800">
+                <span className="font-semibold">{a.title}</span>
+                {a.date ? <span className="text-xs text-slate-500"> · {a.date}</span> : null}
+                {a.whyItMatters ? (
+                  <p className="text-xs text-slate-500">{a.whyItMatters}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </OutreachSection>
+      )}
+
+      {/* 7. Pain / Signals / Intent */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <OutreachSection title="Pain Points">
+          <ChipList items={data.painPoints?.value ?? []} tone="amber" />
+        </OutreachSection>
+        <OutreachSection title="Buying Signals">
+          <ChipList items={buyingLabels} tone="emerald" />
+        </OutreachSection>
+      </div>
+
+      {(data.buyingIntent?.value || data.productFit?.value || outreachAngle) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {data.buyingIntent?.value && (
+            <OutreachSection
+              title={`Buying Intent${data.buyingIntent.score != null ? ` · ${data.buyingIntent.score}%` : ''}`}
+            >
+              <p className="text-sm text-slate-800 leading-relaxed">{data.buyingIntent.value}</p>
+            </OutreachSection>
+          )}
+          {data.productFit?.value && (
+            <OutreachSection
+              title={`Product Fit${data.productFit.score != null ? ` · ${data.productFit.score}%` : ''}`}
+            >
+              <p className="text-sm text-slate-800 leading-relaxed">{data.productFit.value}</p>
+            </OutreachSection>
+          )}
+        </div>
+      )}
+
+      {/* 8. Angle */}
+      <OutreachSection title="Recommended Outreach Angle">
+        <p className="text-sm font-semibold text-slate-900">{outreachAngle || '—'}</p>
+        {data.growthStage ? (
+          <p className="mt-1 text-xs text-slate-500 capitalize">
+            Growth stage: {data.growthStage.replace(/_/g, ' ')}
+          </p>
+        ) : null}
+      </OutreachSection>
+
+      {(data.outreachObjections ?? []).length > 0 && (
+        <OutreachSection title="Likely Objections">
+          <ChipList items={data.outreachObjections ?? []} tone="rose" />
+        </OutreachSection>
+      )}
+
+      {/* 9. Score breakdowns */}
       <div className="grid gap-4 md:grid-cols-3">
         <OutreachSection title={`ICP Score · ${icp?.score ?? data.icpScore ?? '—'}%`}>
           {icp ? (
@@ -359,7 +630,10 @@ function AiOutreachPanel({
             <ul className="space-y-1">
               {intent.contributions.slice(0, 8).map((c) => (
                 <li key={`${c.signal}-${c.delta}`} className="flex justify-between gap-2 text-xs text-slate-700">
-                  <span className="truncate">{c.signal}</span>
+                  <span className="truncate">
+                    {c.signal}
+                    {c.date ? ` (${c.date})` : ''}
+                  </span>
                   <span className="font-bold text-slate-950 shrink-0">+{c.delta}</span>
                 </li>
               ))}
@@ -391,137 +665,6 @@ function AiOutreachPanel({
             <p className="text-sm font-black text-slate-900">
               {data.overallConfidence == null ? 'Not scored' : `${data.overallConfidence}%`}
             </p>
-          )}
-        </OutreachSection>
-      </div>
-
-      {/* Summaries */}
-      {(data.companySummary?.value || data.personSummary?.value) && (
-        <div className="grid gap-4 md:grid-cols-2">
-          {data.companySummary?.value && (
-            <OutreachSection title="Company Summary">
-              <p className="text-sm text-slate-800 leading-relaxed">{data.companySummary.value}</p>
-            </OutreachSection>
-          )}
-          {data.personSummary?.value && (
-            <OutreachSection title="Person Summary">
-              <p className="text-sm text-slate-800 leading-relaxed">{data.personSummary.value}</p>
-            </OutreachSection>
-          )}
-        </div>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <OutreachSection title="Best Outreach Angle">
-          <p className="text-sm font-semibold text-slate-900">
-            {data.bestOutreachAngle?.value || data.recommendedOutreachAngle?.value || '—'}
-          </p>
-        </OutreachSection>
-        <OutreachSection title="Growth Stage">
-          <p className="text-sm font-semibold text-slate-900 capitalize">{data.growthStage?.replace(/_/g, ' ') || '—'}</p>
-        </OutreachSection>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <OutreachSection title="Pain Points">
-          <ChipList items={data.painPoints?.value ?? []} tone="amber" />
-        </OutreachSection>
-        <OutreachSection title="Likely Objections">
-          <ChipList items={data.outreachObjections ?? []} tone="rose" />
-        </OutreachSection>
-      </div>
-
-      <OutreachSection title="Personalization Snippets">
-        {(data.personalizationSnippets ?? []).length ? (
-          <ul className="space-y-1.5">
-            {(data.personalizationSnippets ?? []).map((s) => (
-              <li key={s} className="text-sm text-slate-800 border-l-2 border-slate-300 pl-2">{s}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-slate-400">—</p>
-        )}
-      </OutreachSection>
-
-      {vars && (
-        <OutreachSection title="Email Variables">
-          <div className="grid gap-2 sm:grid-cols-2">
-            {(['hook', 'problem', 'benefit', 'cta', 'proof', 'competitor', 'trigger'] as const).map((key) => (
-              <div key={key} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{`{{${key}}}`}</p>
-                <p className="mt-0.5 text-xs text-slate-800">{vars[key] || '—'}</p>
-              </div>
-            ))}
-          </div>
-        </OutreachSection>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <OutreachSection title="Recent Company Events">
-          <ChipList items={(data.recentCompanyEvents ?? []).map((e) => e.label)} />
-        </OutreachSection>
-        <OutreachSection title="Website CTAs">
-          <ChipList items={data.websiteCtas ?? []} tone="emerald" />
-        </OutreachSection>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <OutreachSection title="Competitors">
-          <ChipList items={data.competitors ?? []} />
-        </OutreachSection>
-        <OutreachSection title="Ideal Buyer Persona">
-          <ChipList items={data.idealBuyerPersona ?? []} />
-        </OutreachSection>
-      </div>
-
-      <OutreachSection title="Existing Tools">
-        {(data.existingTools ?? []).length ? (
-          <ul className="space-y-2">
-            {(data.existingTools ?? []).map((g) => (
-              <li key={g.category}>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{g.category}</p>
-                <ChipList items={g.tools} />
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-slate-400">—</p>
-        )}
-      </OutreachSection>
-
-      {(data.techChanges ?? []).length > 0 && (
-        <OutreachSection title="Tech Changes">
-          <ChipList items={data.techChanges ?? []} tone="amber" />
-        </OutreachSection>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <OutreachSection title="Company LinkedIn Posts">
-          {(data.companyLinkedInPosts ?? []).length ? (
-            <ul className="space-y-2">
-              {(data.companyLinkedInPosts ?? []).map((p) => (
-                <li key={p.url ?? p.text} className="text-xs text-slate-700">
-                  <p>{p.text}</p>
-                  {p.topics?.length ? <ChipList items={p.topics} /> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-slate-400">—</p>
-          )}
-        </OutreachSection>
-        <OutreachSection title="Person LinkedIn Posts">
-          {(data.personLinkedInPosts ?? []).length ? (
-            <ul className="space-y-2">
-              {(data.personLinkedInPosts ?? []).map((p) => (
-                <li key={p.url ?? p.text} className="text-xs text-slate-700">
-                  <p>{p.text}</p>
-                  {p.topics?.length ? <ChipList items={p.topics} /> : null}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-slate-400">—</p>
           )}
         </OutreachSection>
       </div>

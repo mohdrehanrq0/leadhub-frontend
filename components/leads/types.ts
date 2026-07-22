@@ -95,6 +95,60 @@ export type ResearchActivity = {
 export type AiIntelligenceField<T> = { value: T; confidence: number } | null;
 export type ScoredField<T> = { value: T; score: number; confidence: number } | null;
 
+export type WhyNowTrigger = {
+  triggerType: string;
+  title?: string;
+  description: string;
+  impact?: string;
+  date: string;
+  source: string;
+  sourceUrl?: string;
+  priority: 'high' | 'medium';
+  confidence: number;
+};
+
+export type NewsSignal = {
+  type: string;
+  label: string;
+  headline?: string;
+  summary?: string;
+  date: string;
+  source?: string;
+  sourceUrl?: string;
+  relevanceScore: number;
+  ageCategory: string;
+  importance?: 'high' | 'medium' | 'low';
+  relevance?: string;
+};
+
+export type HiringRole = {
+  title: string;
+  department?: string;
+  location?: string;
+  posted?: string;
+  reason?: string;
+};
+
+export type HiringIntelligence = {
+  isHiring: boolean;
+  roles: HiringRole[];
+};
+
+export type Achievement = {
+  title: string;
+  date?: string;
+  source?: string;
+  sourceUrl?: string;
+  whyItMatters?: string;
+};
+
+export type StructuredBuyingSignal = {
+  signal: string;
+  date?: string;
+  impact?: string;
+  confidence: number;
+};
+
 export type AiIntelligenceData = {
   id: string;
   leadId: string;
@@ -109,13 +163,23 @@ export type AiIntelligenceData = {
   personalizationNotes?: AiIntelligenceField<string[]>;
   personaAnalysis?: AiIntelligenceField<Record<string, unknown>>;
   productFit?: ScoredField<string>;
-  buyingSignals?: AiIntelligenceField<string[]>;
+  /** Legacy string[] or Schema X structured signals. */
+  buyingSignals?: AiIntelligenceField<string[] | StructuredBuyingSignal[]>;
   recentActivity?: AiIntelligenceField<string[]>;
   outreachInsights?: AiIntelligenceField<string[]>;
   suggestedEmailOpening?: AiIntelligenceField<string>;
   suggestedCta?: AiIntelligenceField<string>;
+  whyNow?: WhyNowTrigger[] | null;
+  companyNewsAndSignals?: NewsSignal[] | null;
+  hiringIntelligence?: HiringIntelligence | null;
+  recentAchievements?: Achievement[] | null;
+  emailOpener?: AiIntelligenceField<string>;
+  emailOpenerContext?: AiIntelligenceField<string>;
   icpBreakdown?: { score: number; matched: string[]; missing: string[] } | null;
-  intentBreakdown?: { score: number; contributions: Array<{ signal: string; delta: number }> } | null;
+  intentBreakdown?: {
+    score: number;
+    contributions: Array<{ signal: string; delta: number; date?: string }>;
+  } | null;
   confidenceBreakdown?: {
     company: number;
     person: number;
