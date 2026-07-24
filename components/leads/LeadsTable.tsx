@@ -6,6 +6,8 @@ import { IconBuilding, IconEye, IconGripVertical, IconLoader2 } from '@tabler/ic
 import { ContactCell } from './cells/ContactCell';
 import { CompanyUrlCell } from './cells/CompanyUrlCell';
 import { EmailCell } from './cells/EmailCell';
+import { ColumnFilterHeader } from './ColumnFilterHeader';
+import { COLUMN_ID_TO_FILTER, type ColumnFilterKey } from './columnFilters';
 import {
   getColumnWidth,
   LEADS_COLUMNS,
@@ -23,6 +25,8 @@ import {
   type LeadRow,
 } from './types';
 import { APOLLO_UI_ENABLED } from '../../lib/features';
+
+export type ColumnFilterValues = Record<ColumnFilterKey, string>;
 
 type Props = {
   leads: LeadRow[];
@@ -42,6 +46,8 @@ type Props = {
   enriching: boolean;
   columnLayout: LeadsGridLayout;
   onColumnLayoutChange: (layout: LeadsGridLayout) => void;
+  columnFilters: ColumnFilterValues;
+  onColumnFilterChange: (key: ColumnFilterKey, value: string) => void;
 };
 
 function formatDate(value?: string) {
@@ -199,6 +205,8 @@ export function LeadsTable(props: Props) {
     enriching,
     columnLayout,
     onColumnLayoutChange,
+    columnFilters,
+    onColumnFilterChange,
   } = props;
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -328,7 +336,7 @@ export function LeadsTable(props: Props) {
                 ? ` · ${selected.size.toLocaleString()} selected`
                 : ''}
             {' · '}
-            header checkbox selects every lead (use filters to narrow)
+            use column filters on Verify, Enrichment, and Priority
           </p>
         </div>
       </div>
@@ -359,11 +367,19 @@ export function LeadsTable(props: Props) {
               {layout.order.map((id) => {
                 const col = LEADS_COLUMNS.find((c) => c.id === id)!;
                 const isStickyContact = id === 'contact' && layout.order[0] === 'contact';
+                const filterKey = COLUMN_ID_TO_FILTER[id];
+                const filterActive = filterKey ? columnFilters[filterKey] !== 'all' : false;
                 return (
                   <th
                     key={id}
                     draggable
-                    onDragStart={(e) => onHeaderDragStart(id, e)}
+                    onDragStart={(e) => {
+                      if ((e.target as HTMLElement).closest('button,[role="listbox"]')) {
+                        e.preventDefault();
+                        return;
+                      }
+                      onHeaderDragStart(id, e);
+                    }}
                     onDragOver={(e) => onHeaderDragOver(id, e)}
                     onDragLeave={() => setDragOverId((cur) => (cur === id ? null : cur))}
                     onDrop={(e) => onHeaderDrop(id, e)}
@@ -373,12 +389,23 @@ export function LeadsTable(props: Props) {
                     }}
                     className={`relative select-none border-b border-slate-200 bg-slate-50 p-0 ${
                       isStickyContact ? 'sticky left-[48px] z-20' : ''
-                    } ${dragOverId === id ? 'bg-blue-100/80' : ''}`}
+                    } ${dragOverId === id ? 'bg-blue-100/80' : ''} ${
+                      filterActive ? 'bg-blue-50/90' : ''
+                    }`}
                     style={{ width: getColumnWidth(layout, id) }}
                   >
-                    <div className="flex items-center gap-1 px-3 py-4 pr-4">
+                    <div className="flex items-center gap-1 px-3 py-3.5 pr-4">
                       <IconGripVertical size={12} className="shrink-0 text-slate-300" />
-                      <span className="truncate">{col.label}</span>
+                      {filterKey ? (
+                        <ColumnFilterHeader
+                          filterKey={filterKey}
+                          label={col.label}
+                          value={columnFilters[filterKey]}
+                          onChange={(value) => onColumnFilterChange(filterKey, value)}
+                        />
+                      ) : (
+                        <span className="truncate">{col.label}</span>
+                      )}
                     </div>
                     <span
                       role="separator"

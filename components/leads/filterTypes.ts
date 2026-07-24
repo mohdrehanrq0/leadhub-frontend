@@ -6,7 +6,8 @@ export type ExtraFilterField =
   | 'location'
   | 'role'
   | 'priority'
-  | 'enrichmentStatus';
+  | 'enrichmentStatus'
+  | 'emailVerificationStatus';
 
 export type ExtraFilterChip = {
   id: string;
@@ -22,6 +23,8 @@ export type LeadQueryFilters = {
   categoryId: string;
   listId: string;
   enrichmentStatus: string;
+  /** Contact email verification: all | valid | invalid | catch_all | disposable | unknown */
+  emailVerificationStatus: string;
   query: string;
   extras: ExtraFilterChip[];
 };
@@ -45,6 +48,9 @@ export function buildLeadSearchParams(
   if (filters.categoryId !== 'all') params.set('categoryId', filters.categoryId);
   if (filters.listId !== 'all') params.set('listId', filters.listId);
   if (filters.enrichmentStatus !== 'all') params.set('enrichmentStatus', filters.enrichmentStatus);
+  if (filters.emailVerificationStatus !== 'all') {
+    params.set('emailVerificationStatus', filters.emailVerificationStatus);
+  }
   if (filters.query.trim()) params.set('q', filters.query.trim());
 
   for (const chip of filters.extras) {
@@ -57,6 +63,10 @@ export function buildLeadSearchParams(
       if (filters.priority === 'all') params.set('priority', chip.value);
     } else if (chip.field === 'enrichmentStatus' && chip.value) {
       if (filters.enrichmentStatus === 'all') params.set('enrichmentStatus', chip.value);
+    } else if (chip.field === 'emailVerificationStatus' && chip.value) {
+      if (filters.emailVerificationStatus === 'all') {
+        params.set('emailVerificationStatus', chip.value);
+      }
     }
   }
 
@@ -96,6 +106,7 @@ export function companyUrlHref(domain?: string | null, website?: string | null):
 
 export const EXTRA_FILTER_OPTIONS: Array<{ field: ExtraFilterField; label: string }> = [
   { field: 'hasEmail', label: 'Has email' },
+  { field: 'emailVerificationStatus', label: 'Email verification is' },
   { field: 'hasWebsite', label: 'Has company URL' },
   { field: 'location', label: 'Location contains' },
   { field: 'role', label: 'Role contains' },

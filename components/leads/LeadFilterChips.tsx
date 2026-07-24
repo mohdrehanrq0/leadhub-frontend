@@ -15,8 +15,9 @@ type Props = {
 
 function defaultValueForField(field: ExtraFilterField): string {
   if (field === 'hasEmail' || field === 'hasWebsite') return 'true';
-  if (field === 'priority') return 'hot';
-  if (field === 'enrichmentStatus') return 'not_started';
+  if (field === 'priority') return 'warm';
+  if (field === 'enrichmentStatus') return 'completed';
+  if (field === 'emailVerificationStatus') return 'valid';
   return '';
 }
 
@@ -26,8 +27,13 @@ function chipLabel(chip: ExtraFilterChip): string {
   if (chip.field === 'hasEmail' || chip.field === 'hasWebsite') {
     return `${base}: ${chip.value === 'true' ? 'Yes' : 'No'}`;
   }
-  if (chip.field === 'priority' || chip.field === 'enrichmentStatus') {
-    return `${base}: ${chip.value}`;
+  if (
+    chip.field === 'priority' ||
+    chip.field === 'enrichmentStatus' ||
+    chip.field === 'emailVerificationStatus'
+  ) {
+    const pretty = chip.value.replace(/_/g, ' ');
+    return `${base}: ${pretty}`;
   }
   return `${base}: ${chip.value || '…'}`;
 }
@@ -49,7 +55,8 @@ export function LeadFilterChips({ chips, onChange }: Props) {
       draftField === 'hasEmail' ||
       draftField === 'hasWebsite' ||
       draftField === 'priority' ||
-      draftField === 'enrichmentStatus'
+      draftField === 'enrichmentStatus' ||
+      draftField === 'emailVerificationStatus'
         ? chips.filter((c) => c.field !== draftField)
         : chips;
 
@@ -139,11 +146,25 @@ export function LeadFilterChips({ chips, onChange }: Props) {
                 onChange={(e) => setDraftValue(e.target.value)}
                 className="mb-2 h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 outline-none"
               >
-                <option value="not_started">Not Enriched</option>
-                <option value="in_progress">Enriching...</option>
-                <option value="completed">Completed</option>
+                <option value="completed">Fully enriched</option>
                 <option value="partial">Partial</option>
+                <option value="in_progress">Enriching...</option>
                 <option value="failed">Failed</option>
+                <option value="not_started">Not Enriched</option>
+              </select>
+            )}
+
+            {draftField === 'emailVerificationStatus' && (
+              <select
+                value={draftValue}
+                onChange={(e) => setDraftValue(e.target.value)}
+                className="mb-2 h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 outline-none"
+              >
+                <option value="valid">Valid email</option>
+                <option value="invalid">Invalid</option>
+                <option value="catch_all">Catch-all</option>
+                <option value="disposable">Disposable</option>
+                <option value="unknown">Unknown / unverified</option>
               </select>
             )}
 

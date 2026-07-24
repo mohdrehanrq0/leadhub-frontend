@@ -35,6 +35,7 @@ import {
 import { LeadsToolbar } from '../../../components/leads/LeadsToolbar';
 import { SelectionActionBar } from '../../../components/leads/SelectionActionBar';
 import { LeadsTable } from '../../../components/leads/LeadsTable';
+import type { ColumnFilterKey } from '../../../components/leads/columnFilters';
 import {
   BULK_CHUNK,
   buildLeadSearchParams,
@@ -79,6 +80,7 @@ export default function LeadsPage() {
   const [categoryId, setCategoryId] = useState('all');
   const [listId, setListId] = useState('all');
   const [enrichmentStatus, setEnrichmentStatus] = useState('all');
+  const [emailVerificationStatus, setEmailVerificationStatus] = useState('all');
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [extras, setExtras] = useState<ExtraFilterChip[]>([]);
@@ -115,10 +117,11 @@ export default function LeadsPage() {
       categoryId,
       listId,
       enrichmentStatus,
+      emailVerificationStatus,
       query: deferredQuery,
       extras,
     }),
-    [stage, priority, source, categoryId, listId, enrichmentStatus, deferredQuery, extras],
+    [stage, priority, source, categoryId, listId, enrichmentStatus, emailVerificationStatus, deferredQuery, extras],
   );
 
   const filterKey = useMemo(() => buildLeadSearchParams(queryFilters).toString(), [queryFilters]);
@@ -131,10 +134,31 @@ export default function LeadsPage() {
       queryFilters.categoryId !== 'all' ||
       queryFilters.listId !== 'all' ||
       queryFilters.enrichmentStatus !== 'all' ||
+      queryFilters.emailVerificationStatus !== 'all' ||
       Boolean(queryFilters.query.trim()) ||
       queryFilters.extras.length > 0
     );
   }, [queryFilters]);
+
+  const clearFilters = useCallback(() => {
+    setStage('all');
+    setPriority('all');
+    setSource('all');
+    setCategoryId('all');
+    setListId('all');
+    setEnrichmentStatus('all');
+    setEmailVerificationStatus('all');
+    setQuery('');
+    setExtras([]);
+  }, []);
+
+  const handleColumnFilterChange = useCallback((key: ColumnFilterKey, value: string) => {
+    if (key === 'emailVerificationStatus') setEmailVerificationStatus(value);
+    else if (key === 'enrichmentStatus') setEnrichmentStatus(value);
+    else if (key === 'priority') {
+      setPriority(value as 'all' | 'hot' | 'warm' | 'cold' | 'unknown');
+    }
+  }, []);
 
   const fetchMatchingIds = useCallback(async (filters: LeadQueryFilters) => {
     const params = buildLeadSearchParams(filters);
@@ -705,6 +729,8 @@ export default function LeadsPage() {
         onListIdChange={setListId}
         enrichmentStatus={enrichmentStatus}
         onEnrichmentStatusChange={setEnrichmentStatus}
+        emailVerificationStatus={emailVerificationStatus}
+        onEmailVerificationStatusChange={setEmailVerificationStatus}
         extras={extras}
         onExtrasChange={setExtras}
         view={view}
@@ -713,6 +739,8 @@ export default function LeadsPage() {
         lists={lists}
         loadedCount={leads.length}
         totalCount={totalCount}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearFilters}
       />
 
       <SelectionActionBar
@@ -919,6 +947,12 @@ export default function LeadsPage() {
           enriching={enriching || reEnriching}
           columnLayout={columnLayout}
           onColumnLayoutChange={handleColumnLayoutChange}
+          columnFilters={{
+            emailVerificationStatus,
+            enrichmentStatus,
+            priority,
+          }}
+          onColumnFilterChange={handleColumnFilterChange}
         />
       )}
 
