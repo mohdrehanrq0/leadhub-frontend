@@ -18,13 +18,15 @@ export type ExtraFilterChip = {
 
 export type LeadQueryFilters = {
   stage: 'all' | PipelineStage;
-  priority: 'all' | 'hot' | 'warm' | 'cold' | 'unknown';
+  /** Multi-select priorities (empty = all). */
+  priorities: string[];
   source: string;
   categoryId: string;
   listId: string;
-  enrichmentStatus: string;
-  /** Contact email verification: all | valid | invalid | catch_all | disposable | unknown */
-  emailVerificationStatus: string;
+  /** Multi-select enrichment statuses (empty = all). */
+  enrichmentStatuses: string[];
+  /** Multi-select email verification statuses (empty = all). */
+  emailVerificationStatuses: string[];
   query: string;
   extras: ExtraFilterChip[];
 };
@@ -43,13 +45,15 @@ export function buildLeadSearchParams(
     params.set('offset', String(pagination.offset));
   }
   if (filters.stage !== 'all') params.set('pipelineStage', filters.stage);
-  if (filters.priority !== 'all') params.set('priority', filters.priority);
+  if (filters.priorities.length) params.set('priorities', filters.priorities.join(','));
   if (filters.source !== 'all') params.set('source', filters.source);
   if (filters.categoryId !== 'all') params.set('categoryId', filters.categoryId);
   if (filters.listId !== 'all') params.set('listId', filters.listId);
-  if (filters.enrichmentStatus !== 'all') params.set('enrichmentStatus', filters.enrichmentStatus);
-  if (filters.emailVerificationStatus !== 'all') {
-    params.set('emailVerificationStatus', filters.emailVerificationStatus);
+  if (filters.enrichmentStatuses.length) {
+    params.set('enrichmentStatuses', filters.enrichmentStatuses.join(','));
+  }
+  if (filters.emailVerificationStatuses.length) {
+    params.set('emailVerificationStatuses', filters.emailVerificationStatuses.join(','));
   }
   if (filters.query.trim()) params.set('q', filters.query.trim());
 
@@ -59,13 +63,12 @@ export function buildLeadSearchParams(
     } else if (chip.field === 'location' || chip.field === 'role') {
       if (chip.value.trim()) params.set(chip.field, chip.value.trim());
     } else if (chip.field === 'priority' && chip.value) {
-      // Extra priority chip only applies when quick dropdown is "all"
-      if (filters.priority === 'all') params.set('priority', chip.value);
+      if (!filters.priorities.length) params.set('priorities', chip.value);
     } else if (chip.field === 'enrichmentStatus' && chip.value) {
-      if (filters.enrichmentStatus === 'all') params.set('enrichmentStatus', chip.value);
+      if (!filters.enrichmentStatuses.length) params.set('enrichmentStatuses', chip.value);
     } else if (chip.field === 'emailVerificationStatus' && chip.value) {
-      if (filters.emailVerificationStatus === 'all') {
-        params.set('emailVerificationStatus', chip.value);
+      if (!filters.emailVerificationStatuses.length) {
+        params.set('emailVerificationStatuses', chip.value);
       }
     }
   }

@@ -1,35 +1,39 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
-import { IconCheck, IconFilter, IconFilterFilled, IconX } from '@tabler/icons-react';
-import {
-  COLUMN_FILTER_CONFIG,
-  type ColumnFilterKey,
-} from './columnFilters';
+import { IconCheck, IconChevronDown, IconX } from '@tabler/icons-react';
+import type { ColumnFilterOption } from './columnFilters';
 
 type Props = {
-  filterKey: ColumnFilterKey;
-  /** Selected option values (empty = no filter / all). */
+  label: string;
+  emptyLabel: string;
+  options: ColumnFilterOption[];
   values: string[];
   onChange: (values: string[]) => void;
-  label: string;
+  activeClassName?: string;
 };
 
 function toggleValue(current: string[], value: string): string[] {
   return current.includes(value) ? current.filter((v) => v !== value) : [...current, value];
 }
 
-export function ColumnFilterHeader({ filterKey, values, onChange, label }: Props) {
+export function ToolbarMultiSelect({
+  label,
+  emptyLabel,
+  options,
+  values,
+  onChange,
+  activeClassName = 'border-blue-300 bg-blue-50/60',
+}: Props) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const config = COLUMN_FILTER_CONFIG[filterKey];
   const active = values.length > 0;
-  const activeLabel = active
-    ? values
-        .map((v) => config.options.find((o) => o.value === v)?.label ?? v)
-        .join(', ')
-    : null;
+  const summary = active
+    ? values.length === 1
+      ? options.find((o) => o.value === values[0])?.label ?? values[0]
+      : `${label} (${values.length})`
+    : emptyLabel;
 
   useEffect(() => {
     if (!open) return;
@@ -48,59 +52,62 @@ export function ColumnFilterHeader({ filterKey, values, onChange, label }: Props
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative flex min-w-0 flex-1 items-center gap-1">
-      <span className="truncate">{label}</span>
+    <div ref={rootRef} className="relative">
       <button
         type="button"
         aria-expanded={open}
         aria-controls={menuId}
-        aria-label={`Filter ${config.label}${activeLabel ? `: ${activeLabel}` : ''}`}
-        title={activeLabel ? `Filtered: ${activeLabel}` : `Filter ${config.label} (multi-select)`}
-        onClick={(e) => {
-          e.stopPropagation();
-          setOpen((v) => !v);
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-        className={`relative inline-flex size-5 shrink-0 items-center justify-center rounded-md transition ${
-          active
-            ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200'
-            : 'text-slate-400 hover:bg-slate-200/80 hover:text-slate-700'
+        onClick={() => setOpen((v) => !v)}
+        className={`flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100 ${
+          active ? activeClassName : ''
         }`}
       >
-        {active ? <IconFilterFilled size={12} /> : <IconFilter size={12} />}
-        {active && values.length > 1 && (
-          <span className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-blue-600 text-[8px] font-black text-white">
-            {values.length}
-          </span>
-        )}
+        <span className="truncate">{summary}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {active && (
+            <span
+              role="button"
+              tabIndex={0}
+              aria-label={`Clear ${label}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onChange([]);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onChange([]);
+                }
+              }}
+              className="rounded p-0.5 text-slate-400 hover:bg-white/80 hover:text-slate-700"
+            >
+              <IconX size={12} />
+            </span>
+          )}
+          <IconChevronDown size={14} className="text-slate-400" />
+        </span>
       </button>
-
       {open && (
         <div
           id={menuId}
-          role="group"
-          aria-label={`${config.label} multi-select filter`}
-          className="absolute left-0 top-full z-40 mt-1 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10"
-          onMouseDown={(e) => e.stopPropagation()}
+          className="absolute left-0 top-full z-40 mt-1 w-full min-w-[200px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-xl shadow-slate-900/10"
         >
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Filter {config.label}
+              {label} · multi-select
             </span>
             {active && (
               <button
                 type="button"
                 onClick={() => onChange([])}
-                className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                className="text-[10px] font-semibold text-slate-500 hover:text-slate-800"
               >
-                <IconX size={10} /> Clear
+                Clear
               </button>
             )}
           </div>
-          <p className="border-b border-slate-50 px-3 py-1.5 text-[10px] font-medium text-slate-400">
-            Select one or more
-          </p>
-          {config.options.map((opt) => {
+          {options.map((opt) => {
             const selected = values.includes(opt.value);
             return (
               <button

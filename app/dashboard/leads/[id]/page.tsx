@@ -231,7 +231,7 @@ const ENRICHMENT_STEP_MARKETING: Partial<Record<EnrichmentStep, { title: string;
   },
   email_verification: {
     title: 'Validating Email Deliverability',
-    desc: 'Executing triple-pass SMTP handshakes and catch-all validation via Reoon to guarantee inbox deliverability and protect sender reputation.',
+    desc: 'Verifying deliverability with your selected email provider (Reoon or Apify Bounceverify). Cached results within 30 days are reused to avoid re-verification.',
     runningText: 'Opening secure MX port handshake and verifying mailbox...',
     icon: '📧',
   },

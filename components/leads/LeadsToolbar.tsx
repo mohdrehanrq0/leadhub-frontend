@@ -3,6 +3,8 @@
 import { startTransition } from 'react';
 import { IconFilterOff, IconLayoutKanban, IconSearch, IconTable } from '@tabler/icons-react';
 import { LeadFilterChips } from './LeadFilterChips';
+import { ToolbarMultiSelect } from './ToolbarMultiSelect';
+import { COLUMN_FILTER_CONFIG } from './columnFilters';
 import type { ExtraFilterChip } from './filterTypes';
 import { PIPELINE_STAGES, type LeadCategory, type LeadList, type PipelineStage } from './types';
 import { APOLLO_UI_ENABLED } from '../../lib/features';
@@ -12,18 +14,18 @@ type Props = {
   onQueryChange: (value: string) => void;
   stage: 'all' | PipelineStage;
   onStageChange: (value: 'all' | PipelineStage) => void;
-  priority: 'all' | 'hot' | 'warm' | 'cold' | 'unknown';
-  onPriorityChange: (value: 'all' | 'hot' | 'warm' | 'cold' | 'unknown') => void;
+  priorities: string[];
+  onPrioritiesChange: (values: string[]) => void;
   source: string;
   onSourceChange: (value: string) => void;
   categoryId: string;
   onCategoryIdChange: (value: string) => void;
   listId: string;
   onListIdChange: (value: string) => void;
-  enrichmentStatus: string;
-  onEnrichmentStatusChange: (value: string) => void;
-  emailVerificationStatus: string;
-  onEmailVerificationStatusChange: (value: string) => void;
+  enrichmentStatuses: string[];
+  onEnrichmentStatusesChange: (values: string[]) => void;
+  emailVerificationStatuses: string[];
+  onEmailVerificationStatusesChange: (values: string[]) => void;
   extras: ExtraFilterChip[];
   onExtrasChange: (chips: ExtraFilterChip[]) => void;
   view: 'table' | 'kanban';
@@ -49,18 +51,18 @@ export function LeadsToolbar(props: Props) {
     onQueryChange,
     stage,
     onStageChange,
-    priority,
-    onPriorityChange,
+    priorities,
+    onPrioritiesChange,
     source,
     onSourceChange,
     categoryId,
     onCategoryIdChange,
     listId,
     onListIdChange,
-    enrichmentStatus,
-    onEnrichmentStatusChange,
-    emailVerificationStatus,
-    onEmailVerificationStatusChange,
+    enrichmentStatuses,
+    onEnrichmentStatusesChange,
+    emailVerificationStatuses,
+    onEmailVerificationStatusesChange,
     extras,
     onExtrasChange,
     view,
@@ -139,43 +141,32 @@ export function LeadsToolbar(props: Props) {
             </option>
           ))}
         </select>
-        <select
-          value={priority}
-          onChange={(event) =>
-            onPriorityChange(event.target.value as 'all' | 'hot' | 'warm' | 'cold' | 'unknown')
-          }
-          className={`${selectClass} ${priority !== 'all' ? 'border-amber-300 bg-amber-50/60' : ''}`}
-        >
-          <option value="all">All priority</option>
-          <option value="hot">Hot</option>
-          <option value="warm">Warm</option>
-          <option value="cold">Cold</option>
-          <option value="unknown">Unknown</option>
-        </select>
-        <select
-          value={emailVerificationStatus}
-          onChange={(event) => onEmailVerificationStatusChange(event.target.value)}
-          className={`${selectClass} ${emailVerificationStatus !== 'all' ? 'border-emerald-300 bg-emerald-50/60' : ''}`}
-        >
-          <option value="all">All verification</option>
-          <option value="valid">Valid email</option>
-          <option value="invalid">Invalid</option>
-          <option value="catch_all">Catch-all</option>
-          <option value="disposable">Disposable</option>
-          <option value="unknown">Unverified</option>
-        </select>
-        <select
-          value={enrichmentStatus}
-          onChange={(event) => onEnrichmentStatusChange(event.target.value)}
-          className={`${selectClass} ${enrichmentStatus !== 'all' ? 'border-violet-300 bg-violet-50/60' : ''}`}
-        >
-          <option value="all">All enrichment</option>
-          <option value="completed">Fully enriched</option>
-          <option value="partial">Partial</option>
-          <option value="in_progress">Enriching…</option>
-          <option value="failed">Failed</option>
-          <option value="not_started">Not enriched</option>
-        </select>
+
+        <ToolbarMultiSelect
+          label="Priority"
+          emptyLabel="All priority"
+          options={COLUMN_FILTER_CONFIG.priority.options}
+          values={priorities}
+          onChange={onPrioritiesChange}
+          activeClassName="border-amber-300 bg-amber-50/60"
+        />
+        <ToolbarMultiSelect
+          label="Verification"
+          emptyLabel="All verification"
+          options={COLUMN_FILTER_CONFIG.emailVerificationStatus.options}
+          values={emailVerificationStatuses}
+          onChange={onEmailVerificationStatusesChange}
+          activeClassName="border-emerald-300 bg-emerald-50/60"
+        />
+        <ToolbarMultiSelect
+          label="Enrichment"
+          emptyLabel="All enrichment"
+          options={COLUMN_FILTER_CONFIG.enrichmentStatus.options}
+          values={enrichmentStatuses}
+          onChange={onEnrichmentStatusesChange}
+          activeClassName="border-violet-300 bg-violet-50/60"
+        />
+
         <select
           value={source}
           onChange={(event) => onSourceChange(event.target.value)}

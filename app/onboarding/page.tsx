@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
-import { APOLLO_UI_ENABLED } from '../../lib/features';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
 import {
@@ -11,7 +10,6 @@ import {
   IconTarget,
   IconGridPattern,
   IconHierarchy,
-  IconPlug,
   IconCheck,
   IconArrowRight,
   IconArrowLeft,
@@ -93,11 +91,7 @@ export default function OnboardingWizard() {
   // Step 4: Sub-Niches
   const [subNicheMap, setSubNicheMap] = useState<Record<string, any[]>>({});
   const [generatingSubNichesId, setGeneratingSubNichesId] = useState<string | null>(null);
-
-  // Step 5: API Keys / Integrations
-  const [apolloKey, setApolloKey] = useState('');
-  const [apifyKey, setApifyKey] = useState('');
-  const [savingKeys, setSavingKeys] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Workspaces fetching
   const fetchWorkspaces = async () => {
@@ -305,8 +299,6 @@ export default function OnboardingWizard() {
     setIcp(null);
     setNiches([]);
     setSubNicheMap({});
-    setApolloKey('');
-    setApifyKey('');
   };
 
   const ONBOARDING_STEP_TO_UI: Record<string, number> = {
@@ -314,7 +306,8 @@ export default function OnboardingWizard() {
     icp: 2,
     niches: 3,
     sub_niches: 4,
-    integrations: 5,
+    // Legacy: integrations step removed — resume on final step
+    integrations: 4,
   };
 
   const loadExistingProfile = async () => {
@@ -329,6 +322,18 @@ export default function OnboardingWizard() {
       if (profile.onboardingStep === 'completed') {
         router.replace('/dashboard/leads');
         return;
+      }
+
+      // Users stuck on removed integrations step: finish onboarding automatically
+      if (profile.onboardingStep === 'integrations') {
+        try {
+          await api.post('/api/onboarding/complete');
+          await refreshOnboardingStatus();
+          router.replace('/dashboard/leads');
+          return;
+        } catch {
+          // Fall through to step 4 so they can complete manually
+        }
       }
 
       setCompanyName(profile.companyName ?? '');
@@ -468,41 +473,10 @@ export default function OnboardingWizard() {
       setGeneratingSubNichesId(null);
     }
   };
-  // ─── Step 5 Integrations ───────────────────────────────────────
-  const handleSaveKeys = async () => {
-    setSavingKeys(true);
+  // ─── Complete onboarding (after sub-niches) ────────────────────
+  const handleCompleteOnboarding = async () => {
+    setCompleting(true);
     try {
-      let hasKey = false;
-      try {
-        const keysRes = await api.get('/api/api-keys');
-        const validKeys = (keysRes.data.data ?? []).filter(
-          (k: any) =>
-            k.isValid &&
-            (k.provider === 'apify' || (APOLLO_UI_ENABLED && k.provider === 'apollo')),
-        );
-        if (validKeys.length > 0) {
-          hasKey = true;
-        }
-      } catch {
-        // ignore
-      }
-
-      if (!hasKey && !(APOLLO_UI_ENABLED && apolloKey) && !apifyKey) {
-        toast.error(
-          APOLLO_UI_ENABLED
-            ? 'Please configure at least one API Provider (Apollo or Apify) to complete onboarding.'
-            : 'Please configure an Apify API key to complete onboarding.',
-        );
-        setSavingKeys(false);
-        return;
-      }
-
-      if (APOLLO_UI_ENABLED && apolloKey) {
-        await api.post('/api/api-keys', { provider: 'apollo', key: apolloKey });
-      }
-      if (apifyKey) {
-        await api.post('/api/api-keys', { provider: 'apify', key: apifyKey });
-      }
       await api.post('/api/onboarding/complete');
       await refreshOnboardingStatus();
       toast.success('Onboarding complete! Welcome to LeadHub.');
@@ -510,7 +484,7 @@ export default function OnboardingWizard() {
     } catch (err: any) {
       toast.error(err.response?.data?.message ?? 'Failed to complete onboarding.');
     } finally {
-      setSavingKeys(false);
+      setCompleting(false);
     }
   };
   // ─── Products / Services helpers ──────────────────────────────
@@ -571,7 +545,7 @@ export default function OnboardingWizard() {
         </div>
 
         <div className="flex items-center space-x-2">
-          {[1, 2, 3, 4, 5].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
               className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all border ${
@@ -1351,71 +1325,11 @@ export default function OnboardingWizard() {
               </button>
               <button
                 type="button"
-                onClick={() => setStep(5)}
-                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
+                onClick={() => void handleCompleteOnboarding()}
+                disabled={completing}
+                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer disabled:opacity-60"
               >
-                <span>Next: Setup Integrations</span>
-                <IconChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Step 5: Integrations Setup ────────────────────────── */}
-        {step === 5 && (
-          <div className="space-y-6 animate-fade-in">
-            <div>
-              <h2 className="text-2xl font-bold flex items-center space-x-2">
-                <IconPlug className="text-primary" />
-                <span>Connect API Platforms</span>
-              </h2>
-              <p className="text-text-200 text-sm mt-1">
-                Paste credentials to authorize lead collection. You can test and configure additional platforms inside Settings.
-              </p>
-            </div>
-
-            <div className="space-y-4 max-w-lg">
-              {APOLLO_UI_ENABLED && (
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-text-200">Apollo API Key</label>
-                <input
-                  type="password"
-                  value={apolloKey}
-                  onChange={(e) => setApolloKey(e.target.value)}
-                  placeholder="Paste Apollo key here..."
-                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
-                />
-              </div>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-text-200">Apify API Token</label>
-                <input
-                  type="password"
-                  value={apifyKey}
-                  onChange={(e) => setApifyKey(e.target.value)}
-                  placeholder="Paste Apify token here..."
-                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-between pt-6 border-t border-border">
-              <button
-                type="button"
-                onClick={() => setStep(4)}
-                className="flex items-center space-x-1.5 text-text-200 hover:text-text-100 text-sm cursor-pointer"
-              >
-                <IconArrowLeft size={16} />
-                <span>Back</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveKeys}
-                disabled={savingKeys}
-                className="bg-primary hover:bg-primary-200 text-white font-medium py-2 px-6 rounded-lg text-sm flex items-center space-x-1.5 shadow-sm cursor-pointer"
-              >
-                <span>{savingKeys ? 'Finalizing Setup...' : 'Complete Onboarding'}</span>
+                <span>{completing ? 'Finalizing Setup...' : 'Complete Onboarding'}</span>
                 <IconChevronRight size={16} />
               </button>
             </div>

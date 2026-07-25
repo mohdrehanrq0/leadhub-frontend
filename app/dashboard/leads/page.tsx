@@ -75,12 +75,12 @@ export default function LeadsPage() {
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [stage, setStage] = useState<'all' | PipelineStage>('all');
-  const [priority, setPriority] = useState<'all' | 'hot' | 'warm' | 'cold' | 'unknown'>('all');
+  const [priorities, setPriorities] = useState<string[]>([]);
   const [source, setSource] = useState('all');
   const [categoryId, setCategoryId] = useState('all');
   const [listId, setListId] = useState('all');
-  const [enrichmentStatus, setEnrichmentStatus] = useState('all');
-  const [emailVerificationStatus, setEmailVerificationStatus] = useState('all');
+  const [enrichmentStatuses, setEnrichmentStatuses] = useState<string[]>([]);
+  const [emailVerificationStatuses, setEmailVerificationStatuses] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const deferredQuery = useDeferredValue(query);
   const [extras, setExtras] = useState<ExtraFilterChip[]>([]);
@@ -112,16 +112,16 @@ export default function LeadsPage() {
   const queryFilters: LeadQueryFilters = useMemo(
     () => ({
       stage,
-      priority,
+      priorities,
       source,
       categoryId,
       listId,
-      enrichmentStatus,
-      emailVerificationStatus,
+      enrichmentStatuses,
+      emailVerificationStatuses,
       query: deferredQuery,
       extras,
     }),
-    [stage, priority, source, categoryId, listId, enrichmentStatus, emailVerificationStatus, deferredQuery, extras],
+    [stage, priorities, source, categoryId, listId, enrichmentStatuses, emailVerificationStatuses, deferredQuery, extras],
   );
 
   const filterKey = useMemo(() => buildLeadSearchParams(queryFilters).toString(), [queryFilters]);
@@ -129,12 +129,12 @@ export default function LeadsPage() {
   const hasActiveFilters = useMemo(() => {
     return (
       queryFilters.stage !== 'all' ||
-      queryFilters.priority !== 'all' ||
+      queryFilters.priorities.length > 0 ||
       queryFilters.source !== 'all' ||
       queryFilters.categoryId !== 'all' ||
       queryFilters.listId !== 'all' ||
-      queryFilters.enrichmentStatus !== 'all' ||
-      queryFilters.emailVerificationStatus !== 'all' ||
+      queryFilters.enrichmentStatuses.length > 0 ||
+      queryFilters.emailVerificationStatuses.length > 0 ||
       Boolean(queryFilters.query.trim()) ||
       queryFilters.extras.length > 0
     );
@@ -142,22 +142,20 @@ export default function LeadsPage() {
 
   const clearFilters = useCallback(() => {
     setStage('all');
-    setPriority('all');
+    setPriorities([]);
     setSource('all');
     setCategoryId('all');
     setListId('all');
-    setEnrichmentStatus('all');
-    setEmailVerificationStatus('all');
+    setEnrichmentStatuses([]);
+    setEmailVerificationStatuses([]);
     setQuery('');
     setExtras([]);
   }, []);
 
-  const handleColumnFilterChange = useCallback((key: ColumnFilterKey, value: string) => {
-    if (key === 'emailVerificationStatus') setEmailVerificationStatus(value);
-    else if (key === 'enrichmentStatus') setEnrichmentStatus(value);
-    else if (key === 'priority') {
-      setPriority(value as 'all' | 'hot' | 'warm' | 'cold' | 'unknown');
-    }
+  const handleColumnFilterChange = useCallback((key: ColumnFilterKey, values: string[]) => {
+    if (key === 'emailVerificationStatus') setEmailVerificationStatuses(values);
+    else if (key === 'enrichmentStatus') setEnrichmentStatuses(values);
+    else if (key === 'priority') setPriorities(values);
   }, []);
 
   const fetchMatchingIds = useCallback(async (filters: LeadQueryFilters) => {
@@ -719,18 +717,18 @@ export default function LeadsPage() {
         onQueryChange={setQuery}
         stage={stage}
         onStageChange={setStage}
-        priority={priority}
-        onPriorityChange={setPriority}
+        priorities={priorities}
+        onPrioritiesChange={setPriorities}
         source={source}
         onSourceChange={setSource}
         categoryId={categoryId}
         onCategoryIdChange={setCategoryId}
         listId={listId}
         onListIdChange={setListId}
-        enrichmentStatus={enrichmentStatus}
-        onEnrichmentStatusChange={setEnrichmentStatus}
-        emailVerificationStatus={emailVerificationStatus}
-        onEmailVerificationStatusChange={setEmailVerificationStatus}
+        enrichmentStatuses={enrichmentStatuses}
+        onEnrichmentStatusesChange={setEnrichmentStatuses}
+        emailVerificationStatuses={emailVerificationStatuses}
+        onEmailVerificationStatusesChange={setEmailVerificationStatuses}
         extras={extras}
         onExtrasChange={setExtras}
         view={view}
@@ -948,9 +946,9 @@ export default function LeadsPage() {
           columnLayout={columnLayout}
           onColumnLayoutChange={handleColumnLayoutChange}
           columnFilters={{
-            emailVerificationStatus,
-            enrichmentStatus,
-            priority,
+            emailVerificationStatus: emailVerificationStatuses,
+            enrichmentStatus: enrichmentStatuses,
+            priority: priorities,
           }}
           onColumnFilterChange={handleColumnFilterChange}
         />

@@ -26,7 +26,7 @@ import {
 } from './types';
 import { APOLLO_UI_ENABLED } from '../../lib/features';
 
-export type ColumnFilterValues = Record<ColumnFilterKey, string>;
+export type ColumnFilterValues = Record<ColumnFilterKey, string[]>;
 
 type Props = {
   leads: LeadRow[];
@@ -47,7 +47,7 @@ type Props = {
   columnLayout: LeadsGridLayout;
   onColumnLayoutChange: (layout: LeadsGridLayout) => void;
   columnFilters: ColumnFilterValues;
-  onColumnFilterChange: (key: ColumnFilterKey, value: string) => void;
+  onColumnFilterChange: (key: ColumnFilterKey, values: string[]) => void;
 };
 
 function formatDate(value?: string) {
@@ -368,13 +368,13 @@ export function LeadsTable(props: Props) {
                 const col = LEADS_COLUMNS.find((c) => c.id === id)!;
                 const isStickyContact = id === 'contact' && layout.order[0] === 'contact';
                 const filterKey = COLUMN_ID_TO_FILTER[id];
-                const filterActive = filterKey ? columnFilters[filterKey] !== 'all' : false;
+                const filterActive = filterKey ? columnFilters[filterKey].length > 0 : false;
                 return (
                   <th
                     key={id}
                     draggable
                     onDragStart={(e) => {
-                      if ((e.target as HTMLElement).closest('button,[role="listbox"]')) {
+                      if ((e.target as HTMLElement).closest('button,[role="group"],[role="checkbox"]')) {
                         e.preventDefault();
                         return;
                       }
@@ -400,8 +400,8 @@ export function LeadsTable(props: Props) {
                         <ColumnFilterHeader
                           filterKey={filterKey}
                           label={col.label}
-                          value={columnFilters[filterKey]}
-                          onChange={(value) => onColumnFilterChange(filterKey, value)}
+                          values={columnFilters[filterKey]}
+                          onChange={(values) => onColumnFilterChange(filterKey, values)}
                         />
                       ) : (
                         <span className="truncate">{col.label}</span>

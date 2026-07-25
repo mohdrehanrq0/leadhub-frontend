@@ -24,6 +24,7 @@ interface ApiKeyRecord {
 }
 
 type LlmMode = 'openai' | 'gemini' | 'mix';
+type EmailVerificationProviderPreference = 'reoon' | 'apify';
 type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'reoon';
 
 interface ProviderModelOption {
@@ -65,6 +66,8 @@ function ApiKeysPageInner() {
   const [llmMode, setLlmMode] = useState<LlmMode>('openai');
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [emailVerificationProvider, setEmailVerificationProvider] =
+    useState<EmailVerificationProviderPreference>('reoon');
   const [openaiModels, setOpenaiModels] = useState<ProviderModelOption[]>([]);
   const [geminiModels, setGeminiModels] = useState<ProviderModelOption[]>([]);
   const [loadingModeModels, setLoadingModeModels] = useState(false);
@@ -150,8 +153,11 @@ function ApiKeysPageInner() {
       setLlmMode(data.llmMode ?? 'openai');
       setOpenaiModel(data.openaiModel ?? 'gpt-4o-mini');
       setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
+      setEmailVerificationProvider(
+        data.emailVerificationProvider === 'apify' ? 'apify' : 'reoon',
+      );
     } catch {
-      toast.error('Failed to load LLM preferences.');
+      toast.error('Failed to load workspace preferences.');
     }
   }
 
@@ -208,12 +214,13 @@ function ApiKeysPageInner() {
         llmMode,
         openaiModel,
         geminiModel,
+        emailVerificationProvider,
       });
-      toast.success('LLM preferences updated.');
+      toast.success('Workspace preferences updated.');
       await refreshRoutingModelLists(llmMode);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(message ?? 'Failed to save LLM preferences.');
+      toast.error(message ?? 'Failed to save preferences.');
     } finally {
       setSavingPrefs(false);
     }
@@ -295,7 +302,8 @@ function ApiKeysPageInner() {
           <span>Workspace API Keys</span>
         </h1>
         <p className="text-text-200 text-sm mt-2">
-          Add provider credentials and configure conditional LLM routing. Keys are encrypted at rest using AES-256-GCM.
+          Add provider credentials and configure enrichment preferences (email verifier + LLM routing).
+          Keys are encrypted at rest using AES-256-GCM.
         </p>
       </div>
 
@@ -395,80 +403,112 @@ function ApiKeysPageInner() {
         <div className="xl:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-2xl shadow-input">
           <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
             <IconSparkles size={16} className="text-primary" />
-            LLM Routing
+            Enrichment Preferences
           </h2>
           <p className="text-[11px] text-text-300 leading-5">
-            Conditional routing based on use case importance. Provider model selectors are shown only for active mode.
+            Choose LLM routing and which email verifier to use. Only the selected verifier runs —
+            no fallback — so you only spend credits on that provider. Verified emails are cached for 30 days.
           </p>
           <form onSubmit={savePreferences} className="space-y-4">
             <div className="space-y-1">
-              <label htmlFor="llmMode" className="text-xs font-semibold text-text-200">Mode</label>
+              <label htmlFor="emailVerificationProvider" className="text-xs font-semibold text-text-200">
+                Email verification provider
+              </label>
               <select
-                id="llmMode"
-                value={llmMode}
-                onChange={(e) => void handleModeChange(e.target.value as LlmMode)}
+                id="emailVerificationProvider"
+                value={emailVerificationProvider}
+                onChange={(e) =>
+                  setEmailVerificationProvider(e.target.value as EmailVerificationProviderPreference)
+                }
                 className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
               >
-                <option value="openai">OpenAI only</option>
-                <option value="gemini">Gemini only</option>
-                <option value="mix">Mix mode (dynamic)</option>
+                <option value="reoon">Reoon only</option>
+                <option value="apify">Apify Bounceverify only</option>
               </select>
+              <p className="text-[11px] text-text-300 leading-4 pt-1">
+                {emailVerificationProvider === 'reoon'
+                  ? 'Requires a Reoon API key. Results (including unknown) are stored as returned — Apify is not used as a fallback.'
+                  : 'Requires an Apify API key. Bounceverify runs for email checks — Reoon is not called.'}
+              </p>
+              {emailVerificationProvider === 'reoon' && !keys.some((k) => k.provider === 'reoon') && (
+                <p className="text-[11px] text-warning leading-4">Add a Reoon key below before enriching.</p>
+              )}
+              {emailVerificationProvider === 'apify' && !keys.some((k) => k.provider === 'apify') && (
+                <p className="text-[11px] text-warning leading-4">Add an Apify key below before enriching.</p>
+              )}
             </div>
 
-            {(llmMode === 'openai' || llmMode === 'mix') && (
+            <div className="border-t border-border pt-4 space-y-4">
+              <p className="text-[11px] font-semibold text-text-200 uppercase tracking-wide">LLM routing</p>
               <div className="space-y-1">
-                <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
+                <label htmlFor="llmMode" className="text-xs font-semibold text-text-200">Mode</label>
                 <select
-                  id="openaiModel"
-                  value={openaiModel}
-                  onChange={(e) => setOpenaiModel(e.target.value)}
+                  id="llmMode"
+                  value={llmMode}
+                  onChange={(e) => void handleModeChange(e.target.value as LlmMode)}
                   className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
                 >
-                  {openaiModels.length ? (
-                    openaiModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={openaiModel}>No OpenAI key/models found</option>
-                  )}
+                  <option value="openai">OpenAI only</option>
+                  <option value="gemini">Gemini only</option>
+                  <option value="mix">Mix mode (dynamic)</option>
                 </select>
               </div>
-            )}
 
-            {(llmMode === 'gemini' || llmMode === 'mix') && (
-              <div className="space-y-1">
-                <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
-                <select
-                  id="geminiModel"
-                  value={geminiModel}
-                  onChange={(e) => setGeminiModel(e.target.value)}
-                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-                >
-                  {geminiModels.length ? (
-                    geminiModels.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.label}
-                      </option>
-                    ))
-                  ) : (
-                    <option value={geminiModel}>No Gemini key/models found</option>
-                  )}
-                </select>
-              </div>
-            )}
+              {(llmMode === 'openai' || llmMode === 'mix') && (
+                <div className="space-y-1">
+                  <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
+                  <select
+                    id="openaiModel"
+                    value={openaiModel}
+                    onChange={(e) => setOpenaiModel(e.target.value)}
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                  >
+                    {openaiModels.length ? (
+                      openaiModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={openaiModel}>No OpenAI key/models found</option>
+                    )}
+                  </select>
+                </div>
+              )}
 
-            {loadingModeModels && (
-              <p className="text-[11px] text-text-300">Refreshing available models...</p>
-            )}
+              {(llmMode === 'gemini' || llmMode === 'mix') && (
+                <div className="space-y-1">
+                  <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
+                  <select
+                    id="geminiModel"
+                    value={geminiModel}
+                    onChange={(e) => setGeminiModel(e.target.value)}
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                  >
+                    {geminiModels.length ? (
+                      geminiModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={geminiModel}>No Gemini key/models found</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {loadingModeModels && (
+                <p className="text-[11px] text-text-300">Refreshing available models...</p>
+              )}
+            </div>
 
             <button
               type="submit"
               disabled={savingPrefs}
               className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
             >
-              {savingPrefs ? 'Saving...' : 'Save LLM Settings'}
+              {savingPrefs ? 'Saving...' : 'Save preferences'}
             </button>
           </form>
         </div>
