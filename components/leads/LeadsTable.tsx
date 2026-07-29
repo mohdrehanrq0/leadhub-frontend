@@ -141,11 +141,18 @@ function renderLeadCell(
     }
     case 'source':
       return (
-        <span className="capitalize">
-          {APOLLO_UI_ENABLED
-            ? apolloCategoryLabel(lead.apolloCategory) || lead.source
-            : lead.source}
-        </span>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="capitalize">
+            {APOLLO_UI_ENABLED
+              ? apolloCategoryLabel(lead.apolloCategory) || lead.source
+              : lead.source}
+          </span>
+          {lead.importFileName && (
+            <span className="truncate text-[10px] font-medium text-slate-400" title={lead.importFileName}>
+              {lead.importFileName}
+            </span>
+          )}
+        </div>
       );
     case 'category':
       return lead.category ? (

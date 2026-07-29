@@ -36,10 +36,8 @@ export function ImportDestinationFields({
       }`}
     >
       <div className="mb-3">
-        <h3 className="text-sm font-black text-slate-950">Import destination</h3>
-        <p className="mt-1 text-xs text-slate-500">
-          Optionally attach imported leads to a list, category, and tags.
-        </p>
+        <h3 className="text-sm font-black text-slate-950">Organize</h3>
+        <p className="mt-1 text-xs text-slate-500">Optional — list, category, and tags.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
@@ -49,9 +47,9 @@ export function ImportDestinationFields({
           <select
             value={listId}
             onChange={(e) => onListIdChange(e.target.value)}
-            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-300"
+            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-300"
           >
-            <option value="">No list</option>
+            <option value="">None</option>
             {lists.map((list) => (
               <option key={list.id} value={list.id}>
                 {list.name}
@@ -66,9 +64,9 @@ export function ImportDestinationFields({
           <select
             value={categoryId}
             onChange={(e) => onCategoryIdChange(e.target.value)}
-            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none focus:border-blue-300"
+            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold text-slate-700 outline-none transition focus:border-blue-300"
           >
-            <option value="">No category</option>
+            <option value="">None</option>
             {categories.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.name}
@@ -83,10 +81,9 @@ export function ImportDestinationFields({
           <input
             value={tags}
             onChange={(e) => onTagsChange(e.target.value)}
-            placeholder="saas, india, outbound"
-            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-blue-300"
+            placeholder="saas, india"
+            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-300"
           />
-          <p className="mt-1 text-[10px] text-slate-400">Comma-separated</p>
         </div>
       </div>
     </div>

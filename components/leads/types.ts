@@ -263,6 +263,8 @@ export type LeadRow = {
   pipelineStage: PipelineStage;
   priority: Priority;
   source: string;
+  importId?: string | null;
+  importFileName?: string | null;
   icpScore?: number | null;
   intentScore?: number | null;
   confidence?: number | null;

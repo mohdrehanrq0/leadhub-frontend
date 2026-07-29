@@ -877,6 +877,14 @@ export default function LeadsPage() {
                             <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold capitalize text-slate-600">
                               {lead.source}
                             </span>
+                            {lead.importFileName && (
+                              <span
+                                className="max-w-[140px] truncate rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700"
+                                title={lead.importFileName}
+                              >
+                                {lead.importFileName}
+                              </span>
+                            )}
                             {APOLLO_UI_ENABLED && lead.apolloCategory && (
                               <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700">
                                 {apolloCategoryLabel(lead.apolloCategory)}

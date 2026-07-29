@@ -63,7 +63,7 @@ function ApiKeysPageInner() {
   const [fetchingNewKeyModels, setFetchingNewKeyModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [llmMode, setLlmMode] = useState<LlmMode>('openai');
+  const [llmMode, setLlmMode] = useState<LlmMode>('mix');
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
   const [emailVerificationProvider, setEmailVerificationProvider] =
@@ -150,7 +150,7 @@ function ApiKeysPageInner() {
     try {
       const res = await api.get('/api/api-keys/preferences');
       const data = res.data.data;
-      setLlmMode(data.llmMode ?? 'openai');
+      setLlmMode(data.llmMode ?? 'mix');
       setOpenaiModel(data.openaiModel ?? 'gpt-4o-mini');
       setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
       setEmailVerificationProvider(
@@ -595,8 +595,9 @@ function ApiKeysPageInner() {
           <div>
             <h2 className="text-lg font-semibold text-text-100">LeadSniper Autopilot keys</h2>
             <p className="text-sm text-text-300 mt-1">
-              Create a service API key (starts with lh_) and paste it into LeadSniper → Settings →
-              Integrations to connect Autopilot campaigns.
+              Create a service API key (starts with lh_) for LeadSniper Autopilot and Sign-up ingest/pull APIs.
+              Includes scopes: leads:read, enrich:write, signups:read, signups:write. The full key is shown
+              only once when you create it — copy it immediately. Existing keys stay masked forever.
             </p>
           </div>
           <button

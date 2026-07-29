@@ -1134,6 +1134,11 @@ export default function LeadDetailPage() {
                   {enrichMeta.icon} {enrichMeta.label}
                 </span>
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 capitalize">{lead.source}</span>
+                {lead.importFileName && (
+                  <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700" title={lead.importFileName}>
+                    {lead.importFileName}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1620,6 +1625,7 @@ export default function LeadDetailPage() {
               {(
                 [
                   ['Source', lead.source],
+                  ...(lead.importFileName ? ([['CSV file', lead.importFileName]] as const) : []),
                   ['Status', lead.status],
                   ...(APOLLO_UI_ENABLED
                     ? ([['Apollo', apolloCategoryLabel(lead.apolloCategory) ?? '—']] as const)

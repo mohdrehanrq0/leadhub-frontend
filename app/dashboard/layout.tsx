@@ -16,6 +16,8 @@ import {
   IconPlus,
   IconHistory,
   IconCoin,
+  IconMailOpened,
+  IconUser,
 } from '@tabler/icons-react';
 
 type Workspace = {
@@ -100,11 +102,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const menuItems = [
     { name: 'Leads CRM', href: '/dashboard/leads', icon: IconUsers },
+    { name: 'Sign-ups', href: '/dashboard/signups', icon: IconMailOpened },
     { name: 'Lead Search', href: '/dashboard/search', icon: IconSearch },
     { name: 'Search History', href: '/dashboard/search/history', icon: IconHistory },
     { name: 'Jobs Queue', href: '/dashboard/jobs', icon: IconBriefcase },
     { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
     { name: 'API Keys', href: '/dashboard/settings/api-keys', icon: IconKey },
+    { name: 'Founder Profile', href: '/dashboard/settings/founder-profile', icon: IconUser },
     { name: 'Workspace Settings', href: '/dashboard/settings/workspace', icon: IconSettings },
   ];
 
