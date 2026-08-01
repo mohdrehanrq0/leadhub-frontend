@@ -198,6 +198,8 @@ export default function LeadSyncPage() {
       toast.success(`Loaded ${preview.contacts.length} Apollo contacts and ${preview.people.length} exported people.`);
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to fetch Apollo preview.'));
+      setApolloModalOpen(false);
+      setApolloPreview(null);
     } finally {
       setLoading(null);
     }
@@ -290,8 +292,15 @@ export default function LeadSyncPage() {
       </section>
 
       {jobId && (
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
-          Sync job started. <Link href="/dashboard/jobs" className="font-black underline">Open Jobs Queue</Link>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
+          <p className="font-black">Import started</p>
+          <p className="mt-1 text-emerald-800">
+            Job queued successfully. Track live progress in the{' '}
+            <Link href="/dashboard/jobs" className="font-black underline">
+              Jobs Queue
+            </Link>
+            .
+          </p>
         </div>
       )}
 
@@ -522,11 +531,26 @@ function ApolloModal({
           </button>
         </div>
 
-        {loading === 'apollo-preview' || !preview ? (
+        {loading === 'apollo-preview' ? (
           <div className="grid min-h-[420px] place-items-center">
             <div className="text-center">
               <IconLoader2 size={28} className="mx-auto animate-spin text-blue-600" />
               <p className="mt-3 text-sm font-bold text-slate-700">Fetching Apollo contacts and exported people...</p>
+              <p className="mt-1 text-xs text-slate-400">This can take a moment for larger previews.</p>
+            </div>
+          </div>
+        ) : !preview ? (
+          <div className="grid min-h-[420px] place-items-center p-6">
+            <div className="max-w-sm text-center">
+              <p className="text-sm font-bold text-slate-800">Couldn’t load Apollo preview</p>
+              <p className="mt-2 text-xs text-slate-500">Close and try again, or check your Apollo API key.</p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         ) : step === 'select' ? (
@@ -599,7 +623,7 @@ function ApolloModal({
               </button>
               <button onClick={onImport} disabled={selectedCount === 0 || loading === 'apollo-import'} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40">
                 {loading === 'apollo-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
-                Import {selectedCount} records
+                {loading === 'apollo-import' ? 'Starting import…' : `Import ${selectedCount} records`}
               </button>
             </div>
           </>
@@ -657,11 +681,26 @@ function ApifyModal({
           </button>
         </div>
 
-        {loading === 'apify-preview' || !preview ? (
+        {loading === 'apify-preview' ? (
           <div className="grid min-h-[420px] place-items-center">
             <div className="text-center">
               <IconLoader2 size={28} className="mx-auto animate-spin text-violet-600" />
               <p className="mt-3 text-sm font-bold text-slate-700">Running Apify preview...</p>
+              <p className="mt-1 text-xs text-slate-400">Fetching a sample from the actor.</p>
+            </div>
+          </div>
+        ) : !preview ? (
+          <div className="grid min-h-[420px] place-items-center p-6">
+            <div className="max-w-sm text-center">
+              <p className="text-sm font-bold text-slate-800">Couldn’t load Apify preview</p>
+              <p className="mt-2 text-xs text-slate-500">Check actor ID / JSON input, then try again.</p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
             </div>
           </div>
         ) : (
@@ -699,7 +738,7 @@ function ApifyModal({
                 </button>
                 <button onClick={onImport} disabled={loading === 'apify-import'} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white hover:bg-violet-700 disabled:opacity-40">
                   {loading === 'apify-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
-                  Import with mapping
+                  {loading === 'apify-import' ? 'Starting import…' : 'Import with mapping'}
                 </button>
               </div>
             </div>

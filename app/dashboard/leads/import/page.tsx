@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -55,10 +55,33 @@ type ImportHistoryRow = {
   createdAt: string;
 };
 
+type ImportResult = {
+  created: number;
+  duplicates: number;
+  rejected: number;
+  summary: string;
+};
+
+type ImportStep = 'upload' | 'mapping' | 'importing' | 'complete';
+
+const IMPORT_PHASES = [
+  { key: 'upload', label: 'Uploading file…', min: 8 },
+  { key: 'process', label: 'Creating leads…', min: 35 },
+  { key: 'dedupe', label: 'Skipping duplicates…', min: 70 },
+  { key: 'finalize', label: 'Finalizing import…', min: 90 },
+] as const;
+
 function errorMessage(err: unknown, fallback: string) {
   if (typeof err === 'object' && err && 'response' in err) {
-    const response = (err as { response?: { data?: { message?: string } } }).response;
+    const response = (err as { response?: { data?: { message?: string }; status?: number } }).response;
+    if (response?.status === 408 || response?.status === 504) {
+      return 'Import timed out. Try a smaller CSV (max 2,000 rows).';
+    }
     return response?.data?.message ?? fallback;
+  }
+  if (typeof err === 'object' && err && 'code' in err) {
+    const code = (err as { code?: string }).code;
+    if (code === 'ECONNABORTED') return 'Import timed out. Try a smaller CSV.';
   }
   return fallback;
 }
@@ -110,7 +133,7 @@ export default function LeadImportPage() {
   const [importing, setImporting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [step, setStep] = useState<'upload' | 'mapping'>('upload');
+  const [step, setStep] = useState<ImportStep>('upload');
   const [fileName, setFileName] = useState('');
   const [rawRows, setRawRows] = useState<Array<Record<string, string>>>([]);
   const [sourceFields, setSourceFields] = useState<string[]>([]);
@@ -118,6 +141,11 @@ export default function LeadImportPage() {
   const [confidence, setConfidence] = useState<ReturnType<typeof detectFieldMapping>['confidence']>({});
   const [history, setHistory] = useState<ImportHistoryRow[]>([]);
   const [reuploadPrompt, setReuploadPrompt] = useState<ImportHistoryRow | null>(null);
+  const [importProgress, setImportProgress] = useState(0);
+  const [importPhaseLabel, setImportPhaseLabel] = useState<string>(IMPORT_PHASES[0].label);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const parseSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const mappedRows = useMemo(() => {
     return rawRows
@@ -127,6 +155,29 @@ export default function LeadImportPage() {
   }, [rawRows, mapping]);
 
   const readiness = useMemo(() => summarizeReadiness(mappedRows), [mappedRows]);
+
+  const clearProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
+
+  const startProgressSimulation = (rowCount: number) => {
+    clearProgressTimer();
+    setImportProgress(5);
+    setImportPhaseLabel(IMPORT_PHASES[0].label);
+    // Larger files tick slower so the bar doesn't look "done" before the API returns
+    const tickMs = Math.min(900, Math.max(220, Math.floor(120_000 / Math.max(rowCount, 50))));
+    progressTimerRef.current = setInterval(() => {
+      setImportProgress((prev) => {
+        const next = prev >= 92 ? prev : prev + (prev < 40 ? 4 : prev < 75 ? 2 : 1);
+        const phase = [...IMPORT_PHASES].reverse().find((p) => next >= p.min) ?? IMPORT_PHASES[0];
+        setImportPhaseLabel(phase.label);
+        return next;
+      });
+    }, tickMs);
+  };
 
   async function fetchDestinations() {
     try {
@@ -146,6 +197,10 @@ export default function LeadImportPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchDestinations();
+    return () => {
+      clearProgressTimer();
+      if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
+    };
   }, []);
 
   const parseFile = useCallback(async (file: File) => {
@@ -156,9 +211,17 @@ export default function LeadImportPage() {
 
     setParsing(true);
     setFileName(file.name);
+    setImportResult(null);
+
+    if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
+    parseSafetyRef.current = setTimeout(() => {
+      setParsing((still) => {
+        if (still) toast.error('CSV parsing is taking too long. Try a smaller file.');
+        return false;
+      });
+    }, 45_000);
 
     try {
-      // Prefer saved mapping from a prior upload of the same filename
       let savedMapping: FieldMapping | null = null;
       try {
         const prior = await api.get('/api/leads/imports/by-filename', {
@@ -177,6 +240,7 @@ export default function LeadImportPage() {
         header: true,
         skipEmptyLines: true,
         complete: (result) => {
+          if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
           const rows = result.data ?? [];
           const fields =
             result.meta?.fields?.filter(Boolean) ??
@@ -208,11 +272,13 @@ export default function LeadImportPage() {
           );
         },
         error: () => {
+          if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
           setParsing(false);
           toast.error('Could not read that CSV.');
         },
       });
     } catch {
+      if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
       setParsing(false);
       toast.error('Could not read that CSV.');
     }
@@ -235,49 +301,102 @@ export default function LeadImportPage() {
     }
     try {
       setImporting(true);
-      const parsedTags = parseTagInput(tags);
-      const res = await api.post(
-        '/api/leads/upload',
-        {
-          rows: mappedRows,
-          listId: listId || undefined,
-          categoryId: categoryId || undefined,
-          tags: parsedTags.length > 0 ? parsedTags : undefined,
-          fileName: fileName || 'untitled.csv',
-          fieldMapping: mapping,
-          sourceFields,
-          confirmReupload,
-        },
-        {
-          // 409 is an expected "already uploaded" prompt, not a hard failure
-          validateStatus: (status) => (status >= 200 && status < 300) || status === 409,
-        },
-      );
+      setStep('importing');
+      setImportResult(null);
 
-      if (res.status === 409 || res.data?.needsConfirmation) {
-        const prev = res.data?.data?.previousImport as ImportHistoryRow | undefined;
-        setReuploadPrompt(
-          prev ?? {
-            id: '',
-            fileName,
-            totalRows: mappedRows.length,
-            importedCount: 0,
-            duplicateCount: 0,
-            rejectedCount: 0,
-            summary: res.data?.message ?? 'This file was uploaded before.',
-            createdAt: new Date().toISOString(),
+      const parsedTags = parseTagInput(tags);
+      const CHUNK_SIZE = 250;
+      const totalRows = mappedRows.length;
+      const totalChunks = Math.ceil(totalRows / CHUNK_SIZE);
+
+      let accumulatedCreated = 0;
+      let accumulatedDuplicates = 0;
+      let accumulatedRejected = 0;
+      let currentImportId: string | undefined = undefined;
+
+      setImportProgress(5);
+
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkRows = mappedRows.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+        const isFirstChunk = i === 0;
+
+        const progressPercent = Math.min(95, Math.round((i / totalChunks) * 100));
+        setImportProgress(Math.max(5, progressPercent));
+        setImportPhaseLabel(
+          totalChunks === 1
+            ? 'Creating leads…'
+            : `Processing chunk ${i + 1} of ${totalChunks} (${progressPercent}%)…`,
+        );
+
+        const res: any = await api.post(
+          '/api/leads/upload',
+          {
+            rows: chunkRows,
+            totalRows,
+            listId: listId || undefined,
+            categoryId: categoryId || undefined,
+            tags: parsedTags.length > 0 ? parsedTags : undefined,
+            fileName: fileName || 'untitled.csv',
+            fieldMapping: mapping,
+            sourceFields,
+            confirmReupload: confirmReupload || !isFirstChunk,
+            importId: currentImportId,
+          },
+          {
+            timeout: 180_000,
+            validateStatus: (status) => (status >= 200 && status < 300) || status === 409,
           },
         );
-        return;
+
+        if (res.status === 409 || res.data?.needsConfirmation) {
+          clearProgressTimer();
+          setImportProgress(0);
+          setStep('mapping');
+          const prev = res.data?.data?.previousImport as ImportHistoryRow | undefined;
+          setReuploadPrompt(
+            prev ?? {
+              id: '',
+              fileName,
+              totalRows: mappedRows.length,
+              importedCount: 0,
+              duplicateCount: 0,
+              rejectedCount: 0,
+              summary: res.data?.message ?? 'This file was uploaded before.',
+              createdAt: new Date().toISOString(),
+            },
+          );
+          return;
+        }
+
+        const data = res.data.data;
+        if (data?.importId) {
+          currentImportId = data.importId;
+        }
+
+        accumulatedCreated += data?.created ?? 0;
+        accumulatedDuplicates += data?.duplicates ?? 0;
+        accumulatedRejected += data?.rejected ?? 0;
       }
 
-      const data = res.data.data;
-      toast.success(
-        data?.summary ||
-          `Imported ${data?.created ?? 0} · duplicates ${data?.duplicates ?? 0} · rejected ${data?.rejected ?? 0}`,
-      );
-      router.push('/dashboard/leads');
+      clearProgressTimer();
+      setImportProgress(100);
+      setImportPhaseLabel('Import complete');
+
+      const result: ImportResult = {
+        created: accumulatedCreated,
+        duplicates: accumulatedDuplicates,
+        rejected: accumulatedRejected,
+        summary: `${fileName || 'File'}: imported ${accumulatedCreated}, duplicates ${accumulatedDuplicates}, rejected ${accumulatedRejected} (of ${totalRows} rows)`,
+      };
+
+      setImportResult(result);
+      setStep('complete');
+      toast.success(result.summary);
+      void fetchDestinations();
     } catch (err) {
+      clearProgressTimer();
+      setImportProgress(0);
+      setStep('mapping');
       toast.error(errorMessage(err, 'Import failed.'));
     } finally {
       setImporting(false);
@@ -285,12 +404,16 @@ export default function LeadImportPage() {
   };
 
   const resetImport = () => {
+    clearProgressTimer();
     setRawRows([]);
     setSourceFields([]);
     setMapping({});
     setConfidence({});
     setFileName('');
     setReuploadPrompt(null);
+    setImportResult(null);
+    setImportProgress(0);
+    setImportPhaseLabel(IMPORT_PHASES[0].label);
     setStep('upload');
   };
 
@@ -314,9 +437,21 @@ export default function LeadImportPage() {
         </p>
 
         <div className="mt-5 flex flex-wrap items-center gap-2">
-          <StepPill index={1} label="Upload" active={step === 'upload'} done={step === 'mapping'} />
+          <StepPill
+            index={1}
+            label="Upload"
+            active={step === 'upload'}
+            done={step !== 'upload'}
+          />
           <span className="h-px w-6 bg-slate-200" aria-hidden />
-          <StepPill index={2} label="Map & import" active={step === 'mapping'} done={false} />
+          <StepPill
+            index={2}
+            label="Map & import"
+            active={step === 'mapping' || step === 'importing'}
+            done={step === 'complete'}
+          />
+          <span className="h-px w-6 bg-slate-200" aria-hidden />
+          <StepPill index={3} label="Complete" active={step === 'complete'} done={step === 'complete'} />
         </div>
       </section>
 
@@ -353,6 +488,14 @@ export default function LeadImportPage() {
               <span className="mt-2 max-w-sm text-sm leading-5 text-slate-500">
                 Needs a company column. Location helps enrichment. Names are optional.
               </span>
+              {parsing && (
+                <div className="mt-5 w-full max-w-xs">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-500" />
+                  </div>
+                  <p className="mt-2 text-[11px] font-semibold text-slate-500">Parsing columns and rows…</p>
+                </div>
+              )}
               <input
                 type="file"
                 accept=".csv,text/csv"
@@ -494,6 +637,109 @@ export default function LeadImportPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {step === 'importing' && (
+        <section className="rounded-2xl border border-blue-100 bg-white p-8 shadow-sm">
+          <div className="mx-auto flex max-w-md flex-col items-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600">
+              <IconLoader2 size={28} className="animate-spin" />
+            </div>
+            <h2 className="mt-4 text-xl font-black text-slate-950">Importing your leads</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {importPhaseLabel}
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              {fileName || 'CSV'} · {mappedRows.length.toLocaleString()} rows
+            </p>
+
+            <div className="mt-6 w-full">
+              <div className="mb-2 flex items-center justify-between text-xs font-bold text-slate-600">
+                <span>Progress</span>
+                <span>{Math.min(99, Math.round(importProgress))}%</span>
+              </div>
+              <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-blue-600 transition-all duration-300 ease-out"
+                  style={{ width: `${Math.min(99, importProgress)}%` }}
+                />
+              </div>
+            </div>
+
+            <ul className="mt-6 w-full space-y-2 text-left">
+              {IMPORT_PHASES.map((phase) => {
+                const reached = importProgress >= phase.min;
+                const current = importPhaseLabel === phase.label;
+                return (
+                  <li
+                    key={phase.key}
+                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+                      current
+                        ? 'bg-blue-50 font-bold text-blue-800'
+                        : reached
+                          ? 'text-emerald-700'
+                          : 'text-slate-400'
+                    }`}
+                  >
+                    {reached && !current ? (
+                      <IconCheck size={16} className="text-emerald-600" />
+                    ) : current ? (
+                      <IconLoader2 size={16} className="animate-spin" />
+                    ) : (
+                      <span className="h-4 w-4 rounded-full border border-slate-200" />
+                    )}
+                    {phase.label.replace(/…$/, '')}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        </section>
+      )}
+
+      {step === 'complete' && importResult && (
+        <section className="rounded-2xl border border-emerald-100 bg-white p-8 shadow-sm">
+          <div className="mx-auto flex max-w-md flex-col items-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+              <IconCheck size={28} stroke={2.5} />
+            </div>
+            <h2 className="mt-4 text-xl font-black text-slate-950">Upload complete</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{importResult.summary}</p>
+            <p className="mt-1 text-xs text-slate-400">{fileName || 'CSV file'}</p>
+
+            <div className="mt-6 grid w-full grid-cols-3 gap-3">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+                <p className="text-2xl font-black text-emerald-800">{importResult.created}</p>
+                <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-emerald-700">Imported</p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-3">
+                <p className="text-2xl font-black text-amber-800">{importResult.duplicates}</p>
+                <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700">Duplicates</p>
+              </div>
+              <div className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-3">
+                <p className="text-2xl font-black text-rose-800">{importResult.rejected}</p>
+                <p className="mt-0.5 text-[11px] font-bold uppercase tracking-wide text-rose-700">Rejected</p>
+              </div>
+            </div>
+
+            <div className="mt-8 flex w-full flex-col gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard/leads')}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+              >
+                View leads
+              </button>
+              <button
+                type="button"
+                onClick={resetImport}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                Import another file
+              </button>
+            </div>
+          </div>
+        </section>
       )}
 
       {reuploadPrompt && (
