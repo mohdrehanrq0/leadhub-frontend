@@ -16,16 +16,17 @@ import {
 
 interface ApiKeyRecord {
   id: string;
-  provider: 'apollo' | 'apify' | 'openai' | 'gemini' | 'reoon' | 'leadsnipper';
+  provider: 'apollo' | 'apify' | 'openai' | 'gemini' | 'openrouter' | 'reoon' | 'leadsnipper';
   maskedKey: string;
   isValid: boolean;
   lastTestedAt?: string;
   createdAt: string;
 }
 
-type LlmMode = 'openai' | 'gemini' | 'mix';
+type LlmMode = 'openai' | 'gemini' | 'mix' | 'openrouter';
 type EmailVerificationProviderPreference = 'reoon' | 'apify';
-type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'reoon';
+type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'openrouter' | 'reoon';
+type LlmProvider = 'openai' | 'gemini' | 'openrouter';
 
 interface ProviderModelOption {
   id: string;
@@ -37,13 +38,18 @@ const PROVIDER_LABEL: Record<Provider | 'leadsnipper', string> = {
   apify: 'Apify',
   openai: 'OpenAI',
   gemini: 'Gemini',
+  openrouter: 'OpenRouter',
   reoon: 'Reoon',
   leadsnipper: 'LeadSniper',
 };
 
 const VALID_PROVIDERS: Provider[] = APOLLO_UI_ENABLED
-  ? ['apollo', 'apify', 'openai', 'gemini', 'reoon']
-  : ['apify', 'openai', 'gemini', 'reoon'];
+  ? ['apollo', 'apify', 'openai', 'gemini', 'openrouter', 'reoon']
+  : ['apify', 'openai', 'gemini', 'openrouter', 'reoon'];
+
+function isLlmProvider(p: Provider): p is LlmProvider {
+  return p === 'openai' || p === 'gemini' || p === 'openrouter';
+}
 
 function ApiKeysPageInner() {
   const searchParams = useSearchParams();
@@ -66,10 +72,12 @@ function ApiKeysPageInner() {
   const [llmMode, setLlmMode] = useState<LlmMode>('mix');
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
+  const [openrouterModel, setOpenrouterModel] = useState('openai/gpt-4o-mini');
   const [emailVerificationProvider, setEmailVerificationProvider] =
     useState<EmailVerificationProviderPreference>('reoon');
   const [openaiModels, setOpenaiModels] = useState<ProviderModelOption[]>([]);
   const [geminiModels, setGeminiModels] = useState<ProviderModelOption[]>([]);
+  const [openrouterModels, setOpenrouterModels] = useState<ProviderModelOption[]>([]);
   const [loadingModeModels, setLoadingModeModels] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
@@ -153,6 +161,7 @@ function ApiKeysPageInner() {
       setLlmMode(data.llmMode ?? 'mix');
       setOpenaiModel(data.openaiModel ?? 'gpt-4o-mini');
       setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
+      setOpenrouterModel(data.openrouterModel ?? 'openai/gpt-4o-mini');
       setEmailVerificationProvider(
         data.emailVerificationProvider === 'apify' ? 'apify' : 'reoon',
       );
@@ -161,7 +170,7 @@ function ApiKeysPageInner() {
     }
   }
 
-  async function fetchSavedProviderModels(targetProvider: 'openai' | 'gemini') {
+  async function fetchSavedProviderModels(targetProvider: LlmProvider) {
     try {
       const res = await api.post('/api/api-keys/models', { provider: targetProvider });
       return (res.data.data ?? []) as ProviderModelOption[];
@@ -173,19 +182,24 @@ function ApiKeysPageInner() {
   async function refreshRoutingModelLists(currentMode?: LlmMode) {
     const mode = currentMode ?? llmMode;
     setLoadingModeModels(true);
-    const [openai, gemini] = await Promise.all([
+    const [openai, gemini, openrouter] = await Promise.all([
       mode === 'openai' || mode === 'mix' ? fetchSavedProviderModels('openai') : Promise.resolve([]),
       mode === 'gemini' || mode === 'mix' ? fetchSavedProviderModels('gemini') : Promise.resolve([]),
+      mode === 'openrouter' ? fetchSavedProviderModels('openrouter') : Promise.resolve([]),
     ]);
     setOpenaiModels(openai);
     setGeminiModels(gemini);
+    setOpenrouterModels(openrouter);
     if (openai.length && !openai.some((m) => m.id === openaiModel)) setOpenaiModel(openai[0].id);
     if (gemini.length && !gemini.some((m) => m.id === geminiModel)) setGeminiModel(gemini[0].id);
+    if (openrouter.length && !openrouter.some((m) => m.id === openrouterModel)) {
+      setOpenrouterModel(openrouter[0].id);
+    }
     setLoadingModeModels(false);
   }
 
   async function fetchModelsForNewKey() {
-    if ((provider !== 'openai' && provider !== 'gemini') || keyValue.trim().length < 10) return;
+    if (!isLlmProvider(provider) || keyValue.trim().length < 10) return;
     setFetchingNewKeyModels(true);
     try {
       const res = await api.post('/api/api-keys/models', {
@@ -214,6 +228,7 @@ function ApiKeysPageInner() {
         llmMode,
         openaiModel,
         geminiModel,
+        openrouterModel,
         emailVerificationProvider,
       });
       toast.success('Workspace preferences updated.');
@@ -263,8 +278,7 @@ function ApiKeysPageInner() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyValue.trim()) return;
-    const isLlmProvider = provider === 'openai' || provider === 'gemini';
-    if (isLlmProvider && !selectedNewKeyModel) {
+    if (isLlmProvider(provider) && !selectedNewKeyModel) {
       toast.error(`Fetch and select a ${PROVIDER_LABEL[provider]} model first.`);
       return;
     }
@@ -274,7 +288,7 @@ function ApiKeysPageInner() {
       await api.post('/api/api-keys', {
         provider,
         key: keyValue.trim(),
-        ...(isLlmProvider ? { selectedModel: selectedNewKeyModel } : {}),
+        ...(isLlmProvider(provider) ? { selectedModel: selectedNewKeyModel } : {}),
       });
       toast.success(`${PROVIDER_LABEL[provider]} key saved successfully.`);
       setKeyValue('');
@@ -327,6 +341,7 @@ function ApiKeysPageInner() {
                 <option value="apify">Apify Platform</option>
                 <option value="openai">OpenAI Platform</option>
                 <option value="gemini">Gemini Platform</option>
+                <option value="openrouter">OpenRouter</option>
                 <option value="reoon">Reoon Email Verification</option>
               </select>
             </div>
@@ -340,7 +355,7 @@ function ApiKeysPageInner() {
                 value={keyValue}
                 onChange={(e) => {
                   setKeyValue(e.target.value);
-                  if (provider === 'openai' || provider === 'gemini') {
+                  if (isLlmProvider(provider)) {
                     setNewKeyModels([]);
                     setSelectedNewKeyModel('');
                   }
@@ -349,14 +364,16 @@ function ApiKeysPageInner() {
                 placeholder={
                   provider === 'openai'
                     ? 'sk-...'
-                    : provider === 'reoon'
-                      ? 'Your Reoon API key'
-                      : 'Paste API key'
+                    : provider === 'openrouter'
+                      ? 'sk-or-...'
+                      : provider === 'reoon'
+                        ? 'Your Reoon API key'
+                        : 'Paste API key'
                 }
               />
             </div>
 
-            {(provider === 'openai' || provider === 'gemini') && (
+            {isLlmProvider(provider) && (
               <div className="space-y-3 rounded-lg border border-border bg-bg-200/40 p-3">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-semibold text-text-200">{PROVIDER_LABEL[provider]} models</p>
@@ -450,6 +467,7 @@ function ApiKeysPageInner() {
                 >
                   <option value="openai">OpenAI only</option>
                   <option value="gemini">Gemini only</option>
+                  <option value="openrouter">OpenRouter only</option>
                   <option value="mix">Mix mode (dynamic)</option>
                 </select>
               </div>
@@ -493,6 +511,30 @@ function ApiKeysPageInner() {
                       ))
                     ) : (
                       <option value={geminiModel}>No Gemini key/models found</option>
+                    )}
+                  </select>
+                </div>
+              )}
+
+              {llmMode === 'openrouter' && (
+                <div className="space-y-1">
+                  <label htmlFor="openrouterModel" className="text-xs font-semibold text-text-200">
+                    OpenRouter model
+                  </label>
+                  <select
+                    id="openrouterModel"
+                    value={openrouterModel}
+                    onChange={(e) => setOpenrouterModel(e.target.value)}
+                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                  >
+                    {openrouterModels.length ? (
+                      openrouterModels.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={openrouterModel}>No OpenRouter key/models found</option>
                     )}
                   </select>
                 </div>

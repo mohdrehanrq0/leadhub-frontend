@@ -71,7 +71,7 @@ export default function LeadsPage() {
   const [reEnriching, setReEnriching] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [hasOpenAiKey, setHasOpenAiKey] = useState<boolean | null>(null);
+  const [hasLlmKey, setHasLlmKey] = useState<boolean | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const [view, setView] = useState<'table' | 'kanban'>('table');
   const [stage, setStage] = useState<'all' | PipelineStage>('all');
@@ -233,9 +233,13 @@ export default function LeadsPage() {
     try {
       const res = await api.get('/api/api-keys');
       const keys: Array<{ provider: string }> = res.data.data ?? [];
-      setHasOpenAiKey(keys.some((k) => k.provider === 'openai'));
+      setHasLlmKey(
+        keys.some(
+          (k) => k.provider === 'openai' || k.provider === 'gemini' || k.provider === 'openrouter',
+        ),
+      );
     } catch {
-      setHasOpenAiKey(false);
+      setHasLlmKey(false);
     }
   }
 
@@ -411,8 +415,8 @@ export default function LeadsPage() {
 
   const startEnrichment = async (leadIds: string[], reEnrich: boolean) => {
     if (leadIds.length === 0) return;
-    if (hasOpenAiKey === false) {
-      toast.error('AI API key required. Add OpenAI or Gemini in Settings › API Keys.', {
+    if (hasLlmKey === false) {
+      toast.error('AI API key required. Add OpenAI, Gemini, or OpenRouter in Settings › API Keys.', {
         duration: 6000,
         icon: <IconKey size={16} />,
       });
@@ -670,12 +674,12 @@ export default function LeadsPage() {
                 {creditBalance.toLocaleString()} credits
               </Link>
             )}
-            {hasOpenAiKey === false && (
+            {hasLlmKey === false && (
               <Link
                 href="/dashboard/settings/api-keys"
                 className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100"
               >
-                <IconAlertTriangle size={15} /> Add OpenAI key to enable AI enrichment
+                <IconAlertTriangle size={15} /> Add AI key to enable enrichment
               </Link>
             )}
             <button
