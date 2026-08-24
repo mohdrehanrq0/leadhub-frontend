@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'sonner';
+import { AuthSplitLayout } from '../../../components/layout/AuthSplitLayout';
+import { authFieldClass, btnPrimary, spinnerClass } from '../../../components/ui/styles';
 
 function LoginForm() {
   const { login } = useAuth();
@@ -25,80 +27,77 @@ function LoginForm() {
     try {
       await login(email, password);
       toast.success('Welcome back!');
-    } catch (err: any) {
-      toast.error(err.message ?? 'Invalid email or password.');
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Invalid email or password.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-height-screen w-full flex items-center justify-center bg-background px-4 py-16 relative overflow-hidden text-text" style={{ minHeight: '100vh' }}>
-      <div className="w-full max-w-md bg-card p-8 space-y-6 border border-border rounded-xl shadow-input relative z-10">
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-extrabold tracking-tight text-primary">LeadHub</h1>
-          <p className="text-text-200 text-sm">Welcome back! Log in to manage your workspace</p>
+    <AuthSplitLayout
+      panelTitle="Welcome back!"
+      panelSubtitle="Sign in to LeadHub to continue discovering and enriching high-quality leads."
+      title="Sign In"
+      subtitle="Access your account"
+    >
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <div>
+          <label htmlFor="email" className="mb-1 block text-xs font-semibold text-gray-600">
+            Email address
+          </label>
+          <input
+            id="email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className={authFieldClass}
+            placeholder="you@example.com"
+          />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-1">
-            <label htmlFor="email" className="text-xs font-semibold text-text-200">Email Address</label>
-            <input
-              id="email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-              placeholder="you@example.com"
-            />
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label htmlFor="password" className="text-xs font-semibold text-gray-600">
+              Password
+            </label>
+            <Link href="/forgot-password" className="text-[11px] text-brand-main hover:underline">
+              Forgot password?
+            </Link>
           </div>
-
-          <div className="space-y-1">
-            <div className="flex justify-between items-center">
-              <label htmlFor="password" className="text-xs font-semibold text-text-200">Password</label>
-              <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                Forgot password?
-              </Link>
-            </div>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-sm shadow-sm active:scale-[0.98] transition-all disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-          >
-            {loading ? 'Logging in...' : 'Sign In'}
-          </button>
-        </form>
-
-        <div className="text-center text-xs text-text-300">
-          Don't have an account?{' '}
-          <Link href="/signup" className="text-primary hover:underline">
-            Sign up
-          </Link>
+          <input
+            id="password"
+            type="password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className={authFieldClass}
+            placeholder="••••••••"
+          />
         </div>
-      </div>
-    </main>
+        <button type="submit" disabled={loading} className={`${btnPrimary} w-full py-2 shadow-md`}>
+          {loading ? 'Logging in...' : 'Sign In'}
+        </button>
+      </form>
+      <p className="mt-4 text-center text-[11px] text-gray-500">
+        Don&apos;t have an account?{' '}
+        <Link href="/signup" className="text-brand-main hover:underline">
+          Sign up
+        </Link>
+      </p>
+    </AuthSplitLayout>
   );
 }
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={
-      <div className="w-screen h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-screen items-center justify-center bg-bg-100">
+          <div className={spinnerClass} />
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

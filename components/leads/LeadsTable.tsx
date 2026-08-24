@@ -323,18 +323,18 @@ export function LeadsTable(props: Props) {
 
   if (!loading && leads.length === 0) {
     return (
-      <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
-        <p className="text-sm font-bold text-slate-700">No leads match this view.</p>
+      <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
+        <p className="text-sm font-semibold text-slate-700">No leads match this view.</p>
         <p className="mt-1 text-xs text-slate-500">Import CSV leads, run provider sync, or adjust your filters.</p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-3">
         <div>
-          <h2 className="text-sm font-black text-slate-950">Lead Data Grid</h2>
+          <h2 className="text-sm font-semibold text-slate-900">Lead data grid</h2>
           <p className="text-xs text-slate-500">
             Loaded {leads.length.toLocaleString()} of {totalCount.toLocaleString()}
             {matchAll || allSelected

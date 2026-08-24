@@ -1,13 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import {
-  IconCheck,
-  IconExternalLink,
-  IconKey,
-  IconPlayerPlay,
-  IconRocket,
-} from '@tabler/icons-react';
+import { IconCheck, IconExternalLink, IconKey, IconPlayerPlay } from '@tabler/icons-react';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 
 const STEPS = [
   {
@@ -52,44 +47,18 @@ const STEPS = [
 
 export default function ApifyIntegrationGuidePage() {
   return (
-    <div className="max-w-3xl mx-auto space-y-8 animate-fade-in text-text pb-12">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-input space-y-3">
-        <div className="flex items-center gap-2 text-primary">
-          <IconRocket size={22} />
-          <span className="text-xs font-semibold uppercase tracking-wider">Apify integration</span>
-        </div>
-        <h1 className="text-2xl font-bold text-text-100">Connect Apify to LeadHub</h1>
-        <p className="text-sm text-text-200 leading-relaxed">
-          Lead Search needs a valid Apify API key on your workspace. One token unlocks both
-          code_crafter/leads-finder and microworlds/leads-finder. Follow these steps to create a
-          token, save it in LeadHub, and start fetching leads. This page does not store your key —
-          paste it only on the API Keys settings page.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <a
-            href="https://docs.apify.com/platform/integrations/api"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-          >
-            Apify API docs <IconExternalLink size={12} />
-          </a>
-          <a
-            href="https://console.apify.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-          >
-            Apify Console <IconExternalLink size={12} />
-          </a>
-        </div>
-      </div>
+    <div className="mx-auto max-w-3xl animate-fade-in space-y-8 pb-12 text-text">
+      <PageHeader
+        eyebrow="Integrations"
+        title="Connect Apify"
+        description="Lead Search needs a valid Apify API key on your workspace. Follow these steps to create a token, save it in LeadHub, and start fetching leads."
+      />
 
       <ol className="space-y-4">
         {STEPS.map((step, index) => (
           <li
             key={step.title}
-            className="rounded-2xl border border-border bg-card p-5 shadow-input flex gap-4"
+            className="rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm flex gap-4"
           >
             <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold flex-shrink-0">
               {index + 1}

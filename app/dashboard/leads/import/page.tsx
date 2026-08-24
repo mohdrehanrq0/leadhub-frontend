@@ -14,6 +14,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 import { LeadCategory, LeadList } from '../../../../components/leads/types';
 import { FieldMappingPanel } from '../../../../components/leads/FieldMappingPanel';
 import {
@@ -426,17 +427,13 @@ export default function LeadImportPage() {
         <IconArrowLeft size={14} /> Back to Leads
       </Link>
 
-      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_32%),linear-gradient(135deg,#ffffff,#f8fafc)] p-6 shadow-sm">
-        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-          <IconUpload size={14} />
-          Import
-        </div>
-        <h1 className="text-3xl font-black tracking-tight text-slate-950">Import CSV</h1>
-        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-          Upload your file, confirm the columns, then import. Duplicates are skipped automatically.
-        </p>
+      <PageHeader
+        eyebrow="Import"
+        title="Import CSV"
+        description="Upload your file, confirm the columns, then import. Duplicates are skipped automatically."
+      />
 
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="mb-5 flex flex-wrap items-center gap-2">
           <StepPill
             index={1}
             label="Upload"
@@ -452,12 +449,11 @@ export default function LeadImportPage() {
           />
           <span className="h-px w-6 bg-slate-200" aria-hidden />
           <StepPill index={3} label="Complete" active={step === 'complete'} done={step === 'complete'} />
-        </div>
-      </section>
+      </div>
 
       {step === 'upload' && (
         <>
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <label
               onDragOver={(event) => {
                 event.preventDefault();

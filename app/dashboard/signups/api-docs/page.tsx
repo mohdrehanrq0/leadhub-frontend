@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
-import { IconArrowLeft, IconCode, IconKey, IconCopy, IconExternalLink } from '@tabler/icons-react';
+import { PageHeader } from '../../../../components/layout/PageHeader';
+import { IconArrowLeft, IconCopy, IconExternalLink, IconKey } from '@tabler/icons-react';
 
 export default function SignupAPIDocsPage() {
   const [apiKey, setApiKey] = useState<string>('');
@@ -146,16 +147,11 @@ if ($statusCode === 201) {
         <span>Back to Sign-ups</span>
       </Link>
 
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-          <IconCode className="text-primary" />
-          <span>Signup Leads API Documentation</span>
-        </h1>
-        <p className="text-text-200 text-sm mt-1">
-          Push sign-ups from your platform to Lead Hub for automatic enrichment and personalized onboarding emails
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Developers"
+        title="Signup API"
+        description="Push sign-ups from your platform for enrichment and personalized onboarding emails."
+      />
 
       {/* Authentication */}
       <div className="bg-card p-6 border border-border rounded-xl shadow-input space-y-4">

@@ -43,7 +43,7 @@ const SOURCE_OPTIONS = APOLLO_UI_ENABLED
   : ['all', 'apify', 'google_maps', 'csv', 'manual'];
 
 const selectClass =
-  'h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 outline-none transition focus:border-blue-300 focus:ring-2 focus:ring-blue-100';
+  'h-9 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none transition hover:bg-slate-50 focus:border-brand-main focus:ring-2 focus:ring-brand-main/20';
 
 export function LeadsToolbar(props: Props) {
   const {
@@ -76,7 +76,7 @@ export function LeadsToolbar(props: Props) {
   } = props;
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-bold text-slate-600">
@@ -99,18 +99,18 @@ export function LeadsToolbar(props: Props) {
               Clear filters
             </button>
           )}
-          <div className="flex rounded-xl border border-slate-200 bg-slate-50 p-1">
+          <div className="inline-flex gap-1 rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
             <button
               type="button"
               onClick={() => onViewChange('table')}
-              className={`inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-bold ${view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}
+              className={`inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-semibold ${view === 'table' ? 'bg-brand-main text-white' : 'text-slate-600 hover:bg-slate-50'}`}
             >
               <IconTable size={14} /> Table
             </button>
             <button
               type="button"
               onClick={() => onViewChange('kanban')}
-              className={`inline-flex h-8 items-center gap-1 rounded-lg px-3 text-xs font-bold ${view === 'kanban' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500'}`}
+              className={`inline-flex h-8 items-center gap-1 rounded-md px-3 text-xs font-semibold ${view === 'kanban' ? 'bg-brand-main text-white' : 'text-slate-600 hover:bg-slate-50'}`}
             >
               <IconLayoutKanban size={14} /> Board
             </button>
@@ -125,7 +125,7 @@ export function LeadsToolbar(props: Props) {
             value={query}
             onChange={(event) => startTransition(() => onQueryChange(event.target.value))}
             placeholder="Search contact, company, email, domain"
-            className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none transition focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            className="h-9 w-full rounded-md border border-slate-200 bg-white py-1.5 pr-3 pl-8 text-sm outline-none transition focus:border-brand-main focus:ring-2 focus:ring-brand-main/20"
           />
         </label>
 

@@ -6,13 +6,9 @@ import { useRouter } from 'next/navigation';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { toast } from 'sonner';
-import {
-  IconHistory,
-  IconLoader2,
-  IconRefresh,
-  IconRocket,
-  IconSearch,
-} from '@tabler/icons-react';
+import { PageHeader } from '../../../../components/layout/PageHeader';
+import { btnPrimary } from '../../../../components/ui/styles';
+import { IconLoader2, IconRefresh, IconRocket, IconSearch } from '@tabler/icons-react';
 
 interface HistoryRow {
   jobId: string;
@@ -70,24 +66,16 @@ export default function SearchHistoryPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in text-text pb-10">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center gap-2">
-            <IconHistory className="text-primary" />
-            Search history
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            Past Lead Search prompts, sources, and results. Reopen to edit and re-run.
-          </p>
-        </div>
-        <Link
-          href="/dashboard/search"
-          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg bg-primary text-white text-xs font-semibold"
-        >
-          <IconSearch size={14} />
-          New search
-        </Link>
-      </div>
+      <PageHeader
+        eyebrow="Discovery"
+        title="Search history"
+        description="Past Lead Search prompts, sources, and results. Reopen to edit and re-run."
+        actions={
+          <Link href="/dashboard/search" className={btnPrimary}>
+            <IconSearch size={16} /> New search
+          </Link>
+        }
+      />
 
       <div className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row gap-2 items-end">
         <div className="flex-1 w-full space-y-1">

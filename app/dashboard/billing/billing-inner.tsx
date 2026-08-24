@@ -5,7 +5,6 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   IconCheck,
-  IconCoin,
   IconLoader2,
   IconReceipt,
   IconSparkles,
@@ -14,6 +13,7 @@ import { toast } from 'sonner';
 import api from '../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { useAuth } from '../../../context/AuthContext';
+import { PageHeader } from '../../../components/layout/PageHeader';
 import {
   detectDisplayCurrency,
   detectIsIndiaUser,
@@ -154,16 +154,11 @@ export default function BillingPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 animate-fade-in text-text">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-text-100">
-          <IconCoin className="text-primary" />
-          Billing & Credits
-        </h1>
-        <p className="mt-1 text-sm text-text-200">
-          1 enrichment = 1 credit. Credits are charged only when enrichment finishes successfully.
-          Bring your own {APOLLO_UI_ENABLED ? 'Apollo, ' : ''}Apify, OpenAI/Gemini, and Reoon keys.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Billing"
+        title="Credits"
+        description={`1 enrichment = 1 credit. Credits are charged only when enrichment finishes successfully. Bring your own ${APOLLO_UI_ENABLED ? 'Apollo, ' : ''}Apify, OpenAI/Gemini, and Reoon keys.`}
+      />
 
       {pollingCrypto && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -173,21 +168,21 @@ export default function BillingPage() {
       )}
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-input">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Available</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.available ?? 0).toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-text-200">credits ready to enrich</p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-input">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Reserved</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.reservedBalance ?? 0).toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-text-200">in-flight enrichments</p>
         </div>
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-input">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Used</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.totalUsed ?? 0).toLocaleString()}
@@ -219,7 +214,7 @@ export default function BillingPage() {
             return (
               <div
                 key={pack.id}
-                className="flex flex-col rounded-2xl border border-border bg-card p-5 shadow-input"
+                className="flex flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm"
               >
                 <h3 className="text-base font-bold text-text-100">{pack.name}</h3>
                 <p className="mt-1 text-xs text-text-200">{pack.description}</p>
@@ -252,7 +247,7 @@ export default function BillingPage() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-input">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-100">
             <IconReceipt size={16} /> Credit activity
           </h2>
@@ -283,7 +278,7 @@ export default function BillingPage() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-border bg-card p-5 shadow-input">
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-100">
             <IconCheck size={16} /> Payment history
           </h2>

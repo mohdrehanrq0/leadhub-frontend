@@ -1094,7 +1094,7 @@ export default function LeadDetailPage() {
               {contactName.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-950">{contactName}</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950">{contactName}</h1>
               <p className="mt-0.5 text-sm text-slate-600">{lead.contact?.role ?? 'No role'} at {lead.company?.name ?? 'Unknown company'}</p>
               {allEmails.length > 0 && (
                 <div className="mt-1.5 flex flex-col gap-1.5">

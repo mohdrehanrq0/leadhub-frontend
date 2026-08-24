@@ -60,9 +60,9 @@ export default function LeadListDetailPage() {
         <IconArrowLeft size={14} /> Back to Lists
       </Link>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">Lead List</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">{list?.name ?? 'List'}</h1>
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-brand-main">Lead list</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-text-100">{list?.name ?? 'List'}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">{list?.description || `${leads.length} leads in this list.`}</p>
       </section>
 

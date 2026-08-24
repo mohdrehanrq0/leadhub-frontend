@@ -4,7 +4,9 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '../../../lib/api';
 import { toast } from 'sonner';
-import { IconMailOpened, IconFilter, IconRefresh, IconFileText, IconLink } from '@tabler/icons-react';
+import { IconFilter, IconRefresh, IconFileText, IconLink } from '@tabler/icons-react';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { btnOutline, btnPrimary } from '../../../components/ui/styles';
 import EmailPromptModal from '../../../components/signups/EmailPromptModal';
 import ResourceLinksModal from '../../../components/signups/ResourceLinksModal';
 
@@ -89,54 +91,31 @@ export default function SignupsPage() {
     <>
       <EmailPromptModal isOpen={showPromptModal} onClose={() => setShowPromptModal(false)} />
       <ResourceLinksModal isOpen={showResourceLinksModal} onClose={() => setShowResourceLinksModal(false)} />
-      <div className="max-w-7xl mx-auto space-y-6 animate-fade-in text-text">
-        {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-            <IconMailOpened className="text-primary" />
-            <span>Sign-up Leads</span>
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            External platform sign-ups with AI-generated onboarding emails
-          </p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <button
-            onClick={fetchSignupLeads}
-            className="px-3 py-2 bg-bg-200 text-text-100 rounded-lg text-sm font-medium hover:bg-bg-300 transition-colors flex items-center space-x-2"
-          >
-            <IconRefresh size={16} />
-            <span>Refresh</span>
-          </button>
-          <button
-            onClick={() => setShowResourceLinksModal(true)}
-            className="px-3 py-2 bg-bg-200 text-text-100 rounded-lg text-sm font-medium hover:bg-bg-300 transition-colors flex items-center space-x-2"
-          >
-            <IconLink size={16} />
-            <span>Resources</span>
-          </button>
-          <button
-            onClick={() => setShowPromptModal(true)}
-            className="px-3 py-2 bg-bg-200 text-text-100 rounded-lg text-sm font-medium hover:bg-bg-300 transition-colors flex items-center space-x-2"
-          >
-            <IconFileText size={16} />
-            <span>Email Prompt</span>
-          </button>
-          <Link
-            href="/dashboard/signups/api-docs"
-            className="px-3 py-2 bg-bg-200 text-text-100 rounded-lg text-sm font-medium hover:bg-bg-300 transition-colors"
-          >
-            API Docs
-          </Link>
-          <Link
-            href="/dashboard/signups/categories"
-            className="px-3 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors"
-          >
-            Manage Categories
-          </Link>
-        </div>
-      </div>
+      <div className="mx-auto max-w-7xl animate-fade-in space-y-4 text-text">
+      <PageHeader
+        eyebrow="Inbound"
+        title="Sign-up leads"
+        description="External platform sign-ups with AI-generated onboarding emails."
+        actions={
+          <>
+            <button type="button" onClick={fetchSignupLeads} className={btnOutline}>
+              <IconRefresh size={16} /> Refresh
+            </button>
+            <button type="button" onClick={() => setShowResourceLinksModal(true)} className={btnOutline}>
+              <IconLink size={16} /> Resources
+            </button>
+            <button type="button" onClick={() => setShowPromptModal(true)} className={btnOutline}>
+              <IconFileText size={16} /> Email prompt
+            </button>
+            <Link href="/dashboard/signups/api-docs" className={btnOutline}>
+              API docs
+            </Link>
+            <Link href="/dashboard/signups/categories" className={btnPrimary}>
+              Manage categories
+            </Link>
+          </>
+        }
+      />
 
       {/* Info Banner */}
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
@@ -148,7 +127,7 @@ export default function SignupsPage() {
       </div>
 
       {/* Filters */}
-      <div className="bg-card p-4 border border-border rounded-xl shadow-input">
+      <div className="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <IconFilter size={16} className="text-text-300" />
@@ -180,18 +159,18 @@ export default function SignupsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-card border border-border rounded-xl shadow-input overflow-hidden">
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-bg-200 border-b border-border">
+            <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Sign-up User</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Company</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Category</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Email</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Created</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-text-200">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Sign-up user</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Company</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Created</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -203,7 +182,7 @@ export default function SignupsPage() {
                 </tr>
               ) : (
                 signupLeads.map((signup) => (
-                  <tr key={signup.id} className="border-b border-border hover:bg-bg-100 transition-colors">
+                  <tr key={signup.id} className="border-b border-slate-100 transition-colors hover:bg-slate-50/80">
                     <td className="px-4 py-3">
                       <div>
                         <div className="text-sm font-medium text-text-100">{signup.name || 'N/A'}</div>

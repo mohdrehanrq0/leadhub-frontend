@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { IconArrowLeft, IconTag, IconPlus } from '@tabler/icons-react';
+import { PageHeader } from '../../../../components/layout/PageHeader';
+import { btnPrimary } from '../../../../components/ui/styles';
+import { IconArrowLeft, IconPlus } from '@tabler/icons-react';
 
 interface SignupCategory {
   id: string;
@@ -74,25 +76,16 @@ export default function SignupCategoriesPage() {
         <span>Back to Sign-ups</span>
       </Link>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-            <IconTag className="text-primary" />
-            <span>Signup Categories</span>
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            Manage auto-categorization rules for signup leads
-          </p>
-        </div>
-        <button
-          onClick={() => toast.info('Custom category creation coming soon')}
-          className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors flex items-center space-x-2"
-        >
-          <IconPlus size={16} />
-          <span>Add Category</span>
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Sign-ups"
+        title="Categories"
+        description="Auto-categorization rules for signup leads."
+        actions={
+          <button type="button" onClick={() => toast.info('Custom category creation coming soon')} className={btnPrimary}>
+            <IconPlus size={16} /> Add category
+          </button>
+        }
+      />
 
       {/* Categories List */}
       <div className="space-y-4">

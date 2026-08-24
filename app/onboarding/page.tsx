@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import api from '../../lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '../../context/AuthContext';
+import LeadHubBrandLockup from '../../components/common/LeadHubBrandLockup';
 import {
   IconBuilding,
   IconTarget,
@@ -511,11 +512,11 @@ export default function OnboardingWizard() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-text flex flex-col items-center justify-center p-6 relative overflow-hidden" style={{ minHeight: '100vh' }}>
+    <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-bg-100 p-6 text-text">
       {/* Stepper Header */}
       <div className="w-full max-w-4xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 z-10">
         <div className="flex items-center space-x-4">
-          <h1 className="text-xl font-bold tracking-tight text-primary">LeadHub Onboarding</h1>
+        <LeadHubBrandLockup size={36} />
           
           {/* Workspace Switcher */}
           <div className="flex items-center space-x-2 bg-card border border-border px-3 py-1.5 rounded-lg text-xs">

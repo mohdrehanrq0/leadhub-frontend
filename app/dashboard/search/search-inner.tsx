@@ -7,6 +7,8 @@ import api from '../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { toast } from 'sonner';
 import { useAuth } from '../../../context/AuthContext';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { btnOutline } from '../../../components/ui/styles';
 import {
   IconAlertTriangle,
   IconArrowRight,
@@ -17,7 +19,6 @@ import {
   IconLoader2,
   IconPlayerPlay,
   IconRefresh,
-  IconSearch,
   IconSparkles,
   IconTimeline,
   IconUsers,
@@ -608,39 +609,26 @@ export default function SearchPageInner() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in text-text pb-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center gap-2">
-            <IconSearch className="text-primary" />
-            Lead Search
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            Describe who you want to reach. AI plans Apify sources, you review filters, then fetch leads.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <Link
-            href="/dashboard/search/history"
-            className="text-xs bg-bg-300 hover:bg-bg-300/80 border border-border text-text-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5"
-          >
-            <IconHistory size={14} />
-            History
-          </Link>
-          <button
-            type="button"
-            onClick={() => void fetchCredits()}
-            className="text-xs bg-bg-300 hover:bg-bg-300/80 border border-border text-text-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 cursor-pointer"
-          >
-            <IconRefresh size={14} className={creditsLoading ? 'animate-spin' : ''} />
-            Refresh credits
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-4xl animate-fade-in space-y-6 pb-12 text-text">
+      <PageHeader
+        eyebrow="Discovery"
+        title="Lead search"
+        description="Describe who you want to reach. AI plans Apify sources, you review filters, then fetch leads."
+        actions={
+          <>
+            <Link href="/dashboard/search/history" className={btnOutline}>
+              <IconHistory size={16} /> History
+            </Link>
+            <button type="button" onClick={() => void fetchCredits()} className={btnOutline}>
+              <IconRefresh size={16} className={creditsLoading ? 'animate-spin' : ''} />
+              Refresh credits
+            </button>
+          </>
+        }
+      />
 
       {/* Credits bar */}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-input">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] font-bold text-text-300 uppercase tracking-wider">Provider credits</span>
           {creditsLoading && <IconLoader2 size={14} className="animate-spin text-text-300" />}

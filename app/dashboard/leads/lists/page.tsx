@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { IconArrowLeft, IconListDetails, IconPlus, IconTrash } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 import { LeadList } from '../../../../components/leads/types';
 
 function errorMessage(err: unknown, fallback: string) {
@@ -69,25 +70,23 @@ export default function LeadListsPage() {
         <IconArrowLeft size={14} /> Back to Leads
       </Link>
 
-      <section className="rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#e0f2fe,transparent_28%),linear-gradient(135deg,#fff,#f8fafc)] p-6 shadow-sm">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-blue-700">List Manager</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">Organize lead segments and working lists.</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Create named lead lists for campaigns, territories, events, target accounts, and sales queues.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Lists"
+        title="Lead lists"
+        description="Create named segments for campaigns, territories, events, and sales queues."
+      />
 
       <div className="grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <form onSubmit={createList} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-black text-slate-950"><IconPlus size={17} /> New list</h2>
+        <form onSubmit={createList} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold text-slate-900"><IconPlus size={17} /> New list</h2>
           <label className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">Name</label>
           <input value={name} onChange={(event) => setName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-blue-300 focus:bg-white" placeholder="Q3 enterprise accounts" />
           <label className="mt-4 block text-xs font-black uppercase tracking-[0.14em] text-slate-400">Description</label>
           <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-blue-300 focus:bg-white" placeholder="Who belongs here and why" />
-          <button className="mt-4 h-11 w-full rounded-xl bg-blue-600 text-sm font-black text-white">Create list</button>
+          <button className="mt-4 h-11 w-full rounded-xl bg-brand-main text-sm font-semibold text-white hover:bg-brand-main/80">Create list</button>
         </form>
 
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 p-4">
             <h2 className="text-sm font-black text-slate-950">Lists</h2>
           </div>

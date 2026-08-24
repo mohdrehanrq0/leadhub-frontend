@@ -71,7 +71,7 @@ export function SelectionActionBar(props: Props) {
     creditBalance !== null && creditBalance < selectedCount;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-950">
+    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-brand-main/30 bg-brand-main/10 px-3 py-2 text-xs text-slate-800">
       <span className="font-black">
         {selectedCount.toLocaleString()} selected
         {matchAll ? ' (all matching)' : ''}

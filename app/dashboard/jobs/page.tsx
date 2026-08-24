@@ -5,7 +5,6 @@ import api from '../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../lib/features';
 import { toast } from 'sonner';
 import {
-  IconBriefcase,
   IconCheck,
   IconClock,
   IconLoader2,
@@ -15,6 +14,8 @@ import {
   IconAlertCircle,
 } from '@tabler/icons-react';
 import { useAuth } from '../../../context/AuthContext';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { btnOutline } from '../../../components/ui/styles';
 
 interface JobRecord {
   id: string;
@@ -90,28 +91,17 @@ export default function JobsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in text-text">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-            <IconBriefcase className="text-primary" />
-            <span>Search Jobs Queue</span>
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            Running and completed jobs — type, sources, prompt, and date. For browsing past searches, use{' '}
-            <a href="/dashboard/search/history" className="text-primary hover:underline">
-              Search History
-            </a>
-            .
-          </p>
-        </div>
-        <button
-          onClick={fetchJobs}
-          className="text-xs bg-bg-300 hover:bg-bg-300/80 border border-border text-text-100 px-3 py-1.5 rounded-lg flex items-center space-x-1 cursor-pointer"
-        >
-          <IconLoader2 size={12} className={loading ? 'animate-spin' : ''} />
-          <span>Refresh</span>
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Operations"
+        title="Jobs queue"
+        description="Running and completed jobs — type, sources, prompt, and date."
+        actions={
+          <button type="button" onClick={fetchJobs} className={btnOutline}>
+            <IconLoader2 size={14} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        }
+      />
 
       {loading && jobs.length === 0 ? (
         <div className="space-y-3">

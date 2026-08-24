@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { toast } from 'sonner';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 import {
   IconAlertTriangle,
   IconCheck,
@@ -309,20 +310,15 @@ function ApiKeysPageInner() {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in text-text">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-input">
-        <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-          <IconKey className="text-primary" size={24} />
-          <span>Workspace API Keys</span>
-        </h1>
-        <p className="text-text-200 text-sm mt-2">
-          Add provider credentials and configure enrichment preferences (email verifier + LLM routing).
-          Keys are encrypted at rest using AES-256-GCM.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl animate-fade-in space-y-6 text-text">
+      <PageHeader
+        eyebrow="Settings"
+        title="API keys"
+        description="Add provider credentials and configure enrichment preferences. Keys are encrypted at rest using AES-256-GCM."
+      />
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-2xl shadow-input">
+        <div className="h-fit space-y-4 rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm xl:col-span-1">
           <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
             <IconKey size={16} className="text-primary" />
             Add Credentials
@@ -417,7 +413,7 @@ function ApiKeysPageInner() {
           </form>
         </div>
 
-        <div className="xl:col-span-1 bg-card p-6 h-fit space-y-4 border border-border rounded-2xl shadow-input">
+        <div className="h-fit space-y-4 rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm xl:col-span-1">
           <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
             <IconSparkles size={16} className="text-primary" />
             Enrichment Preferences

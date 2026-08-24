@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 import { FieldMappingPanel } from '../../../../components/leads/FieldMappingPanel';
 import {
   ImportDestinationFields,
@@ -281,15 +282,11 @@ export default function LeadSyncPage() {
         <IconArrowLeft size={14} /> Back to Leads
       </Link>
 
-      <section className="rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#ede9fe,transparent_28%),linear-gradient(135deg,#fff,#f8fafc)] p-6 shadow-sm">
-        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-violet-700">Provider Sync</p>
-        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950">
-          {APOLLO_UI_ENABLED ? 'Sync Apollo and Apify with field mapping.' : 'Sync Apify with field mapping.'}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-          Preview integration data, review auto-detected field mapping, adjust mappings if needed, then import enrichment-ready leads.
-        </p>
-      </section>
+      <PageHeader
+        eyebrow="Provider sync"
+        title={APOLLO_UI_ENABLED ? 'Sync Apollo and Apify' : 'Sync Apify'}
+        description="Preview integration data, review auto-detected field mapping, then import enrichment-ready leads."
+      />
 
       {jobId && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">

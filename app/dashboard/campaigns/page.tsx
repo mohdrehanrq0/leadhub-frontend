@@ -3,8 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../lib/api';
 import { toast } from 'sonner';
-import { IconMail, IconPlus, IconPaperclip, IconPlayerPlay, IconPlayerPause, IconSettings } from '@tabler/icons-react';
+import { IconPlus, IconPlayerPlay, IconSettings } from '@tabler/icons-react';
 import { useAuth } from '../../../context/AuthContext';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { btnPrimary } from '../../../components/ui/styles';
 
 interface Campaign {
   id: string;
@@ -80,25 +82,16 @@ export default function CampaignsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in text-text">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-            <IconMail className="text-primary" />
-            <span>Outreach Campaigns</span>
-          </h1>
-          <p className="text-text-200 text-sm mt-1">
-            Send highly-targeted sequences via your connected LeadSniper sending accounts.
-          </p>
-        </div>
-
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="bg-primary hover:bg-primary-200 text-white font-semibold py-2 px-4 rounded-lg text-xs flex items-center space-x-1.5 shadow-sm cursor-pointer"
-        >
-          <IconPlus size={14} />
-          <span>New Campaign</span>
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Outreach"
+        title="Campaigns"
+        description="Send targeted sequences via your connected sending accounts."
+        actions={
+          <button type="button" onClick={() => setShowCreate(!showCreate)} className={btnPrimary}>
+            <IconPlus size={16} /> New campaign
+          </button>
+        }
+      />
 
       {showCreate && (
         <form onSubmit={handleCreate} className="bg-card p-6 border border-border rounded-xl shadow-input space-y-4">

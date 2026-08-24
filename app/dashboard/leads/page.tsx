@@ -4,9 +4,10 @@ import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useSt
 import Link from 'next/link';
 import api from '../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../lib/features';
+import { PageHeader } from '../../../components/layout/PageHeader';
+import { btnNavy, btnOutline } from '../../../components/ui/styles';
 import { toast } from 'sonner';
 import {
-  IconUsers,
   IconEye,
   IconLoader2,
   IconUpload,
@@ -649,40 +650,29 @@ export default function LeadsPage() {
     Math.round(((lead.icpScore ?? 0) + (lead.intentScore ?? 0) + (lead.confidence ?? 0)) / 3);
 
   return (
-    <div className="space-y-6 animate-fade-in text-text">
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_32%),linear-gradient(135deg,#ffffff,#f8fafc)] p-6 shadow-sm">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700">
-              <IconUsers size={14} />
-              Lead CRM
-            </div>
-            <h1 className="text-3xl font-black tracking-tight text-slate-950">
-              Manage every lead from capture to close.
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Import, sync, qualify, enrich, and move leads through a CRM pipeline with table and Kanban views.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className="mx-auto max-w-7xl animate-fade-in space-y-4 text-text">
+      <PageHeader
+        eyebrow="Lead CRM"
+        title="Leads"
+        description="Import, qualify, enrich, and move contacts through the pipeline."
+        actions={
+          <>
             {creditBalance !== null && (
-              <Link
-                href="/dashboard/billing"
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <IconCoin size={15} className="text-primary" />
+              <Link href="/dashboard/billing" className={btnOutline}>
+                <IconCoin size={16} className="text-brand-main" />
                 {creditBalance.toLocaleString()} credits
               </Link>
             )}
             {hasLlmKey === false && (
               <Link
                 href="/dashboard/settings/api-keys"
-                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 shadow-sm hover:bg-amber-100"
+                className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-800 hover:bg-amber-100"
               >
-                <IconAlertTriangle size={15} /> Add AI key to enable enrichment
+                <IconAlertTriangle size={16} /> Add AI key
               </Link>
             )}
             <button
+              type="button"
               onClick={() => {
                 setDupListId(listId);
                 setDupCategoryId(categoryId);
@@ -690,31 +680,22 @@ export default function LeadsPage() {
                 setPreviewData(null);
                 setShowDeduplicateModal(true);
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50 cursor-pointer"
+              className={btnOutline}
             >
-              <IconCopyOff size={15} /> Clean Duplicates
+              <IconCopyOff size={16} /> Clean duplicates
             </button>
-            <Link
-              href="/dashboard/leads/import"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <IconUpload size={15} /> Import CSV
+            <Link href="/dashboard/leads/import" className={btnNavy}>
+              <IconUpload size={16} /> Import CSV
             </Link>
-            <Link
-              href="/dashboard/leads/sync"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <IconRefresh size={15} /> Apify Sync
+            <Link href="/dashboard/leads/sync" className={btnOutline}>
+              <IconRefresh size={16} /> Apify sync
             </Link>
-            <Link
-              href="/dashboard/leads/lists"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <IconListDetails size={15} /> Lists
+            <Link href="/dashboard/leads/lists" className={btnOutline}>
+              <IconListDetails size={16} /> Lists
             </Link>
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       <LeadsToolbar
         query={query}
@@ -782,15 +763,15 @@ export default function LeadsPage() {
             <div className="h-48 skeleton" />
           </div>
         ) : leads.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
             <p className="text-sm font-bold text-slate-700">No leads match this view.</p>
             <p className="mt-1 text-xs text-slate-500">Import CSV leads, run provider sync, or adjust your filters.</p>
           </div>
         ) : (
-          <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
             <div className="mb-3 flex items-center justify-between px-1">
               <div>
-                <h2 className="text-sm font-black text-slate-950">Pipeline Board</h2>
+                <h2 className="text-sm font-semibold text-slate-950">Pipeline board</h2>
                 <p className="text-xs text-slate-500">
                   Showing {leads.length.toLocaleString()} of {totalCount.toLocaleString()} loaded leads. Use Table
                   view to load more.
@@ -968,10 +949,10 @@ export default function LeadsPage() {
 
       {showDeduplicateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 w-[540px] max-w-full shadow-2xl flex flex-col max-h-[90vh]">
+          <div className="flex max-h-[90vh] w-[540px] max-w-full flex-col rounded-xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="flex items-start justify-between border-b border-slate-100 pb-3">
               <div>
-                <h3 className="text-base font-black text-slate-950 flex items-center gap-2">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-slate-950">
                   <IconCopyOff className="text-rose-600" size={18} /> Find & Remove Duplicates
                 </h3>
                 <p className="text-xs text-slate-500 mt-1">

@@ -3,8 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
-import { IconCopy, IconSettings } from '@tabler/icons-react';
+import { IconCopy } from '@tabler/icons-react';
 import { useAuth } from '../../../../context/AuthContext';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 
 export default function WorkspaceSettingsPage() {
   const { activeWorkspaceId } = useAuth();
@@ -64,17 +65,13 @@ export default function WorkspaceSettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in text-text">
-      <div>
-        <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-          <IconSettings className="text-primary" />
-          <span>Workspace Settings</span>
-        </h1>
-        <p className="text-text-200 text-sm mt-1">
-          Manage workspace profile, name, team members, and limits.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Workspace"
+        description="Manage workspace profile, name, and identifiers."
+      />
 
-      <div className="bg-card p-6 border border-border rounded-xl shadow-input space-y-6">
+      <div className="space-y-6 overflow-hidden rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <form onSubmit={handleUpdate} className="space-y-4">
           <div className="space-y-1">
             <label htmlFor="workspaceName" className="text-xs font-semibold text-text-200">Workspace Name</label>

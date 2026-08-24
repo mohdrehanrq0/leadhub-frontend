@@ -1,6 +1,14 @@
 import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
+import { ClientProviders } from '../components/common/ClientProviders';
+import { cn } from '../lib/utils';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: {
@@ -12,22 +20,21 @@ export const metadata: Metadata = {
   keywords: ['B2B leads', 'lead generation', 'AI sales', 'GTM platform', 'lead intelligence'],
 };
 
-import { ClientProviders } from '../components/common/ClientProviders';
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-      </head>
-      <body className="antialiased" suppressHydrationWarning>
-        <ClientProviders>
-          {children}
-        </ClientProviders>
+    <html lang="en" className="light" suppressHydrationWarning>
+      <body className={cn(inter.className, 'bg-bg-100 text-text-100 antialiased')} suppressHydrationWarning>
+        <ClientProviders>{children}</ClientProviders>
         <Toaster
           theme="light"
-          position="bottom-right"
+          position="top-right"
+          toastOptions={{
+            style: {
+              background: '#ffffff',
+              color: '#1e293b',
+              border: '1px solid #e2e8f0',
+            },
+          }}
         />
       </body>
     </html>

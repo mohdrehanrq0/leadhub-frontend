@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
+import { PageHeader } from '../../../../components/layout/PageHeader';
 import { IconUser, IconMail, IconCalendar, IconBrandWhatsapp, IconBrandLinkedin, IconWorldWww } from '@tabler/icons-react';
 import { useAuth } from '../../../../context/AuthContext';
 
@@ -88,17 +89,13 @@ export default function FounderProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in text-text">
-      <div>
-        <h1 className="text-2xl font-bold text-text-100 flex items-center space-x-2">
-          <IconUser className="text-primary" />
-          <span>Founder Profile</span>
-        </h1>
-        <p className="text-text-200 text-sm mt-1">
-          Configure your contact details for personalized sign-up onboarding emails.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Settings"
+        title="Founder profile"
+        description="Contact details used in personalized sign-up onboarding emails."
+      />
 
-      <div className="bg-card p-6 border border-border rounded-xl shadow-input">
+      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Founder Name */}
           <div className="space-y-1">
