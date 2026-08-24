@@ -23,6 +23,10 @@ import {
   IconTimeline,
   IconUsers,
 } from '@tabler/icons-react';
+import {
+  IntentPackPicker,
+  type IntentPackId,
+} from '../../../components/leads/IntentPackPicker';
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -303,6 +307,8 @@ export default function SearchPageInner() {
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [enriching, setEnriching] = useState(false);
+  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
+  const [roleHint, setRoleHint] = useState('');
   const [reopenLoading, setReopenLoading] = useState(false);
 
   const [liveJob, setLiveJob] = useState<LeadsFinderJob | null>(null);
@@ -549,7 +555,11 @@ export default function SearchPageInner() {
     }
     setEnriching(true);
     try {
-      const res = await api.post('/api/leads/enrich', { leadIds });
+      const res = await api.post('/api/leads/enrich', {
+        leadIds,
+        intentPack,
+        ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
+      });
       toast.success(res.data.data?.message ?? 'Enrichment started.');
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to start enrichment.'));
@@ -1317,7 +1327,14 @@ export default function SearchPageInner() {
           </div>
 
           {phase === 'completed' && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
+              <IntentPackPicker
+                value={intentPack}
+                onChange={setIntentPack}
+                roleHint={roleHint}
+                onRoleHintChange={setRoleHint}
+              />
+              <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => void handleEnrich()}
@@ -1341,6 +1358,7 @@ export default function SearchPageInner() {
                 <IconClock size={16} />
                 Jobs queue
               </Link>
+            </div>
             </div>
           )}
 

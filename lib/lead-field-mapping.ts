@@ -10,7 +10,10 @@ export type SystemFieldKey =
   | 'company.name'
   | 'company.domain'
   | 'company.linkedin'
-  | 'notes';
+  | 'notes'
+  | 'enrichment.researchGoal'
+  | 'enrichment.intentPack'
+  | 'enrichment.personTarget';
 
 export type FieldMapping = Partial<Record<SystemFieldKey, string>>;
 
@@ -105,6 +108,24 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     label: 'Notes',
     group: 'other',
     aliases: ['notes', 'note', 'comments', 'description'],
+  },
+  {
+    key: 'enrichment.researchGoal',
+    label: 'Research Goal',
+    group: 'other',
+    aliases: ['research goal', 'researchgoal', 'outreach purpose', 'goal'],
+  },
+  {
+    key: 'enrichment.intentPack',
+    label: 'Enrichment Pack',
+    group: 'other',
+    aliases: ['enrichment pack', 'intent pack', 'person pack', 'find', 'target pack'],
+  },
+  {
+    key: 'enrichment.personTarget',
+    label: 'Person Target',
+    group: 'other',
+    aliases: ['person target', 'target role', 'find person', 'role target', 'person_target'],
   },
 ];
 
@@ -231,6 +252,16 @@ export function applyFieldMapping(
   if (location) {
     rawData.location = location;
     rawData.companyLocation = location;
+  }
+
+  const researchGoal = readMappedValue(row, mapping, 'enrichment.researchGoal');
+  const intentPack = readMappedValue(row, mapping, 'enrichment.intentPack');
+  const personTarget = readMappedValue(row, mapping, 'enrichment.personTarget');
+  if (researchGoal) rawData.researchGoal = researchGoal;
+  if (intentPack) rawData.intentPack = intentPack;
+  if (personTarget) {
+    rawData.roleHint = personTarget;
+    if (!intentPack) rawData.intentPack = 'custom';
   }
 
   return {

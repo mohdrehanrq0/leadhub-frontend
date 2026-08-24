@@ -25,7 +25,12 @@ import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { useAuth } from '../../../../context/AuthContext';
 import {
+  IntentPackPicker,
+  type IntentPackId,
+} from '../../../../components/leads/IntentPackPicker';
+import {
   apolloCategoryLabel,
+  EnrichmentProfile,
   AiIntelligenceData,
   canEnrichLead,
   canReEnrichLead,
@@ -319,6 +324,192 @@ function buyingSignalLabels(
   }).filter(Boolean);
 }
 
+function CompactOutreachCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+function EvidenceFirstOutreachPanel({
+  profile,
+  legacy,
+  identityNote,
+}: {
+  profile: EnrichmentProfile;
+  legacy: AiIntelligenceData | null;
+  identityNote?: string | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const si = profile.salesIntelligence ?? {};
+  const emailOpener =
+    si.emailOpener ||
+    legacy?.emailOpener?.value ||
+    legacy?.suggestedEmailOpening?.value ||
+    '';
+
+  const copyOpener = async () => {
+    if (!emailOpener) return;
+    try {
+      await navigator.clipboard.writeText(emailOpener);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const companyLine = [
+    profile.identity.companyName,
+    profile.identity.location,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const qualLine = [
+    profile.qualification.businessModel,
+    profile.qualification.sizeBucket,
+    profile.qualification.whatTheySell,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <div className="space-y-3">
+      {identityNote && (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+          {identityNote}
+        </div>
+      )}
+
+      <CompactOutreachCard title="Company">
+        <p className="text-sm font-semibold text-slate-900">{companyLine || '—'}</p>
+        {qualLine ? <p className="text-sm text-slate-600 mt-1">{qualLine}</p> : null}
+      </CompactOutreachCard>
+
+      {(profile.buyer.name || profile.buyer.email || (profile.people?.length ?? 0) > 0) && (
+        <CompactOutreachCard title="Recommended contact">
+          {profile.people && profile.people.length > 0 ? (
+            <div className="space-y-2">
+              {profile.people.slice(0, 1).map((p) => (
+                <div key={`${p.name}-${p.roleType}`}>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {[p.name, p.title].filter(Boolean).join(' · ')}
+                  </p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mt-0.5">
+                    {p.roleType.replace(/_/g, ' ')} — {p.fitScore}% match
+                  </p>
+                </div>
+              ))}
+              {profile.people.length > 1 ? (
+                <div className="border-t border-slate-100 pt-2 mt-2">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Alternatives
+                  </p>
+                  {profile.people.slice(1, 4).map((p) => (
+                    <p key={`${p.name}-alt`} className="text-sm text-slate-700">
+                      {p.name}
+                      {p.title ? ` · ${p.title}` : ''}
+                      <span className="text-xs text-slate-500"> — {p.fitScore}%</span>
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <p className="text-sm font-semibold text-slate-900">
+                {[profile.buyer.name, profile.buyer.title].filter(Boolean).join(' · ')}
+              </p>
+              {profile.buyer.email ? (
+                <p className="text-sm text-slate-700 mt-1">
+                  {profile.buyer.email}
+                  {profile.buyer.emailStatus ? (
+                    <span className="ml-2 text-xs font-bold uppercase text-emerald-700">
+                      {profile.buyer.emailStatus}
+                    </span>
+                  ) : null}
+                </p>
+              ) : null}
+            </>
+          )}
+        </CompactOutreachCard>
+      )}
+
+      {(profile.signals.length > 0 || si.whyNow) && (
+        <CompactOutreachCard title="Why now">
+          {si.whyNow ? (
+            <p className="text-sm text-slate-800">{si.whyNow}</p>
+          ) : null}
+          {profile.signals.slice(0, 3).map((s) => (
+            <div key={`${s.type}-${s.summary}`} className="mt-2 border-t border-slate-100 pt-2 first:mt-0 first:border-0 first:pt-0">
+              <p className="text-sm text-slate-800">{s.summary}</p>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mt-1">
+                {s.source ?? s.type}
+                {s.date ? ` · ${s.date}` : ''}
+              </p>
+            </div>
+          ))}
+        </CompactOutreachCard>
+      )}
+
+      <CompactOutreachCard title="Outreach">
+        {(si.painPoints?.length ?? 0) > 0 && (
+          <ul className="list-disc pl-4 space-y-1 mb-3">
+            {si.painPoints!.slice(0, 3).map((p) => (
+              <li key={p} className="text-sm text-slate-800">{p}</li>
+            ))}
+          </ul>
+        )}
+        {si.outreachAngle ? (
+          <p className="text-sm text-slate-800 mb-2">
+            <span className="font-semibold">Angle: </span>
+            {si.outreachAngle}
+          </p>
+        ) : null}
+        {emailOpener ? (
+          <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2">
+            <p className="text-sm text-slate-900 leading-relaxed flex-1">{emailOpener}</p>
+            <button
+              type="button"
+              onClick={copyOpener}
+              className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50"
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        ) : null}
+      </CompactOutreachCard>
+
+      <CompactOutreachCard title="Quality">
+        <p className="text-sm text-slate-800">
+          Identity {Math.round((profile.quality.identityConfidence ?? 0) * 100)}%
+          {' · '}
+          Data {Math.round((profile.quality.dataConfidence ?? 0) * 100)}%
+        </p>
+        {profile.quality.conflicts.length > 0 ? (
+          <p className="text-xs text-amber-700 mt-1">
+            Conflicts: {profile.quality.conflicts.join('; ')}
+          </p>
+        ) : null}
+        {profile.quality.missing.length > 0 ? (
+          <p className="text-xs text-slate-500 mt-1">
+            Missing: {profile.quality.missing.join(', ')}
+          </p>
+        ) : null}
+      </CompactOutreachCard>
+    </div>
+  );
+}
+
 function AiOutreachPanel({
   data,
   identityNote,
@@ -328,6 +519,17 @@ function AiOutreachPanel({
 }) {
   const [showRaw, setShowRaw] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  if (data.enrichmentProfile) {
+    return (
+      <EvidenceFirstOutreachPanel
+        profile={data.enrichmentProfile}
+        legacy={data}
+        identityNote={identityNote}
+      />
+    );
+  }
+
   const icp = data.icpBreakdown;
   const intent = data.intentBreakdown;
   const conf = data.confidenceBreakdown;
@@ -721,6 +923,8 @@ export default function LeadDetailPage() {
   const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
   const [showJourney, setShowJourney] = useState(true);
   const [reEnriching, setReEnriching] = useState(false);
+  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
+  const [roleHint, setRoleHint] = useState('');
 
   const sseRef = useRef<EventSource | null>(null);
 
@@ -766,7 +970,14 @@ export default function LeadDetailPage() {
       setEnrichmentLogs(logsRes.data.data ?? []);
       setResearchActivities(activitiesRes.data.data ?? []);
       setResearchQueries(queriesRes.data.data ?? []);
-      setAiIntelligence(aiRes.data.data ?? null);
+      setAiIntelligence(
+        aiRes.data.data
+          ? {
+              ...aiRes.data.data,
+              enrichmentProfile: aiRes.data.enrichmentProfile ?? null,
+            }
+          : null,
+      );
       setCanonicalProfile(profileRes.data.data ?? null);
     } catch {
       // Non-blocking
@@ -854,6 +1065,8 @@ export default function LeadDetailPage() {
       await api.post('/api/leads/enrich', {
         leadIds: [lead.id],
         reEnrich: isReEnrich,
+        intentPack,
+        ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
       });
       toast.success(isReEnrich ? 'Re-enrichment started.' : 'Enrichment started.');
       setShowJourney(true);
@@ -1153,6 +1366,13 @@ export default function LeadDetailPage() {
                 </span>
               ) : (
                 <>
+                  <IntentPackPicker
+                    value={intentPack}
+                    onChange={setIntentPack}
+                    roleHint={roleHint}
+                    onRoleHintChange={setRoleHint}
+                    compact
+                  />
                   <button
                     type="button"
                     onClick={() => void handleReEnrich()}

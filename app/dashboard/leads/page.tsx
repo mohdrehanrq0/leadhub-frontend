@@ -35,6 +35,10 @@ import {
 } from '../../../components/leads/types';
 import { LeadsToolbar } from '../../../components/leads/LeadsToolbar';
 import { SelectionActionBar } from '../../../components/leads/SelectionActionBar';
+import {
+  IntentPackPicker,
+  type IntentPackId,
+} from '../../../components/leads/IntentPackPicker';
 import { LeadsTable } from '../../../components/leads/LeadsTable';
 import type { ColumnFilterKey } from '../../../components/leads/columnFilters';
 import {
@@ -90,6 +94,8 @@ export default function LeadsPage() {
   const [bulkStage, setBulkStage] = useState<PipelineStage>('contacted');
   const [bulkCategoryId, setBulkCategoryId] = useState('');
   const [bulkListId, setBulkListId] = useState('');
+  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
+  const [roleHint, setRoleHint] = useState('');
 
   const [showDeduplicateModal, setShowDeduplicateModal] = useState(false);
   const [matchOn, setMatchOn] = useState<'email' | 'domain' | 'linkedinUrl' | 'company_contact'>('email');
@@ -454,7 +460,12 @@ export default function LeadsPage() {
       let leadCount = 0;
       let skipped = 0;
       for (const chunk of chunkIds(leadIds, ENRICH_CHUNK)) {
-        const res = await api.post('/api/leads/enrich', { leadIds: chunk, reEnrich });
+        const res = await api.post('/api/leads/enrich', {
+          leadIds: chunk,
+          reEnrich,
+          intentPack,
+          ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
+        });
         leadCount += res.data.data?.leadCount ?? chunk.length;
         skipped += res.data.data?.skippedCount ?? 0;
       }
@@ -753,6 +764,15 @@ export default function LeadsPage() {
         categories={categories}
         lists={lists}
         onSelectAllMatching={selectAllMatching}
+        intentPackSlot={
+          <IntentPackPicker
+            value={intentPack}
+            onChange={setIntentPack}
+            roleHint={roleHint}
+            onRoleHintChange={setRoleHint}
+            compact
+          />
+        }
       />
 
       {view === 'kanban' ? (

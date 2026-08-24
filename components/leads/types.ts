@@ -149,6 +149,78 @@ export type StructuredBuyingSignal = {
   confidence: number;
 };
 
+export type EnrichmentProfileSignal = {
+  type: string;
+  summary: string;
+  date?: string;
+  source?: string;
+  sourceUrl?: string;
+  confidence: number;
+};
+
+export type EnrichmentProfile = {
+  identity: {
+    companyName?: string;
+    domain?: string;
+    location?: string;
+    linkedin?: string;
+    companyType?: string;
+    confidence?: number;
+  };
+  qualification: {
+    industry?: string;
+    businessModel?: string;
+    sizeBucket?: string;
+    employeeEstimate?: number | null;
+    whatTheySell?: string;
+    whoTheySellTo?: string;
+    primaryMarket?: string;
+    icpScore?: number;
+  };
+  buyer: {
+    name?: string;
+    title?: string;
+    seniority?: string;
+    department?: string;
+    linkedin?: string;
+    email?: string;
+    emailStatus?: string;
+    emailConfidence?: number;
+    personCompanyMatch?: boolean;
+  };
+  /** Multi-person discovery results */
+  people?: Array<{
+    roleType: string;
+    name: string;
+    title: string;
+    priority: number;
+    fitScore: number;
+    linkedin?: string;
+    email?: string;
+  }>;
+  signals: EnrichmentProfileSignal[];
+  salesIntelligence: {
+    whyNow?: string;
+    painPoints?: string[];
+    outreachAngle?: string;
+    emailOpener?: string;
+    companySummary?: string;
+    buyerSummary?: string;
+    icpScore?: number;
+    intentScore?: number;
+    confidence?: number;
+  };
+  quality: {
+    identityConfidence: number;
+    dataConfidence: number;
+    freshness: string;
+    conflicts: string[];
+    missing: string[];
+    identityPass?: boolean;
+    qualificationPass?: boolean;
+  };
+};
+
 export type AiIntelligenceData = {
   id: string;
   leadId: string;
@@ -215,6 +287,8 @@ export type AiIntelligenceData = {
   priority?: Priority | null;
   generatedAt: string;
   updatedAt: string;
+  /** Evidence-first v2 compact profile */
+  enrichmentProfile?: EnrichmentProfile | null;
 };
 
 export type EnrichedProfileField = {

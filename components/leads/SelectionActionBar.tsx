@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import {
   IconDownload,
   IconLoader2,
@@ -34,6 +35,7 @@ type Props = {
   categories: LeadCategory[];
   lists: LeadList[];
   onSelectAllMatching: () => void;
+  intentPackSlot?: ReactNode;
 };
 
 export function SelectionActionBar(props: Props) {
@@ -62,6 +64,7 @@ export function SelectionActionBar(props: Props) {
     categories,
     lists,
     onSelectAllMatching,
+    intentPackSlot,
   } = props;
 
   if (selectedCount === 0) return null;
@@ -97,6 +100,7 @@ export function SelectionActionBar(props: Props) {
           Select all matching
         </button>
       )}
+      {intentPackSlot}
       <button
         type="button"
         onClick={onEnrich}

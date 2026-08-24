@@ -21,6 +21,7 @@ import {
   ImportDestinationFields,
   parseTagInput,
 } from '../../../../components/leads/ImportDestinationFields';
+import type { IntentPackId } from '../../../../components/leads/IntentPackPicker';
 import {
   applyFieldMapping,
   detectFieldMapping,
@@ -131,6 +132,8 @@ export default function LeadImportPage() {
   const [listId, setListId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [tags, setTags] = useState('');
+  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
+  const [roleHint, setRoleHint] = useState('');
   const [importing, setImporting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -205,8 +208,11 @@ export default function LeadImportPage() {
   }, []);
 
   const parseFile = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
-      toast.error('Please upload a .csv file.');
+    const lower = file.name.toLowerCase();
+    const isCsv = lower.endsWith('.csv') || file.type === 'text/csv';
+    const isExcel = lower.endsWith('.xlsx') || lower.endsWith('.xls');
+    if (!isCsv && !isExcel) {
+      toast.error('Please upload a .csv or .xlsx file.');
       return;
     }
 
@@ -217,7 +223,7 @@ export default function LeadImportPage() {
     if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
     parseSafetyRef.current = setTimeout(() => {
       setParsing((still) => {
-        if (still) toast.error('CSV parsing is taking too long. Try a smaller file.');
+        if (still) toast.error('File parsing is taking too long. Try a smaller file.');
         return false;
       });
     }, 45_000);
@@ -235,42 +241,61 @@ export default function LeadImportPage() {
         // ignore — fall back to auto-detect
       }
 
+      const applyParsed = (rows: Array<Record<string, string>>, fields: string[]) => {
+        if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
+        if (rows.length === 0 || fields.length === 0) {
+          toast.error('This file looks empty. Check the file and try again.');
+          setParsing(false);
+          return;
+        }
+
+        const detected = detectFieldMapping(fields);
+        const usableSaved =
+          savedMapping &&
+          Object.values(savedMapping).some((col) => fields.includes(col))
+            ? savedMapping
+            : null;
+
+        setRawRows(rows);
+        setSourceFields(fields);
+        setMapping(usableSaved ?? detected.mapping);
+        setConfidence(usableSaved ? {} : detected.confidence);
+        setStep('mapping');
+        setParsing(false);
+        toast.success(
+          usableSaved
+            ? `Loaded ${rows.length.toLocaleString()} rows — reused mapping from last upload of this file`
+            : `Loaded ${rows.length.toLocaleString()} rows from ${file.name}`,
+        );
+      };
+
+      if (isExcel) {
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+        const base64 = btoa(binary);
+        const res = await api.post('/api/leads/parse-spreadsheet', {
+          fileName: file.name,
+          base64,
+        });
+        const fields = (res.data.data?.fields ?? []) as string[];
+        const rows = (res.data.data?.rows ?? []) as Array<Record<string, string>>;
+        applyParsed(rows, fields);
+        return;
+      }
+
       const Papa = await import('papaparse');
       const parser = (Papa.default ?? Papa) as PapaParser;
       parser.parse(file, {
         header: true,
         skipEmptyLines: true,
         complete: (result) => {
-          if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
           const rows = result.data ?? [];
           const fields =
             result.meta?.fields?.filter(Boolean) ??
             Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
-
-          if (rows.length === 0 || fields.length === 0) {
-            toast.error('This CSV looks empty. Check the file and try again.');
-            setParsing(false);
-            return;
-          }
-
-          const detected = detectFieldMapping(fields);
-          const usableSaved =
-            savedMapping &&
-            Object.values(savedMapping).some((col) => fields.includes(col))
-              ? savedMapping
-              : null;
-
-          setRawRows(rows);
-          setSourceFields(fields);
-          setMapping(usableSaved ?? detected.mapping);
-          setConfidence(usableSaved ? {} : detected.confidence);
-          setStep('mapping');
-          setParsing(false);
-          toast.success(
-            usableSaved
-              ? `Loaded ${rows.length.toLocaleString()} rows — reused mapping from last upload of this file`
-              : `Loaded ${rows.length.toLocaleString()} rows from ${file.name}`,
-          );
+          applyParsed(rows, fields);
         },
         error: () => {
           if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
@@ -281,7 +306,7 @@ export default function LeadImportPage() {
     } catch {
       if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
       setParsing(false);
-      toast.error('Could not read that CSV.');
+      toast.error('Could not read that file.');
     }
   }, []);
 
@@ -342,6 +367,8 @@ export default function LeadImportPage() {
             sourceFields,
             confirmReupload: confirmReupload || !isFirstChunk,
             importId: currentImportId,
+            intentPack,
+            ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
           },
           {
             timeout: 180_000,
@@ -479,7 +506,7 @@ export default function LeadImportPage() {
                 )}
               </div>
               <span className="mt-4 text-base font-black text-slate-950">
-                {parsing ? 'Reading CSV…' : dragging ? 'Drop to upload' : 'Drop CSV here, or click to browse'}
+                {parsing ? 'Reading file…' : dragging ? 'Drop to upload' : 'Drop CSV or Excel here, or click to browse'}
               </span>
               <span className="mt-2 max-w-sm text-sm leading-5 text-slate-500">
                 Needs a company column. Location helps enrichment. Names are optional.
@@ -494,7 +521,7 @@ export default function LeadImportPage() {
               )}
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                 className="hidden"
                 disabled={parsing}
                 onChange={(event) => {
@@ -601,6 +628,10 @@ export default function LeadImportPage() {
             onListIdChange={setListId}
             onCategoryIdChange={setCategoryId}
             onTagsChange={setTags}
+            intentPack={intentPack}
+            onIntentPackChange={setIntentPack}
+            roleHint={roleHint}
+            onRoleHintChange={setRoleHint}
           />
 
           <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
