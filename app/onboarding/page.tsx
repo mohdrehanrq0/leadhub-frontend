@@ -23,18 +23,11 @@ import {
 export default function OnboardingWizard() {
   const {
     activeWorkspaceId,
-    setActiveWorkspaceId,
     refreshOnboardingStatus,
     onboardingStep,
     onboardingLoading,
   } = useAuth();
   const router = useRouter();
-
-  // Workspaces state
-  const [workspaces, setWorkspaces] = useState<any[]>([]);
-  const [showCreateWsModal, setShowCreateWsModal] = useState(false);
-  const [newWsName, setNewWsName] = useState('');
-  const [creatingWs, setCreatingWs] = useState(false);
 
   // ICP Editor State
   const [icpCompanySizes, setIcpCompanySizes] = useState<string[]>([]);
@@ -93,39 +86,6 @@ export default function OnboardingWizard() {
   const [subNicheMap, setSubNicheMap] = useState<Record<string, any[]>>({});
   const [generatingSubNichesId, setGeneratingSubNichesId] = useState<string | null>(null);
   const [completing, setCompleting] = useState(false);
-
-  // Workspaces fetching
-  const fetchWorkspaces = async () => {
-    try {
-      const res = await api.get('/api/workspaces');
-      setWorkspaces(res.data.data ?? []);
-    } catch {
-      // ignore
-    }
-  };
-
-  useEffect(() => {
-    fetchWorkspaces();
-  }, []);
-
-  const handleCreateWorkspace = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newWsName.trim()) return;
-    setCreatingWs(true);
-    try {
-      const res = await api.post('/api/workspaces', { name: newWsName.trim() });
-      const newWs = res.data.data;
-      setWorkspaces((prev) => [...prev, newWs]);
-      setActiveWorkspaceId(newWs.id);
-      setNewWsName('');
-      setShowCreateWsModal(false);
-      toast.success(`Workspace "${newWs.name}" created!`);
-    } catch (err: any) {
-      toast.error(err.message ?? 'Failed to create workspace.');
-    } finally {
-      setCreatingWs(false);
-    }
-  };
 
   // Load ICP data
   const loadICP = async () => {
@@ -516,33 +476,7 @@ export default function OnboardingWizard() {
       {/* Stepper Header */}
       <div className="w-full max-w-4xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 z-10">
         <div className="flex items-center space-x-4">
-        <LeadHubBrandLockup size={36} />
-          
-          {/* Workspace Switcher */}
-          <div className="flex items-center space-x-2 bg-card border border-border px-3 py-1.5 rounded-lg text-xs">
-            <span className="text-text-300">Workspace:</span>
-            <select
-              value={activeWorkspaceId ?? ''}
-              onChange={async (e) => {
-                const val = e.target.value;
-                if (val === '__new__') {
-                  setShowCreateWsModal(true);
-                } else if (val) {
-                  setActiveWorkspaceId(val);
-                }
-              }}
-              className="bg-transparent text-text-100 font-semibold focus:outline-none cursor-pointer"
-            >
-              {workspaces.map((ws) => (
-                <option key={ws.id} value={ws.id} className="bg-card text-text-100">
-                  {ws.name}
-                </option>
-              ))}
-              <option value="__new__" className="bg-card text-primary font-semibold">
-                + Create New Workspace
-              </option>
-            </select>
-          </div>
+          <LeadHubBrandLockup size={36} />
         </div>
 
         <div className="flex items-center space-x-2">
@@ -1338,55 +1272,6 @@ export default function OnboardingWizard() {
         )}
 
       </div>
-
-      {/* ─── Create Workspace Modal ────────────────────────────────── */}
-      {showCreateWsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-card border border-border rounded-xl shadow-xl w-full max-w-md p-6 animate-scale-up space-y-4">
-            <div>
-              <h3 className="text-lg font-bold text-text-100">Create New Workspace</h3>
-              <p className="text-text-300 text-xs mt-1">
-                A workspace represents a separate context for company profiles, campaigns, and lead generation lists.
-              </p>
-            </div>
-            <form onSubmit={handleCreateWorkspace} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-text-200">Workspace Name</label>
-                <input
-                  type="text"
-                  required
-                  value={newWsName}
-                  onChange={(e) => setNewWsName(e.target.value)}
-                  placeholder="e.g. Acme Sales Team"
-                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary text-text-100"
-                  disabled={creatingWs}
-                  autoFocus
-                />
-              </div>
-              <div className="flex justify-end space-x-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateWsModal(false);
-                    setNewWsName('');
-                  }}
-                  className="px-4 py-2 border border-border rounded-lg text-xs font-semibold text-text-200 hover:bg-bg-300 transition-colors"
-                  disabled={creatingWs}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-primary hover:bg-primary-200 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center space-x-1.5 shadow-sm disabled:opacity-50"
-                  disabled={creatingWs || !newWsName.trim()}
-                >
-                  {creatingWs ? 'Creating...' : 'Create'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </main>
   );
 }

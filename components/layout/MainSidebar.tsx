@@ -8,7 +8,6 @@ import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
 import {
   IconBriefcase,
-  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   IconCoin,
@@ -16,15 +15,11 @@ import {
   IconKey,
   IconLogout,
   IconMailOpened,
-  IconPlus,
   IconSearch,
-  IconSettings,
   IconUser,
   IconUsers,
   IconX,
 } from '@tabler/icons-react';
-
-type Workspace = { id: string; name: string };
 
 type User = {
   firstName?: string;
@@ -36,10 +31,6 @@ type MainSidebarProps = {
   isOpen: boolean;
   onClose: () => void;
   user: User;
-  workspaces: Workspace[];
-  activeWorkspaceId: string | null;
-  onSelectWorkspace: (id: string) => void;
-  onCreateWorkspace: () => void;
   onLogout: () => void;
 };
 
@@ -58,27 +49,14 @@ const NAV_MAIN = [
 const NAV_SETTINGS = [
   { name: 'API Keys', href: '/dashboard/settings/api-keys', icon: IconKey },
   { name: 'Founder Profile', href: '/dashboard/settings/founder-profile', icon: IconUser },
-  { name: 'Workspace', href: '/dashboard/settings/workspace', icon: IconSettings },
 ];
 
-export function MainSidebar({
-  isOpen,
-  onClose,
-  user,
-  workspaces,
-  activeWorkspaceId,
-  onSelectWorkspace,
-  onCreateWorkspace,
-  onLogout,
-}: MainSidebarProps) {
+export function MainSidebar({ isOpen, onClose, user, onLogout }: MainSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const hoverCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedCollapse = useRef(false);
-
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
 
   useEffect(() => {
     if (hydratedCollapse.current) return;
@@ -232,57 +210,6 @@ export function MainSidebar({
               >
                 <IconX className="h-5 w-5" />
               </button>
-
-              {showExpandedChrome ? (
-                <div className="relative mt-4">
-                  <button
-                    type="button"
-                    onClick={() => setDropdownOpen((open) => !open)}
-                    className="flex w-full items-center justify-between rounded-lg border border-sidebar-border bg-sidebar-hover p-2 text-left text-sidebar-text transition-colors hover:border-sidebar-active/40"
-                  >
-                    <div className="flex min-w-0 items-center space-x-2 truncate">
-                      <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded bg-brand-main text-[10px] font-bold text-white uppercase">
-                        {activeWorkspace?.name?.slice(0, 2) ?? 'WS'}
-                      </div>
-                      <span className="truncate text-sm font-semibold">{activeWorkspace?.name ?? 'Select workspace'}</span>
-                    </div>
-                    <IconChevronDown size={16} className="ml-1 flex-shrink-0 text-sidebar-muted" />
-                  </button>
-                  {dropdownOpen ? (
-                    <div className="absolute inset-x-0 z-50 mt-2 rounded-lg border border-sidebar-border bg-sidebar py-1 shadow-xl">
-                      {workspaces.map((ws) => (
-                        <button
-                          key={ws.id}
-                          type="button"
-                          onClick={() => {
-                            onSelectWorkspace(ws.id);
-                            setDropdownOpen(false);
-                          }}
-                          className={cn(
-                            'flex w-full items-center justify-between px-3 py-2 text-left text-xs transition-colors hover:bg-sidebar-hover',
-                            ws.id === activeWorkspaceId ? 'font-semibold text-brand-main' : 'text-sidebar-text',
-                          )}
-                        >
-                          <span>{ws.name}</span>
-                          {ws.id === activeWorkspaceId ? <span className="h-1.5 w-1.5 rounded-full bg-brand-main" /> : null}
-                        </button>
-                      ))}
-                      <div className="my-1 border-t border-sidebar-border" />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onCreateWorkspace();
-                          setDropdownOpen(false);
-                        }}
-                        className="flex w-full items-center space-x-1.5 px-3 py-2 text-left text-xs font-medium text-brand-main transition-colors hover:bg-sidebar-hover"
-                      >
-                        <IconPlus size={14} />
-                        <span>Create workspace</span>
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
 
             <nav
