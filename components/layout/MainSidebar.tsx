@@ -7,15 +7,15 @@ import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
 import {
-  IconBriefcase,
+  IconBookmark,
   IconChevronLeft,
   IconChevronRight,
   IconCoin,
-  IconHistory,
   IconKey,
   IconLogout,
   IconMailOpened,
-  IconSearch,
+  IconPuzzle,
+  IconRobot,
   IconUser,
   IconUsers,
   IconX,
@@ -39,15 +39,15 @@ const HOVER_COLLAPSE_MS = 220;
 
 const NAV_MAIN = [
   { name: 'Leads CRM', href: '/dashboard/leads', icon: IconUsers },
+  { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark },
   { name: 'Sign-ups', href: '/dashboard/signups', icon: IconMailOpened },
-  { name: 'Lead Search', href: '/dashboard/search', icon: IconSearch },
-  { name: 'Search History', href: '/dashboard/search/history', icon: IconHistory },
-  { name: 'Jobs Queue', href: '/dashboard/jobs', icon: IconBriefcase },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
 ];
 
 const NAV_SETTINGS = [
   { name: 'API Keys', href: '/dashboard/settings/api-keys', icon: IconKey },
+  { name: 'Enrichment Agents', href: '/dashboard/settings/enrichment-agents', icon: IconRobot },
+  { name: 'Browser Extension', href: '/dashboard/settings/extension', icon: IconPuzzle },
   { name: 'Founder Profile', href: '/dashboard/settings/founder-profile', icon: IconUser },
 ];
 
@@ -93,8 +93,8 @@ export function MainSidebar({ isOpen, onClose, user, onLogout }: MainSidebarProp
     if (href === '/dashboard/signups') {
       return pathname === href || pathname.startsWith('/dashboard/signups/');
     }
-    if (href === '/dashboard/search') {
-      return pathname === href;
+    if (href === '/dashboard/captures') {
+      return pathname === href || pathname.startsWith('/dashboard/captures/');
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   };

@@ -11,11 +11,12 @@ import {
   IconEye,
   IconLoader2,
   IconUpload,
-  IconRefresh,
+  // IconRefresh,
   IconListDetails,
   IconAlertTriangle,
   IconKey,
   IconCopyOff,
+  IconPlus,
   IconX,
   IconCoin,
 } from '@tabler/icons-react';
@@ -33,12 +34,10 @@ import {
   priorityTone,
   stageMeta,
 } from '../../../components/leads/types';
+import { AddLeadModal } from '../../../components/leads/AddLeadModal';
 import { LeadsToolbar } from '../../../components/leads/LeadsToolbar';
+import { EnrichmentAgentPicker } from '../../../components/leads/EnrichmentAgentPicker';
 import { SelectionActionBar } from '../../../components/leads/SelectionActionBar';
-import {
-  IntentPackPicker,
-  type IntentPackId,
-} from '../../../components/leads/IntentPackPicker';
 import { LeadsTable } from '../../../components/leads/LeadsTable';
 import type { ColumnFilterKey } from '../../../components/leads/columnFilters';
 import {
@@ -94,9 +93,9 @@ export default function LeadsPage() {
   const [bulkStage, setBulkStage] = useState<PipelineStage>('contacted');
   const [bulkCategoryId, setBulkCategoryId] = useState('');
   const [bulkListId, setBulkListId] = useState('');
-  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
-  const [roleHint, setRoleHint] = useState('');
+  const [enrichmentAgentId, setEnrichmentAgentId] = useState('');
 
+  const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showDeduplicateModal, setShowDeduplicateModal] = useState(false);
   const [matchOn, setMatchOn] = useState<'email' | 'domain' | 'linkedinUrl' | 'company_contact'>('email');
   const [keepStrategy, setKeepStrategy] = useState<'oldest' | 'newest'>('oldest');
@@ -446,11 +445,63 @@ export default function LeadsPage() {
       return;
     }
 
-    if (reEnrich) {
+    // Find out what would actually run before reserving anything. Without this
+    // a selection of 500 could quietly enrich 180 and report success.
+    let allowDiscovery = false;
+    let runIds = leadIds;
+    try {
+      const pre = await api.post('/api/leads/enrich/preflight', { leadIds, reEnrich });
+      const preflight = pre.data.data as {
+        ready: string[];
+        needsDiscovery: string[];
+        blocked: string[];
+        alreadyEnriched: string[];
+      };
+
+      if (preflight.ready.length === 0 && preflight.needsDiscovery.length === 0) {
+        toast.error(
+          preflight.blocked.length
+            ? `${preflight.blocked.length} lead(s) have no company website, LinkedIn, or name. Add one to enrich them.`
+            : 'These leads are already enriched. Use re-enrich to run research again.',
+          { duration: 7000 },
+        );
+        return;
+      }
+
+      const notes: string[] = [];
+      if (preflight.blocked.length) {
+        notes.push(`${preflight.blocked.length} will be skipped (no company to identify)`);
+      }
+      if (preflight.alreadyEnriched.length) {
+        notes.push(`${preflight.alreadyEnriched.length} already enriched`);
+      }
+
+      if (preflight.needsDiscovery.length > 0) {
+        allowDiscovery = window.confirm(
+          `${preflight.needsDiscovery.length} of these leads have only a company name.\n\n` +
+            'Finding their website costs extra searches and can still end without a match. ' +
+            `${preflight.ready.length} other lead(s) are ready to run.\n\n` +
+            'OK to include the name-only leads, or Cancel to enrich only the ready ones.',
+        );
+        if (!allowDiscovery && preflight.ready.length === 0) return;
+      }
+
+      // Send only the leads that will actually run. A chunk made up entirely of
+      // skipped leads is rejected outright and would abort the whole batch.
+      runIds = [
+        ...preflight.ready,
+        ...(allowDiscovery ? preflight.needsDiscovery : []),
+      ];
+
       const confirmed = window.confirm(
-        `Re-run research on ${leadIds.length} lead(s)? This uses up to ${leadIds.length} credit(s) (only charged on success).`,
+        `${reEnrich ? 'Re-run research on' : 'Enrich'} ${runIds.length} lead(s)? ` +
+          `Uses up to ${runIds.length} credit(s), only charged on success.` +
+          (notes.length ? `\n\n${notes.join('. ')}.` : ''),
       );
       if (!confirmed) return;
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not check which leads are eligible.'));
+      return;
     }
 
     try {
@@ -459,12 +510,12 @@ export default function LeadsPage() {
 
       let leadCount = 0;
       let skipped = 0;
-      for (const chunk of chunkIds(leadIds, ENRICH_CHUNK)) {
+      for (const chunk of chunkIds(runIds, ENRICH_CHUNK)) {
         const res = await api.post('/api/leads/enrich', {
           leadIds: chunk,
           reEnrich,
-          intentPack,
-          ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
+          allowDiscovery,
+          ...(enrichmentAgentId ? { enrichmentAgentId } : {}),
         });
         leadCount += res.data.data?.leadCount ?? chunk.length;
         skipped += res.data.data?.skippedCount ?? 0;
@@ -684,6 +735,13 @@ export default function LeadsPage() {
             )}
             <button
               type="button"
+              onClick={() => setShowAddLeadModal(true)}
+              className={btnNavy}
+            >
+              <IconPlus size={16} /> Add lead
+            </button>
+            <button
+              type="button"
               onClick={() => {
                 setDupListId(listId);
                 setDupCategoryId(categoryId);
@@ -695,12 +753,12 @@ export default function LeadsPage() {
             >
               <IconCopyOff size={16} /> Clean duplicates
             </button>
-            <Link href="/dashboard/leads/import" className={btnNavy}>
+            <Link href="/dashboard/leads/import" className={btnOutline}>
               <IconUpload size={16} /> Import CSV
             </Link>
-            <Link href="/dashboard/leads/sync" className={btnOutline}>
+            {/* <Link href="/dashboard/leads/sync" className={btnOutline}>
               <IconRefresh size={16} /> Apify sync
-            </Link>
+            </Link> */}
             <Link href="/dashboard/leads/lists" className={btnOutline}>
               <IconListDetails size={16} /> Lists
             </Link>
@@ -765,11 +823,9 @@ export default function LeadsPage() {
         lists={lists}
         onSelectAllMatching={selectAllMatching}
         intentPackSlot={
-          <IntentPackPicker
-            value={intentPack}
-            onChange={setIntentPack}
-            roleHint={roleHint}
-            onRoleHintChange={setRoleHint}
+          <EnrichmentAgentPicker
+            value={enrichmentAgentId}
+            onChange={setEnrichmentAgentId}
             compact
           />
         }
@@ -785,7 +841,7 @@ export default function LeadsPage() {
         ) : leads.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
             <p className="text-sm font-bold text-slate-700">No leads match this view.</p>
-            <p className="mt-1 text-xs text-slate-500">Import CSV leads, run provider sync, or adjust your filters.</p>
+            <p className="mt-1 text-xs text-slate-500">Add a lead, import CSV, or adjust your filters.</p>
           </div>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -966,6 +1022,24 @@ export default function LeadsPage() {
           onColumnFilterChange={handleColumnFilterChange}
         />
       )}
+
+      <AddLeadModal
+        open={showAddLeadModal}
+        onClose={() => setShowAddLeadModal(false)}
+        categories={categories}
+        lists={lists}
+        onCreated={async () => {
+          setLoading(true);
+          try {
+            await fetchLeadsPage(queryFilters, 0, false);
+            await fetchMeta();
+          } catch {
+            toast.error('Lead saved, but the list failed to refresh.');
+          } finally {
+            setLoading(false);
+          }
+        }}
+      />
 
       {showDeduplicateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">

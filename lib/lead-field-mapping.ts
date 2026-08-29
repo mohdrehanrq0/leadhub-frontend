@@ -24,23 +24,36 @@ export interface SystemFieldDefinition {
   requiredForImport?: boolean;
   requiredForEnrichment?: boolean;
   recommendedForEnrichment?: boolean;
+  /** Identifies a company on its own, so mapping it makes a row importable. */
+  isAnchor?: boolean;
   aliases: string[];
 }
 
+
 export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
+  {
+    key: 'company.domain',
+    label: 'Company Website / Domain',
+    group: 'company',
+    // The website is what turns enrichment from a guess into a lookup.
+    requiredForEnrichment: true,
+    isAnchor: true,
+    aliases: ['domain', 'website', 'company website', 'company domain', 'url', 'website url', 'primary_domain', 'website_url'],
+  },
   {
     key: 'company.name',
     label: 'Company Name',
     group: 'company',
     requiredForImport: true,
-    requiredForEnrichment: true,
+    isAnchor: true,
     aliases: ['company', 'company name', 'organization', 'account', 'org', 'company_name', 'organization_name', 'employer'],
   },
   {
     key: 'contact.location',
     label: 'Location',
     group: 'contact',
-    requiredForEnrichment: true,
+    // Not required. A wrong location actively hurts company matching, so it is
+    // only used to break ties when the company has to be discovered by name.
     aliases: ['location', 'city', 'address', 'country', 'region', 'present address', 'present_raw_address', 'company location', 'headquarters'],
   },
   {
@@ -91,16 +104,12 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     aliases: ['linkedin', 'linkedin url', 'linkedin profile', 'profile url', 'linkedin_url', 'person linkedin'],
   },
   {
-    key: 'company.domain',
-    label: 'Company Website / Domain',
-    group: 'company',
-    recommendedForEnrichment: true,
-    aliases: ['domain', 'website', 'company website', 'company domain', 'url', 'website url', 'primary_domain', 'website_url'],
-  },
-  {
     key: 'company.linkedin',
     label: 'Company LinkedIn',
     group: 'company',
+    // Unlocks person discovery without first hunting for the company page.
+    recommendedForEnrichment: true,
+    isAnchor: true,
     aliases: ['company linkedin', 'linkedin company', 'company_linkedin', 'organization linkedin'],
   },
   {
@@ -128,6 +137,11 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     aliases: ['person target', 'target role', 'find person', 'role target', 'person_target'],
   },
 ];
+
+/** Columns that identify a company, and so make an import viable. */
+export const ANCHOR_FIELDS: SystemFieldKey[] = SYSTEM_FIELDS.filter((f) => f.isAnchor).map(
+  (f) => f.key,
+);
 
 export interface DetectedMapping {
   mapping: FieldMapping;
@@ -207,6 +221,7 @@ export interface MappedLeadInput {
   company: {
     name?: string;
     domain?: string;
+    linkedin?: string;
     location?: string;
   };
   contact: {
@@ -268,6 +283,7 @@ export function applyFieldMapping(
     company: {
       name: companyName,
       domain: companyDomain,
+      linkedin: companyLinkedin,
       location,
     },
     contact: {
@@ -284,43 +300,142 @@ export function applyFieldMapping(
   };
 }
 
-export function isUsableMappedLead(row: MappedLeadInput) {
-  return Boolean(
-    row.contact.email ||
-      row.company.name ||
-      row.company.domain ||
-      row.contact.firstName ||
-      row.contact.lastName ||
-      row.contact.location,
-  );
+const FREE_EMAIL_HOSTS = new Set([
+  'gmail.com',
+  'googlemail.com',
+  'yahoo.com',
+  'yahoo.co.in',
+  'yahoo.co.uk',
+  'ymail.com',
+  'hotmail.com',
+  'hotmail.co.uk',
+  'outlook.com',
+  'live.com',
+  'msn.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'aol.com',
+  'proton.me',
+  'protonmail.com',
+  'pm.me',
+  'mail.com',
+  'zoho.com',
+  'yandex.com',
+  'yandex.ru',
+  'gmx.com',
+  'gmx.net',
+  'web.de',
+  'rediffmail.com',
+  'qq.com',
+  '163.com',
+  'naver.com',
+]);
+
+/** The company domain implied by an email, or undefined for consumer mail. */
+export function companyDomainFromEmail(email?: string) {
+  const host = email?.split('@')[1]?.trim().toLowerCase().replace(/^www\./, '');
+  if (!host?.includes('.')) return undefined;
+  return FREE_EMAIL_HOSTS.has(host) ? undefined : host;
 }
 
+/**
+ * Input tiers, mirroring the backend contract.
+ *
+ * The website is the dividing line: with one, the company is identified and
+ * research is a lookup; without one, it has to be discovered, which costs more
+ * and can fail outright.
+ */
+export type InputTier = 'rejected' | 'discovery' | 'base' | 'medium' | 'good';
+
+export const TIER_LABEL: Record<InputTier, string> = {
+  rejected: 'Cannot enrich',
+  discovery: 'Needs discovery',
+  base: 'Ready',
+  medium: 'Good',
+  good: 'Complete',
+};
+
 export interface EnrichmentReadiness {
+  tier: InputTier;
+  /** True when this row can be enriched without a discovery opt-in. */
   enrichable: boolean;
-  missingRequired: string[];
+  /** Why it is not higher, in one sentence. */
+  reason: string;
+  /** The single most valuable column to add. */
+  nextBestField?: string;
   missingRecommended: string[];
 }
 
 export function assessEnrichmentReadiness(row: MappedLeadInput): EnrichmentReadiness {
-  const missingRequired: string[] = [];
-  const missingRecommended: string[] = [];
-
-  // Research agent requires company name + location. Person name is optional —
-  // enrichment discovers founders / decision-makers when missing.
-  if (!row.company.name?.trim()) missingRequired.push('Company Name');
-  if (!row.contact.location?.trim()) missingRequired.push('Location');
-
-  if (!row.company.domain?.trim()) missingRecommended.push('Company Domain');
+  const domain = row.company.domain?.trim() || companyDomainFromEmail(row.contact.email?.trim());
+  const companyLinkedin = row.company.linkedin?.trim();
+  const companyName = row.company.name?.trim();
   const personName = [row.contact.firstName, row.contact.lastName].filter(Boolean).join(' ').trim();
-  if (!personName) missingRecommended.push('Contact Name (optional — agent will find decision-makers)');
+
+  const missingRecommended: string[] = [];
   if (!row.contact.email?.trim()) missingRecommended.push('Email');
   if (!row.contact.role?.trim()) missingRecommended.push('Job Title');
 
+  if (!domain && !companyLinkedin && !companyName) {
+    return {
+      tier: 'rejected',
+      enrichable: false,
+      reason: 'No company website, LinkedIn URL, or name — nothing to identify the company.',
+      nextBestField: 'Company Website / Domain',
+      missingRecommended,
+    };
+  }
+
+  if (!domain && !companyLinkedin) {
+    return {
+      tier: 'discovery',
+      enrichable: false,
+      reason: 'Company name only — the website has to be found first, which costs more and can fail.',
+      nextBestField: 'Company Website / Domain',
+      missingRecommended,
+    };
+  }
+
+  if (!companyLinkedin) {
+    return {
+      tier: 'base',
+      enrichable: true,
+      reason: 'Company website known, so research starts immediately.',
+      nextBestField: 'Company LinkedIn',
+      missingRecommended,
+    };
+  }
+
+  if (!personName) {
+    return {
+      tier: 'medium',
+      enrichable: true,
+      reason: 'Website and company LinkedIn known, so people can be searched directly.',
+      nextBestField: 'Full Name',
+      missingRecommended,
+    };
+  }
+
   return {
-    enrichable: missingRequired.length === 0,
-    missingRequired,
+    tier: 'good',
+    enrichable: true,
+    reason: 'Company and person both identified.',
     missingRecommended,
   };
+}
+
+/**
+ * Whether a row can be imported at all. Contact fragments with no company are
+ * rejected here rather than importing as leads that can never be enriched.
+ */
+export function isUsableMappedLead(row: MappedLeadInput) {
+  return assessEnrichmentReadiness(row).tier !== 'rejected';
+}
+
+/** True once the mapping includes at least one column that names a company. */
+export function mappingHasAnchor(mapping: FieldMapping) {
+  return ANCHOR_FIELDS.some((key) => Boolean(mapping[key]));
 }
 
 export const APOLLO_DEFAULT_MAPPING: FieldMapping = {
@@ -338,57 +453,77 @@ export function getDefaultMappingForSource(source: 'csv' | 'apollo' | 'apify', s
   return detectFieldMapping(sourceFields);
 }
 
-export function summarizeReadiness(rows: MappedLeadInput[]) {
-  let enrichable = 0;
-  let partial = 0;
-  let notReady = 0;
-
-  for (const row of rows) {
-    const readiness = assessEnrichmentReadiness(row);
-    if (readiness.enrichable && readiness.missingRecommended.length === 0) enrichable += 1;
-    else if (readiness.enrichable) partial += 1;
-    else notReady += 1;
-  }
-
-  return { enrichable, partial, notReady, total: rows.length };
+export interface ReadinessSummary {
+  byTier: Record<InputTier, number>;
+  /** Rows that can be enriched right away (base and above). */
+  ready: number;
+  /** Rows that need the discovery opt-in. */
+  needsDiscovery: number;
+  /** Rows that cannot be imported at all. */
+  rejected: number;
+  total: number;
 }
 
+export function summarizeReadiness(rows: MappedLeadInput[]): ReadinessSummary {
+  const byTier: Record<InputTier, number> = {
+    rejected: 0,
+    discovery: 0,
+    base: 0,
+    medium: 0,
+    good: 0,
+  };
+
+  for (const row of rows) {
+    byTier[assessEnrichmentReadiness(row).tier] += 1;
+  }
+
+  return {
+    byTier,
+    ready: byTier.base + byTier.medium + byTier.good,
+    needsDiscovery: byTier.discovery,
+    rejected: byTier.rejected,
+    total: rows.length,
+  };
+}
+
+// Website leads the template because it is the column that decides whether
+// enrichment can run at all.
 export const CSV_TEMPLATE_HEADERS = [
+  'Domain',
+  'Company',
+  'Company LinkedIn',
   'First Name',
   'Last Name',
   'Email',
-  'Company',
-  'Domain',
   'Role',
   'Phone',
   'LinkedIn',
-  'Location',
   'Notes',
 ] as const;
 
 export const CSV_TEMPLATE_SAMPLE_ROWS: string[][] = [
   [
+    'acme.com',
+    'Acme Inc',
+    'https://linkedin.com/company/acme-inc',
     'Jane',
     'Smith',
     'jane.smith@acme.com',
-    'Acme Inc',
-    'acme.com',
     'CEO',
     '+1 555 0100',
     'https://linkedin.com/in/janesmith',
-    'San Francisco, USA',
     'Met at SaaS conference',
   ],
   [
+    'techcorp.in',
+    'TechCorp India',
+    'https://linkedin.com/company/techcorp-india',
     'Rahul',
     'Verma',
     'rahul@techcorp.in',
-    'TechCorp India',
-    'techcorp.in',
     'Head of Sales',
     '+91 98765 43210',
     'https://linkedin.com/in/rahulverma',
-    'Bengaluru, India',
     '',
   ],
 ];

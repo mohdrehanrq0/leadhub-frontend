@@ -4,11 +4,13 @@ import React, { useMemo } from 'react';
 import { IconAlertTriangle, IconCheck } from '@tabler/icons-react';
 import {
   SYSTEM_FIELDS,
+  TIER_LABEL,
   type DetectedMapping,
   type FieldMapping,
   type MappedLeadInput,
   type SystemFieldKey,
   assessEnrichmentReadiness,
+  mappingHasAnchor,
   summarizeReadiness,
 } from '../../lib/lead-field-mapping';
 
@@ -74,30 +76,50 @@ export function FieldMappingPanel({
     onMappingChange(next);
   };
 
+  const hasAnchor = mappingHasAnchor(mapping);
+
   return (
     <div className="space-y-4">
+      {!hasAnchor && (
+        <div className="flex items-start gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+          <IconAlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-600" />
+          <div>
+            <p className="text-sm font-black text-rose-900">
+              Map a company column before importing
+            </p>
+            <p className="mt-1 text-xs leading-5 text-rose-700">
+              Pick a column for the company website, company name, or company LinkedIn URL.
+              Without one there is no way to tell which company a row belongs to, and none of
+              these rows could ever be enriched.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-black text-slate-950">Match your columns</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               We mapped {sourceLabel} columns automatically. Fix anything that looks off.
-              Company + location are needed for enrichment.
+              The company website is what makes enrichment reliable — map it if you have it.
             </p>
           </div>
           {readiness && (
             <div className="flex flex-wrap gap-2 text-xs">
-              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
-                {readiness.enrichable} ready
-              </span>
-              {readiness.partial > 0 && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-bold text-amber-700">
-                  {readiness.partial} partial
+              {readiness.ready > 0 && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 font-bold text-emerald-700">
+                  {readiness.ready} ready
                 </span>
               )}
-              {readiness.notReady > 0 && (
+              {readiness.needsDiscovery > 0 && (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 font-bold text-amber-700">
+                  {readiness.needsDiscovery} need discovery
+                </span>
+              )}
+              {readiness.rejected > 0 && (
                 <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 font-bold text-rose-700">
-                  {readiness.notReady} incomplete
+                  {readiness.rejected} unusable
                 </span>
               )}
             </div>
@@ -186,12 +208,25 @@ export function FieldMappingPanel({
                       <td className="p-3 text-slate-600">{row.company.domain || '—'}</td>
                       <td className="p-3">
                         {status.enrichable ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
-                            <IconCheck size={12} /> Ready
+                          <span
+                            title={status.reason}
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700"
+                          >
+                            <IconCheck size={12} /> {TIER_LABEL[status.tier]}
+                          </span>
+                        ) : status.tier === 'discovery' ? (
+                          <span
+                            title={status.reason}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700"
+                          >
+                            <IconAlertTriangle size={12} /> Needs website
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700">
-                            <IconAlertTriangle size={12} /> {status.missingRequired.join(', ') || 'Incomplete'}
+                          <span
+                            title={status.reason}
+                            className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700"
+                          >
+                            <IconAlertTriangle size={12} /> No company
                           </span>
                         )}
                       </td>

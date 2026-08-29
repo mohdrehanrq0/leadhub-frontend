@@ -27,6 +27,7 @@ import {
   detectFieldMapping,
   getDefaultMappingForSource,
   isUsableMappedLead,
+  mappingHasAnchor,
   type FieldMapping,
 } from '../../../../lib/lead-field-mapping';
 
@@ -291,13 +292,7 @@ export default function LeadSyncPage() {
       {jobId && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950">
           <p className="font-black">Import started</p>
-          <p className="mt-1 text-emerald-800">
-            Job queued successfully. Track live progress in the{' '}
-            <Link href="/dashboard/jobs" className="font-black underline">
-              Jobs Queue
-            </Link>
-            .
-          </p>
+          <p className="mt-1 text-emerald-800">Job queued successfully. Imported leads will appear in Leads CRM.</p>
         </div>
       )}
 
@@ -618,7 +613,12 @@ function ApolloModal({
               <button onClick={() => setStep('select')} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
                 Back
               </button>
-              <button onClick={onImport} disabled={selectedCount === 0 || loading === 'apollo-import'} className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:opacity-40">
+              <button
+                onClick={onImport}
+                disabled={selectedCount === 0 || loading === 'apollo-import' || !mappingHasAnchor(mapping)}
+                title={mappingHasAnchor(mapping) ? undefined : 'Map a company website, name, or LinkedIn column first'}
+                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
                 {loading === 'apollo-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
                 {loading === 'apollo-import' ? 'Starting import…' : `Import ${selectedCount} records`}
               </button>
@@ -733,7 +733,12 @@ function ApifyModal({
                 <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 hover:bg-slate-50">
                   Cancel
                 </button>
-                <button onClick={onImport} disabled={loading === 'apify-import'} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white hover:bg-violet-700 disabled:opacity-40">
+                <button
+                  onClick={onImport}
+                  disabled={loading === 'apify-import' || !mappingHasAnchor(mapping)}
+                  title={mappingHasAnchor(mapping) ? undefined : 'Map a company website, name, or LinkedIn column first'}
+                  className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   {loading === 'apify-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
                   {loading === 'apify-import' ? 'Starting import…' : 'Import with mapping'}
                 </button>

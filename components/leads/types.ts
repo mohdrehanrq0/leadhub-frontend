@@ -14,7 +14,13 @@ export type Priority = (typeof PRIORITIES)[number];
 
 // ─── Enrichment Engine Types ─────────────────────────────────────
 
-export type EnrichmentStatus = 'not_started' | 'in_progress' | 'completed' | 'partial' | 'failed';
+export type EnrichmentStatus =
+  | 'not_started'
+  | 'in_progress'
+  | 'needs_identity_confirmation'
+  | 'completed'
+  | 'partial'
+  | 'failed';
 
 export type EnrichmentStep =
   | 'identity_resolution'
@@ -125,13 +131,27 @@ export type HiringRole = {
   title: string;
   department?: string;
   location?: string;
+  /** YYYY-MM-DD when the role was posted, if found. */
   posted?: string;
   reason?: string;
+  /** Human-readable source (e.g. careers page). */
+  source?: string;
+  /** URL of the page we read for this role. */
+  sourceUrl?: string;
 };
 
 export type HiringIntelligence = {
   isHiring: boolean;
   roles: HiringRole[];
+};
+
+/** Scrape telemetry from TinyFish fetch. */
+export type FetchStats = {
+  urlsAttempted: number;
+  urlsRead: number;
+  tinyfishOk: number;
+  botBlocked: number;
+  dropped: number;
 };
 
 export type Achievement = {
@@ -218,6 +238,8 @@ export type EnrichmentProfile = {
     missing: string[];
     identityPass?: boolean;
     qualificationPass?: boolean;
+    /** Confidence for qualification values shown below the promotion threshold. */
+    lowConfidenceFields?: Record<string, number>;
   };
 };
 
@@ -351,6 +373,24 @@ export type LeadRow = {
   enrichmentError?: string | null;
   enrichmentStartedAt?: string | null;
   enrichmentCompletedAt?: string | null;
+  enrichmentAgentId?: string | null;
+  enrichmentPolicy?: Record<string, unknown> | null;
+  enrichmentProfile?: EnrichmentProfile | null;
+  enrichmentAgent?: {
+    id: string;
+    name: string;
+    description?: string | null;
+  } | null;
+  identityCandidates?: Array<{
+    name?: string;
+    domain?: string;
+    website?: string;
+    linkedinUrl?: string;
+    locationSnippet?: string;
+    score: number;
+    evidenceUrls?: string[];
+  }> | null;
+  researchSuggestions?: Record<string, unknown> | null;
   category?: LeadCategory | null;
   company?: {
     id?: string | null;
@@ -408,6 +448,10 @@ export type EnrichmentSnapshot = {
     role: string | null;
     linkedinUrl: string | null;
     score: number | null;
+    /** 'confirmed' = proven to work at this company; 'weak' = circumstantial guess. */
+    affiliationStrength?: 'confirmed' | 'weak' | null;
+    affiliationSignals?: string[];
+    verified?: boolean;
   }>;
   emails: {
     primary: string | null;
@@ -468,27 +512,78 @@ export function leadLocation(lead: LeadRow) {
   return (fromRaw || fromLocJson || fromCompany || fromContact || '').trim();
 }
 
+export type InputTier = 'rejected' | 'discovery' | 'base' | 'medium' | 'good';
+
+export function leadCompanyDomain(lead: LeadRow) {
+  const raw = (lead as LeadRow & { rawData?: Record<string, unknown> }).rawData;
+  const fromRaw =
+    typeof raw?.domain === 'string'
+      ? raw.domain
+      : typeof raw?.website === 'string'
+        ? raw.website
+        : '';
+  const fromCompany = lead.company?.domain ?? lead.company?.website ?? '';
+  const value = (fromCompany || fromRaw || '').trim();
+  // Older imports invented placeholder domains; they identify nothing.
+  if (!value || /\.local$/i.test(value) || value.startsWith('manual-')) return '';
+  return value;
+}
+
+export function leadCompanyLinkedin(lead: LeadRow) {
+  const raw = (lead as LeadRow & { rawData?: Record<string, unknown> }).rawData;
+  const fromRaw = typeof raw?.companyLinkedin === 'string' ? raw.companyLinkedin : '';
+  const fromCompany = lead.company?.socialLinks?.linkedin ?? '';
+  return (fromCompany || fromRaw || '').trim();
+}
+
+/**
+ * The input tier of a lead, mirroring the backend contract.
+ *
+ * Location is deliberately not part of this: it never identified a company, and
+ * requiring it blocked leads that had a website and would have enriched fine.
+ */
+export function leadInputTier(lead: LeadRow): InputTier {
+  const domain = leadCompanyDomain(lead);
+  const companyLinkedin = leadCompanyLinkedin(lead);
+  const companyName = leadCompanyName(lead);
+  const personName = [lead.contact?.firstName, lead.contact?.lastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  if (!domain && !companyLinkedin && !companyName) return 'rejected';
+  if (!domain && !companyLinkedin) return 'discovery';
+  if (!companyLinkedin) return 'base';
+  if (!personName) return 'medium';
+  return 'good';
+}
+
 export function leadHasEnrichmentInput(lead: LeadRow) {
-  return Boolean(leadCompanyName(lead) && leadLocation(lead));
+  const tier = leadInputTier(lead);
+  return tier !== 'rejected' && tier !== 'discovery';
 }
 
 /** Why enrichment is blocked — shown as a warning chip on lead cards. */
 export function enrichmentBlockReason(lead: LeadRow): string | null {
   if (lead.enrichmentStatus === 'in_progress') return null;
   if (lead.enrichmentStatus === 'completed') return null;
-  const missing: string[] = [];
-  if (!leadCompanyName(lead)) missing.push('company name');
-  if (!leadLocation(lead)) missing.push('location');
-  if (!missing.length) return null;
-  return `Missing ${missing.join(' + ')} — enrichment blocked`;
+
+  const tier = leadInputTier(lead);
+  if (tier === 'rejected') return 'No company website, LinkedIn, or name — cannot enrich';
+  if (tier === 'discovery') return 'No company website — needs discovery, costs more';
+  return null;
 }
 
 export function canEnrichLead(lead: LeadRow) {
-  return lead.enrichmentStatus !== 'in_progress' && leadHasEnrichmentInput(lead);
+  return (
+    lead.enrichmentStatus !== 'in_progress' &&
+    lead.enrichmentStatus !== 'needs_identity_confirmation' &&
+    leadHasEnrichmentInput(lead)
+  );
 }
 
 export function canReEnrichLead(lead: LeadRow) {
-  // Already enriched once — allow re-run even if location isn't on the list row
+  // Already enriched once — the run itself found the anchors the list row lacks.
   if (lead.enrichmentStatus === 'completed') return true;
   return lead.enrichmentStatus === 'partial' && leadHasEnrichmentInput(lead);
 }
@@ -498,16 +593,52 @@ export function enrichmentDisabledReason(lead: LeadRow): string | null {
   if (lead.enrichmentStatus === 'in_progress') {
     return 'Enrichment is already in progress.';
   }
+  if (lead.enrichmentStatus === 'needs_identity_confirmation') {
+    return 'Confirm which company this lead is before continuing enrichment.';
+  }
   if (canEnrichLead(lead) || canReEnrichLead(lead)) return null;
 
-  const missing: string[] = [];
-  if (!leadCompanyName(lead)) missing.push('company name');
-  if (!leadLocation(lead)) missing.push('location');
-  if (missing.length) {
-    return `Add ${missing.join(' and ')} to enable enrichment.`;
+  const tier = leadInputTier(lead);
+  if (tier === 'rejected') {
+    return 'Add a company website, company name, or company LinkedIn URL to enable enrichment.';
+  }
+  if (tier === 'discovery') {
+    return 'This lead has only a company name. Add the company website, or run enrichment with discovery enabled to search for it.';
   }
   return 'Enrichment is not available for this lead yet.';
 }
+
+export const INPUT_TIER_META: Record<
+  InputTier,
+  { label: string; description: string; tone: string }
+> = {
+  rejected: {
+    label: 'Cannot enrich',
+    description: 'Nothing identifies the company — no website, LinkedIn URL, or name.',
+    tone: 'border-rose-200 bg-rose-50 text-rose-700',
+  },
+  discovery: {
+    label: 'Needs discovery',
+    description:
+      'Company name only. The website has to be found first, which costs more and can fail.',
+    tone: 'border-amber-200 bg-amber-50 text-amber-700',
+  },
+  base: {
+    label: 'Ready',
+    description: 'The company website is known, so research starts immediately.',
+    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  medium: {
+    label: 'Good',
+    description: 'Website and company LinkedIn known, so people can be searched directly.',
+    tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  },
+  good: {
+    label: 'Complete',
+    description: 'Company and person are both identified.',
+    tone: 'border-blue-200 bg-blue-50 text-blue-700',
+  },
+};
 
 export function stageMeta(stage: string) {
   return PIPELINE_STAGES.find((item) => item.value === stage) ?? PIPELINE_STAGES[0];
@@ -535,6 +666,8 @@ export function enrichmentStatusMeta(status?: EnrichmentStatus | null) {
       return { label: 'Partial', tone: 'border-amber-200 bg-amber-50 text-amber-700', icon: '~' };
     case 'in_progress':
       return { label: 'Enriching…', tone: 'border-blue-200 bg-blue-50 text-blue-700', icon: '⟳' };
+    case 'needs_identity_confirmation':
+      return { label: 'Confirm company', tone: 'border-amber-300 bg-amber-50 text-amber-800', icon: '?' };
     case 'failed':
       return { label: 'Failed', tone: 'border-rose-200 bg-rose-50 text-rose-700', icon: '✕' };
     default:

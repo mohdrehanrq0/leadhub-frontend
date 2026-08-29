@@ -37,10 +37,10 @@ const STEPS = [
     internal: true,
   },
   {
-    title: 'Return to Lead Search',
-    body: 'Once the Apify key is valid, open Lead Search / Leads Finder again. The top alert disappears and you can plan, review filters, and fetch leads.',
-    href: '/dashboard/search',
-    linkLabel: 'Open Lead Search',
+    title: 'Return to Leads CRM',
+    body: 'Once the Apify key is valid, open Leads CRM again. The top alert disappears and you can enrich and manage leads.',
+    href: '/dashboard/leads',
+    linkLabel: 'Open Leads CRM',
     internal: true,
   },
 ];

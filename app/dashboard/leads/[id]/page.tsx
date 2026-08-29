@@ -1,20 +1,17 @@
 'use client';
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   IconActivity,
   IconArrowLeft,
-  IconBrain,
-  IconBuilding,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
   IconExternalLink,
   IconLoader2,
   IconMail,
-  IconNotes,
   IconSparkles,
   IconTrash,
   IconX,
@@ -24,10 +21,23 @@ import { toast } from 'sonner';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { useAuth } from '../../../../context/AuthContext';
+import { EnrichmentAgentPicker } from '../../../../components/leads/EnrichmentAgentPicker';
 import {
-  IntentPackPicker,
-  type IntentPackId,
-} from '../../../../components/leads/IntentPackPicker';
+  EnrichmentAgentBadge,
+  LeadDetailFindings,
+} from '../../../../components/leads/LeadDetailFindings';
+import {
+  IdentityConfirmModal,
+  type IdentityCandidate,
+} from '../../../../components/leads/IdentityConfirmModal';
+import { IdentityNoteBanner } from '../../../../components/leads/IdentityNoteBanner';
+import { LinkedInLink, pickLinkedInUrl } from '../../../../components/leads/LinkedInLink';
+import {
+  buildIdentityNote,
+  identityNoteToPlainText,
+  type IdentityNote,
+} from '../../../../lib/identity-reasons';
+import { displayEmailStatus, isShowableEmailStatus } from '../../../../lib/email-display';
 import {
   apolloCategoryLabel,
   EnrichmentProfile,
@@ -35,6 +45,7 @@ import {
   canEnrichLead,
   canReEnrichLead,
   CanonicalLeadProfile,
+  FetchStats,
   ENRICHMENT_STEP_ICONS,
   ENRICHMENT_STEP_LABELS,
   enrichmentFromLead,
@@ -43,11 +54,11 @@ import {
   enrichmentStatusMeta,
   enrichmentBlockReason,
   enrichmentDisabledReason,
+  INPUT_TIER_META,
+  leadInputTier,
   LeadCategory,
   LeadList,
   LeadRow,
-  PIPELINE_STAGES,
-  PRIORITIES,
   priorityTone,
   RESEARCH_PHASE_ICONS,
   RESEARCH_PHASE_LABELS,
@@ -70,6 +81,16 @@ type LeadDetail = LeadRow & {
     identityValidated?: boolean;
     identityRejected?: boolean;
     companyNotFound?: boolean;
+    identityBlockReasons?: string[];
+    identitySignals?: string[];
+    customAnswers?: Array<{
+      question: string;
+      answer: string;
+      confidence?: number;
+      sources?: string[];
+    }>;
+    enrichmentModules?: Record<string, boolean>;
+    fetchStats?: FetchStats;
   };
   lists?: LeadList[];
   activities?: Array<{
@@ -96,44 +117,6 @@ function verificationTone(status?: string | null) {
   return 'border-slate-200 bg-slate-50 text-slate-600';
 }
 
-function foundEmailForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrichmentFromLead>) {
-  const fromContact = lead.contact?.email?.trim();
-  if (fromContact) {
-    return {
-      email: fromContact,
-      status: lead.contact?.emailVerificationStatus ?? null,
-    };
-  }
-
-  const fromPrimary = enrichment?.emails?.primary?.trim();
-  if (fromPrimary) {
-    const person = enrichment?.people?.find((p) => p.email === fromPrimary);
-    return {
-      email: fromPrimary,
-      status: person?.emailVerificationStatus ?? lead.contact?.emailVerificationStatus ?? null,
-    };
-  }
-
-  const fromValidated = enrichment?.emails?.validated?.find((v) => v.email?.trim())?.email?.trim();
-  if (fromValidated) {
-    const person = enrichment?.people?.find((p) => p.email === fromValidated);
-    return {
-      email: fromValidated,
-      status: person?.emailVerificationStatus ?? null,
-    };
-  }
-
-  const fromPerson = enrichment?.people?.find((p) => p.email?.trim());
-  if (fromPerson?.email) {
-    return {
-      email: fromPerson.email.trim(),
-      status: fromPerson.emailVerificationStatus ?? null,
-    };
-  }
-
-  return null;
-}
-
 function allEmailsForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrichmentFromLead>) {
   const byEmail = new Map<string, string | null>();
   const primary = lead.contact?.email?.trim().toLowerCase();
@@ -141,8 +124,10 @@ function allEmailsForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrich
   const add = (raw: string | null | undefined, status?: string | null) => {
     const email = raw?.trim().toLowerCase();
     if (!email) return;
+    const normalized = displayEmailStatus(status);
+    if (!isShowableEmailStatus(normalized ?? status)) return;
     if (!byEmail.has(email)) {
-      byEmail.set(email, status ?? null);
+      byEmail.set(email, normalized ?? status ?? null);
     }
   };
 
@@ -165,8 +150,6 @@ function allEmailsForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrich
   }
   return ordered;
 }
-
-type Tab = 'verified' | 'ai' | 'mydata';
 
 // ─── Step details with marketing titles & copy ───────────────────
 
@@ -346,7 +329,7 @@ function EvidenceFirstOutreachPanel({
 }: {
   profile: EnrichmentProfile;
   legacy: AiIntelligenceData | null;
-  identityNote?: string | null;
+  identityNote?: IdentityNote | null;
 }) {
   const [copied, setCopied] = useState(false);
   const si = profile.salesIntelligence ?? {};
@@ -384,18 +367,19 @@ function EvidenceFirstOutreachPanel({
 
   return (
     <div className="space-y-3">
-      {identityNote && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-          {identityNote}
-        </div>
-      )}
+      {identityNote && <IdentityNoteBanner note={identityNote} />}
 
       <CompactOutreachCard title="Company">
         <p className="text-sm font-semibold text-slate-900">{companyLine || '—'}</p>
         {qualLine ? <p className="text-sm text-slate-600 mt-1">{qualLine}</p> : null}
+        {profile.identity.linkedin ? (
+          <div className="mt-2">
+            <LinkedInLink url={profile.identity.linkedin} kind="company" compact />
+          </div>
+        ) : null}
       </CompactOutreachCard>
 
-      {(profile.buyer.name || profile.buyer.email || (profile.people?.length ?? 0) > 0) && (
+      {(profile.buyer.name || profile.buyer.email || profile.buyer.linkedin || (profile.people?.length ?? 0) > 0) && (
         <CompactOutreachCard title="Recommended contact">
           {profile.people && profile.people.length > 0 ? (
             <div className="space-y-2">
@@ -407,6 +391,11 @@ function EvidenceFirstOutreachPanel({
                   <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 mt-0.5">
                     {p.roleType.replace(/_/g, ' ')} — {p.fitScore}% match
                   </p>
+                  {p.linkedin ? (
+                    <div className="mt-1.5">
+                      <LinkedInLink url={p.linkedin} kind="person" compact />
+                    </div>
+                  ) : null}
                 </div>
               ))}
               {profile.people.length > 1 ? (
@@ -415,11 +404,18 @@ function EvidenceFirstOutreachPanel({
                     Alternatives
                   </p>
                   {profile.people.slice(1, 4).map((p) => (
-                    <p key={`${p.name}-alt`} className="text-sm text-slate-700">
-                      {p.name}
-                      {p.title ? ` · ${p.title}` : ''}
-                      <span className="text-xs text-slate-500"> — {p.fitScore}%</span>
-                    </p>
+                    <div key={`${p.name}-alt`} className="py-1">
+                      <p className="text-sm text-slate-700">
+                        {p.name}
+                        {p.title ? ` · ${p.title}` : ''}
+                        <span className="text-xs text-slate-500"> — {p.fitScore}%</span>
+                      </p>
+                      {p.linkedin ? (
+                        <div className="mt-1">
+                          <LinkedInLink url={p.linkedin} kind="person" compact />
+                        </div>
+                      ) : null}
+                    </div>
                   ))}
                 </div>
               ) : null}
@@ -438,6 +434,11 @@ function EvidenceFirstOutreachPanel({
                     </span>
                   ) : null}
                 </p>
+              ) : null}
+              {profile.buyer.linkedin ? (
+                <div className="mt-1.5">
+                  <LinkedInLink url={profile.buyer.linkedin} kind="person" compact />
+                </div>
               ) : null}
             </>
           )}
@@ -515,7 +516,7 @@ function AiOutreachPanel({
   identityNote,
 }: {
   data: AiIntelligenceData;
-  identityNote?: string | null;
+  identityNote?: IdentityNote | null;
 }) {
   const [showRaw, setShowRaw] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -577,11 +578,7 @@ function AiOutreachPanel({
 
   return (
     <div className="space-y-4">
-      {identityNote && (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-          {identityNote}
-        </div>
-      )}
+      {identityNote && <IdentityNoteBanner note={identityNote} />}
       {!hasNarrative && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           No outreach narrative was generated for this lead
@@ -731,6 +728,23 @@ function AiOutreachPanel({
                     {r.location ? ` · ${r.location}` : ''}
                     {r.posted ? (
                       <span className="text-xs text-slate-500"> · posted {r.posted}</span>
+                    ) : null}
+                    {(r.source || r.sourceUrl) ? (
+                      <p className="text-xs text-slate-500">
+                        Source:{' '}
+                        {r.sourceUrl ? (
+                          <a
+                            href={r.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="font-medium text-blue-600 hover:underline"
+                          >
+                            {r.source ?? r.sourceUrl}
+                          </a>
+                        ) : (
+                          r.source
+                        )}
+                      </p>
                     ) : null}
                     {r.reason ? (
                       <p className="text-xs text-slate-500">{r.reason}</p>
@@ -913,7 +927,6 @@ export default function LeadDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const [notes, setNotes] = useState('');
   const [listToAdd, setListToAdd] = useState('');
-  const [activeTab, setActiveTab] = useState<Tab>('verified');
 
   // Enrichment state
   const [enrichmentLogs, setEnrichmentLogs] = useState<EnrichmentLog[]>([]);
@@ -923,8 +936,10 @@ export default function LeadDetailPage() {
   const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
   const [showJourney, setShowJourney] = useState(true);
   const [reEnriching, setReEnriching] = useState(false);
-  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
-  const [roleHint, setRoleHint] = useState('');
+  const [enrichmentAgentId, setEnrichmentAgentId] = useState('');
+  const [showIdentityModal, setShowIdentityModal] = useState(false);
+  const [identityDismissed, setIdentityDismissed] = useState(false);
+  const [liveFetchStats, setLiveFetchStats] = useState<FetchStats | null>(null);
 
   const sseRef = useRef<EventSource | null>(null);
 
@@ -942,6 +957,9 @@ export default function LeadDetailPage() {
       const leadData: LeadDetail = leadRes.data.data;
       setLead(leadData);
       setNotes(leadData.notes ?? '');
+      if (leadData.enrichmentAgentId) {
+        setEnrichmentAgentId(leadData.enrichmentAgentId);
+      }
       setCategories(catRes.data.data ?? []);
       setLists(listRes.data.data ?? []);
       // If it's not active in_progress, collapse the journey panel by default to keep page clean
@@ -1034,6 +1052,7 @@ export default function LeadDetailPage() {
           setEnrichmentLogs(payload.steps ?? []);
           if (payload.activities) setResearchActivities(payload.activities);
           if (payload.queries) setResearchQueries(payload.queries);
+          if (payload.fetchStats) setLiveFetchStats(payload.fetchStats as FetchStats);
         } else if (payload.type === 'done') {
           es.close();
           sseRef.current = null;
@@ -1065,13 +1084,13 @@ export default function LeadDetailPage() {
       await api.post('/api/leads/enrich', {
         leadIds: [lead.id],
         reEnrich: isReEnrich,
-        intentPack,
-        ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
+        ...(enrichmentAgentId ? { enrichmentAgentId } : {}),
       });
       toast.success(isReEnrich ? 'Re-enrichment started.' : 'Enrichment started.');
       setShowJourney(true);
       setResearchActivities([]);
       setResearchQueries([]);
+      setLiveFetchStats(null);
       await loadLead();
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to start enrichment.'));
@@ -1164,6 +1183,43 @@ export default function LeadDetailPage() {
       : ENRICHMENT_STEP_MARKETING[runningStepLog.step]
     : null;
 
+  const fetchStats: FetchStats | null =
+    liveFetchStats ?? lead?.researchSuggestions?.fetchStats ?? null;
+
+  const identityNote = useMemo(() => {
+    if (!lead) return null;
+
+    const enrichmentDone =
+      lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial';
+    const companyNotFound =
+      lead.researchSuggestions?.companyNotFound === true ||
+      lead.researchSuggestions?.identityRejected === true ||
+      (lead.researchSuggestions?.identityValidated === false &&
+        (lead.researchSuggestions?.gapsRemaining ?? lead.researchSuggestions?.unableToFind ?? []).some(
+          (g) => g === 'company_not_found' || g === 'missing_valid_company_domain',
+        )) ||
+      (enrichmentDone &&
+        !lead.company?.domain &&
+        !lead.company?.website &&
+        lead.researchSuggestions?.identityValidated === false);
+
+    const identityUnvalidated =
+      lead.researchSuggestions?.identityValidated === false ||
+      companyNotFound ||
+      (enrichmentDone &&
+        Array.isArray(lead.researchSuggestions?.gapsRemaining) &&
+        lead.researchSuggestions.gapsRemaining.includes('company_identity_unvalidated'));
+
+    return buildIdentityNote({
+      companyNotFound,
+      identityUnvalidated,
+      blockReasons: lead.researchSuggestions?.identityBlockReasons,
+      gapsRemaining: lead.researchSuggestions?.gapsRemaining ?? lead.researchSuggestions?.unableToFind,
+      fetchStats: liveFetchStats ?? lead.researchSuggestions?.fetchStats ?? null,
+      researchActivities,
+    });
+  }, [lead, liveFetchStats, researchActivities]);
+
   // ─── Render ─────────────────────────────────────────────────────
 
   if (loading) {
@@ -1184,6 +1240,7 @@ export default function LeadDetailPage() {
   }
 
   const enrichMeta = enrichmentStatusMeta(lead.enrichmentStatus);
+  const inputTier = leadInputTier(lead);
   const enrichBlock = enrichmentBlockReason(lead);
   const enrichDisabledMsg = enrichmentDisabledReason(lead);
   const canRunEnrich =
@@ -1191,39 +1248,9 @@ export default function LeadDetailPage() {
   const contactName = [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ') || lead.contact?.email || 'Unnamed';
   const enrichmentDone =
     lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial';
-  const companyNotFound =
-    lead.researchSuggestions?.companyNotFound === true ||
-    lead.researchSuggestions?.identityRejected === true ||
-    (lead.researchSuggestions?.identityValidated === false &&
-      (lead.researchSuggestions?.gapsRemaining ?? lead.researchSuggestions?.unableToFind ?? []).some(
-        (g) => g === 'company_not_found' || g === 'missing_valid_company_domain',
-      )) ||
-    // Legacy runs: no domain/website and identity never locked → treat as company not found
-    (enrichmentDone &&
-      !lead.company?.domain &&
-      !lead.company?.website &&
-      lead.researchSuggestions?.identityValidated === false);
-
-  const identityUnvalidated =
-    lead.researchSuggestions?.identityValidated === false ||
-    companyNotFound ||
-    (enrichmentDone &&
-      Array.isArray(lead.researchSuggestions?.gapsRemaining) &&
-      lead.researchSuggestions.gapsRemaining.includes('company_identity_unvalidated'));
-
-  const identityNote = companyNotFound
-    ? 'Company identity could not be locked — ICP/intent narrative was abstained so we do not invent a company profile. Contact/email facts from enrichment may still appear under Verify.'
-    : identityUnvalidated
-      ? 'Company identity was not fully validated — treat outreach scores as low-confidence.'
-      : null;
 
   const enrichment = enrichmentFromLead(lead);
-  const foundEmail = foundEmailForLead(lead, enrichment);
   const allEmails = allEmailsForLead(lead, enrichment);
-  const verifyHasPeople = (enrichment?.people?.length ?? 0) > 0;
-  const verifyHasEmails = Boolean(
-    enrichment?.emails?.primary || (enrichment?.emails?.validated?.length ?? 0) > 0,
-  );
   const companyForJson = lead.company
     ? (() => {
         const { sourceHistory: _pages, location, ...rest } = lead.company as typeof lead.company & {
@@ -1237,6 +1264,17 @@ export default function LeadDetailPage() {
         return { ...rest, ...(loc ? { location: loc } : {}) };
       })()
     : null;
+
+  const headerCompanyLinkedIn = pickLinkedInUrl(
+    lead.company?.socialLinks?.linkedin,
+    lead.enrichmentProfile?.identity?.linkedin,
+    aiIntelligence?.enrichmentProfile?.identity?.linkedin,
+  );
+  const headerContactLinkedIn = pickLinkedInUrl(
+    lead.contact?.linkedinUrl,
+    lead.enrichmentProfile?.buyer?.linkedin,
+    aiIntelligence?.enrichmentProfile?.buyer?.linkedin,
+  );
 
   const profileFields = canonicalProfile?.fields
     ? Object.fromEntries(
@@ -1296,8 +1334,9 @@ export default function LeadDetailPage() {
         </Link>
 
         {enrichBlock && (
-          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-900">
-            ⚠ {enrichBlock}. Add company name and location before running enrichment — without them research can match the wrong company.
+          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+            <p className="text-sm font-bold">⚠ {enrichBlock}</p>
+            <p className="mt-1 text-xs leading-5 text-amber-800">{enrichDisabledMsg}</p>
           </div>
         )}
 
@@ -1336,7 +1375,23 @@ export default function LeadDetailPage() {
                   ))}
                 </div>
               )}
+              {(headerContactLinkedIn || headerCompanyLinkedIn) && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  {headerContactLinkedIn ? (
+                    <LinkedInLink url={headerContactLinkedIn} kind="person" compact />
+                  ) : null}
+                  {headerCompanyLinkedIn ? (
+                    <LinkedInLink url={headerCompanyLinkedIn} kind="company" compact />
+                  ) : null}
+                </div>
+              )}
               <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span
+                  title={INPUT_TIER_META[inputTier].description}
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${INPUT_TIER_META[inputTier].tone}`}
+                >
+                  Input: {INPUT_TIER_META[inputTier].label}
+                </span>
                 <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${stageMeta(lead.pipelineStage).tone}`}>
                   {stageMeta(lead.pipelineStage).label}
                 </span>
@@ -1346,6 +1401,10 @@ export default function LeadDetailPage() {
                 <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}>
                   {enrichMeta.icon} {enrichMeta.label}
                 </span>
+                <EnrichmentAgentBadge
+                  agent={lead.enrichmentAgent}
+                  agentId={lead.enrichmentAgentId}
+                />
                 <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 capitalize">{lead.source}</span>
                 {lead.importFileName && (
                   <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700" title={lead.importFileName}>
@@ -1366,13 +1425,23 @@ export default function LeadDetailPage() {
                 </span>
               ) : (
                 <>
-                  <IntentPackPicker
-                    value={intentPack}
-                    onChange={setIntentPack}
-                    roleHint={roleHint}
-                    onRoleHintChange={setRoleHint}
+                  <EnrichmentAgentPicker
+                    value={enrichmentAgentId}
+                    onChange={setEnrichmentAgentId}
                     compact
                   />
+                  {lead.enrichmentStatus === 'needs_identity_confirmation' ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIdentityDismissed(false);
+                        setShowIdentityModal(true);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                    >
+                      Confirm company
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     onClick={() => void handleReEnrich()}
@@ -1408,7 +1477,16 @@ export default function LeadDetailPage() {
               </button>
             </div>
             <div className="flex gap-4">
-            {[{ label: 'ICP', val: lead.icpScore }, { label: 'Intent', val: lead.intentScore }, { label: 'Confidence', val: lead.confidence }].map(({ label, val }) => (
+            {(() => {
+              const modules = (lead.enrichmentPolicy as { modules?: Record<string, boolean> } | null)
+                ?.modules;
+              const showScoring = modules?.scoring !== false;
+              if (!showScoring) return null;
+              return [
+                { label: 'ICP', val: lead.icpScore },
+                { label: 'Intent', val: lead.intentScore },
+                { label: 'Confidence', val: lead.confidence },
+              ].map(({ label, val }) => (
               <div key={label} className="w-24 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
                 <p className="mt-1 text-xl font-black text-slate-950">
@@ -1416,7 +1494,8 @@ export default function LeadDetailPage() {
                 </p>
                 {scoreBar(enrichmentDone || val != null ? (val ?? 0) : null)}
               </div>
-            ))}
+            ));
+            })()}
             </div>
           </div>
         </div>
@@ -1490,6 +1569,31 @@ export default function LeadDetailPage() {
                   )}
                 </div>
               </div>
+
+              {/* Scrape metrics: URLs read + bot restrictions */}
+              {fetchStats && (fetchStats.urlsAttempted > 0 || fetchStats.urlsRead > 0) && (
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">URLs read</p>
+                    <p className="mt-0.5 text-lg font-bold text-slate-100">
+                      {fetchStats.urlsRead}
+                      <span className="ml-1 text-xs font-medium text-slate-500">
+                        / {fetchStats.urlsAttempted}
+                      </span>
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Bot walls detected
+                    </p>
+                    <p className="mt-0.5 text-lg font-bold text-amber-400">{fetchStats.botBlocked}</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-slate-500">Dropped</p>
+                    <p className="mt-0.5 text-lg font-bold text-rose-400">{fetchStats.dropped}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Live research feed */}
               <div className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4">
@@ -1585,173 +1689,44 @@ export default function LeadDetailPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
         {/* ── Main content ────────────────────────────────────── */}
-        <div className="space-y-6">
-          {/* Tab bar */}
-          <div className="flex items-center gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
-            {([
-              { id: 'verified', label: 'Verified Facts', icon: <IconBuilding size={14} /> },
-              { id: 'ai', label: 'Outreach', icon: <IconBrain size={14} /> },
-              { id: 'mydata', label: 'My Data', icon: <IconNotes size={14} /> },
-            ] as { id: Tab; label: string; icon: React.ReactNode }[]).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all ${activeTab === tab.id ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* ── Tab: Verified Facts (enrichment profile JSON) ── */}
-          {activeTab === 'verified' && (
-            <div className="space-y-3">
-              {identityNote && (
-                <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
-                  {identityNote}
-                </div>
-              )}
-              {enrichmentDone && !verifyHasPeople && !verifyHasEmails && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                  Enrichment finished but no people/emails were retained in the Verify snapshot.
-                  Re-enrich to refresh, or check Research Agent logs for identity/synthesis failures.
-                </div>
-              )}
-              <EnrichmentJson
-                data={lead.enrichmentStatus === 'not_started' ? null : enrichProfileJson}
-                emptyLabel={
-                  lead.enrichmentStatus === 'not_started'
-                    ? 'Not enriched yet. Run enrichment to see the profile JSON.'
-                    : 'No enrichment profile data was saved for this lead.'
-                }
-              />
-            </div>
-          )}
-
-          {/* ── Tab: Outreach (AI intelligence cards) ── */}
-          {activeTab === 'ai' && (
-            aiIntelligence ? (
-              <AiOutreachPanel data={aiIntelligence} identityNote={identityNote} />
-            ) : (
-              <EnrichmentJson
-                data={null}
-                emptyLabel={
-                  lead.enrichmentStatus === 'not_started'
-                    ? 'Select this lead and click "Enrich" to generate outreach insights.'
-                    : lead.enrichmentStatus === 'in_progress'
-                    ? 'AI research is running. The panel will update automatically.'
-                    : identityNote
-                      ? `${identityNote} No AI intelligence row was saved — re-enrich after fixing company name/location/website.`
-                      : 'No AI intelligence data was saved (synthesis may have failed). Re-enrich to regenerate ICP, intent, and outreach cards.'
-                }
-              />
-            )
-          )}
-
-          {/* ── Tab: My Data ── */}
-          {activeTab === 'mydata' && (
-            <div className="space-y-4">
-              {/* Pipeline + Priority */}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pipeline Stage</label>
-                  <select
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"
-                    value={lead.pipelineStage}
-                    onChange={(e) => void patch({ pipelineStage: e.target.value })}
-                    disabled={saving}
-                  >
-                    {PIPELINE_STAGES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Priority</label>
-                  <select
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"
-                    value={lead.priority}
-                    onChange={(e) => void patch({ priority: e.target.value })}
-                    disabled={saving}
-                  >
-                    {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-              </div>
-
-              {/* Category */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Category</label>
-                <select
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"
-                  value={lead.category?.id ?? ''}
-                  onChange={(e) => void patch({ categoryId: e.target.value || null })}
-                  disabled={saving}
-                >
-                  <option value="">No category</option>
-                  {categories.map((cat) => <option key={cat.id} value={cat.id}>{cat.name}</option>)}
-                </select>
-              </div>
-
-              {/* Notes */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Notes</label>
-                <textarea
-                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-800 outline-none focus:border-blue-300 focus:bg-white"
-                  rows={5}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Add private notes…"
+        <div className="min-w-0">
+          <LeadDetailFindings
+            lead={lead}
+            enrichment={enrichment}
+            allEmails={allEmails}
+            enrichProfileJson={enrichProfileJson}
+            aiIntelligence={aiIntelligence}
+            identityNote={identityNote}
+            categories={categories}
+            lists={lists}
+            notes={notes}
+            setNotes={setNotes}
+            saving={saving}
+            listToAdd={listToAdd}
+            setListToAdd={setListToAdd}
+            onPatch={(payload) => void patch(payload)}
+            onSaveNotes={() => void saveNotes()}
+            onAddToList={() => void addToList()}
+            formatDate={formatDate}
+            outreachPanel={
+              aiIntelligence ? (
+                <AiOutreachPanel data={aiIntelligence} identityNote={null} />
+              ) : (
+                <EnrichmentJson
+                  data={null}
+                  emptyLabel={
+                    lead.enrichmentStatus === 'not_started'
+                      ? 'Run enrichment to generate outreach insights.'
+                      : lead.enrichmentStatus === 'in_progress'
+                        ? 'AI research is running. This section updates when it finishes.'
+                        : identityNote
+                          ? `${identityNoteToPlainText(identityNote)} No AI intelligence was saved — re-enrich after fixing company identity.`
+                          : 'No outreach narrative was saved. Re-enrich to regenerate.'
+                  }
                 />
-                <button
-                  onClick={saveNotes}
-                  disabled={saving}
-                  className="mt-2 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? <IconLoader2 size={13} className="animate-spin" /> : <IconCheck size={13} />}
-                  Save notes
-                </button>
-              </div>
-
-              {/* Lists */}
-              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="mb-3 text-[10px] font-bold uppercase tracking-wider text-slate-500">Lists</h3>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {(lead.lists ?? []).map((l) => (
-                    <span key={l.id} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700">{l.name}</span>
-                  ))}
-                  {(lead.lists ?? []).length === 0 && <p className="text-xs text-slate-400">Not in any list.</p>}
-                </div>
-                <div className="flex gap-2">
-                  <select value={listToAdd} onChange={(e) => setListToAdd(e.target.value)} className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-                    <option value="">Select list…</option>
-                    {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                  <button onClick={addToList} disabled={!listToAdd} className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-40">Add</button>
-                </div>
-              </div>
-
-              {/* Activity */}
-              {(lead.activities ?? []).length > 0 && (
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="mb-3 flex items-center gap-2">
-                    <IconActivity size={14} className="text-slate-500" />
-                    <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Activity Log</h3>
-                  </div>
-                  <ul className="space-y-3">
-                    {lead.activities!.map((act) => (
-                      <li key={act.id} className="flex items-start gap-3">
-                        <span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600">{act.type.charAt(0).toUpperCase()}</span>
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">{act.title}</p>
-                          {act.body && <p className="text-[11px] text-slate-500">{act.body}</p>}
-                          <p className="mt-0.5 text-[10px] text-slate-400">{formatDate(act.createdAt)}</p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
+              )
+            }
+          />
         </div>
 
         {/* ── Sidebar ──────────────────────────────────────────── */}
@@ -1824,7 +1799,7 @@ export default function LeadDetailPage() {
             </div>
             {lead.enrichmentStatus === 'in_progress' ? (
               <p className="text-xs text-slate-600 leading-relaxed">
-                Enrichment is in progress. Verified Facts and Outreach will update automatically when it finishes.
+                Enrichment is in progress. Findings on this page update automatically when it finishes.
               </p>
             ) : lead.enrichmentStatus === 'not_started' ? (
               <p className="text-xs text-slate-500">Not enriched yet. Click Run enrichment when ready.</p>
@@ -1832,7 +1807,7 @@ export default function LeadDetailPage() {
               <p className="text-xs text-rose-600">Enrichment failed. You can try running it again.</p>
             ) : (
               <p className="text-xs text-slate-600">
-                Enrichment finished. Review Verified Facts, Outreach, and My Data.
+                Enrichment finished. Scroll the page for verified facts, outreach, and your CRM data.
               </p>
             )}
           </div>
@@ -1847,6 +1822,9 @@ export default function LeadDetailPage() {
                   ['Source', lead.source],
                   ...(lead.importFileName ? ([['CSV file', lead.importFileName]] as const) : []),
                   ['Status', lead.status],
+                  ...(lead.enrichmentAgent?.name
+                    ? ([['Agent', lead.enrichmentAgent.name]] as const)
+                    : []),
                   ...(APOLLO_UI_ENABLED
                     ? ([['Apollo', apolloCategoryLabel(lead.apolloCategory) ?? '—']] as const)
                     : []),
@@ -1863,6 +1841,24 @@ export default function LeadDetailPage() {
           </div>
         </div>
       </div>
+
+      <IdentityConfirmModal
+        open={
+          (showIdentityModal || lead.enrichmentStatus === 'needs_identity_confirmation') &&
+          !identityDismissed
+        }
+        leadId={lead.id}
+        candidates={(lead.identityCandidates ?? []) as IdentityCandidate[]}
+        onClose={() => {
+          setShowIdentityModal(false);
+          setIdentityDismissed(true);
+        }}
+        onConfirmed={async () => {
+          setIdentityDismissed(false);
+          setShowJourney(true);
+          await loadLead();
+        }}
+      />
     </div>
   );
 }

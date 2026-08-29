@@ -21,12 +21,12 @@ import {
   ImportDestinationFields,
   parseTagInput,
 } from '../../../../components/leads/ImportDestinationFields';
-import type { IntentPackId } from '../../../../components/leads/IntentPackPicker';
 import {
   applyFieldMapping,
   detectFieldMapping,
   downloadCsvTemplate,
   isUsableMappedLead,
+  mappingHasAnchor,
   summarizeReadiness,
   type FieldMapping,
 } from '../../../../lib/lead-field-mapping';
@@ -132,8 +132,7 @@ export default function LeadImportPage() {
   const [listId, setListId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [tags, setTags] = useState('');
-  const [intentPack, setIntentPack] = useState<IntentPackId>('decision_maker');
-  const [roleHint, setRoleHint] = useState('');
+  const [enrichmentAgentId, setEnrichmentAgentId] = useState('');
   const [importing, setImporting] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -151,14 +150,23 @@ export default function LeadImportPage() {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const parseSafetyRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const mappedRows = useMemo(() => {
-    return rawRows
-      .map((row) => applyFieldMapping(row, mapping))
-      .filter(isUsableMappedLead)
-      .map((row) => ({ ...row, tags: ['csv'] as string[] }));
-  }, [rawRows, mapping]);
+  // Summarize before filtering, so the footer can report what was dropped
+  // rather than silently shrinking the import.
+  const allMappedRows = useMemo(
+    () => rawRows.map((row) => applyFieldMapping(row, mapping)),
+    [rawRows, mapping],
+  );
 
-  const readiness = useMemo(() => summarizeReadiness(mappedRows), [mappedRows]);
+  const mappedRows = useMemo(
+    () =>
+      allMappedRows
+        .filter(isUsableMappedLead)
+        .map((row) => ({ ...row, tags: ['csv'] as string[] })),
+    [allMappedRows],
+  );
+
+  const readiness = useMemo(() => summarizeReadiness(allMappedRows), [allMappedRows]);
+  const hasAnchor = useMemo(() => mappingHasAnchor(mapping), [mapping]);
 
   const clearProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -321,8 +329,12 @@ export default function LeadImportPage() {
   );
 
   const uploadRows = async (confirmReupload = false) => {
+    if (!hasAnchor) {
+      toast.error('Map a company website, name, or LinkedIn column before importing.');
+      return;
+    }
     if (mappedRows.length === 0) {
-      toast.error('Map at least company name so we can import rows.');
+      toast.error('No rows have a company to identify. Check your column mapping.');
       return;
     }
     try {
@@ -367,8 +379,7 @@ export default function LeadImportPage() {
             sourceFields,
             confirmReupload: confirmReupload || !isFirstChunk,
             importId: currentImportId,
-            intentPack,
-            ...(intentPack === 'custom' && roleHint ? { roleHint } : {}),
+            ...(enrichmentAgentId ? { enrichmentAgentId } : {}),
           },
           {
             timeout: 180_000,
@@ -628,19 +639,22 @@ export default function LeadImportPage() {
             onListIdChange={setListId}
             onCategoryIdChange={setCategoryId}
             onTagsChange={setTags}
-            intentPack={intentPack}
-            onIntentPackChange={setIntentPack}
-            roleHint={roleHint}
-            onRoleHintChange={setRoleHint}
+            enrichmentAgentId={enrichmentAgentId}
+            onEnrichmentAgentIdChange={setEnrichmentAgentId}
           />
 
           <div className="sticky bottom-4 z-10 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-lg backdrop-blur">
             <div className="text-sm text-slate-600">
               <span className="font-black text-slate-950">{mappedRows.length.toLocaleString()}</span>
               {' '}ready to import
-              {readiness.notReady > 0 && (
-                <span className="ml-2 text-slate-400">
-                  · {readiness.notReady} missing company/location
+              {readiness.needsDiscovery > 0 && (
+                <span className="ml-2 text-amber-600">
+                  · {readiness.needsDiscovery.toLocaleString()} without a website
+                </span>
+              )}
+              {readiness.rejected > 0 && (
+                <span className="ml-2 text-rose-500">
+                  · {readiness.rejected.toLocaleString()} skipped, no company
                 </span>
               )}
             </div>
@@ -655,7 +669,7 @@ export default function LeadImportPage() {
               <button
                 type="button"
                 onClick={() => void uploadRows(false)}
-                disabled={importing || mappedRows.length === 0}
+                disabled={importing || mappedRows.length === 0 || !hasAnchor}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {importing && <IconLoader2 size={16} className="animate-spin" />}

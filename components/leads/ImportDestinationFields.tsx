@@ -2,10 +2,7 @@
 
 import React from 'react';
 import type { LeadCategory, LeadList } from './types';
-import {
-  IntentPackPicker,
-  type IntentPackId,
-} from './IntentPackPicker';
+import { EnrichmentAgentPicker } from './EnrichmentAgentPicker';
 
 type ImportDestinationFieldsProps = {
   lists: LeadList[];
@@ -16,10 +13,8 @@ type ImportDestinationFieldsProps = {
   onListIdChange: (value: string) => void;
   onCategoryIdChange: (value: string) => void;
   onTagsChange: (value: string) => void;
-  intentPack?: IntentPackId;
-  onIntentPackChange?: (pack: IntentPackId) => void;
-  roleHint?: string;
-  onRoleHintChange?: (hint: string) => void;
+  enrichmentAgentId?: string;
+  onEnrichmentAgentIdChange?: (id: string) => void;
   compact?: boolean;
 };
 
@@ -35,10 +30,8 @@ export function ImportDestinationFields({
   onListIdChange,
   onCategoryIdChange,
   onTagsChange,
-  intentPack,
-  onIntentPackChange,
-  roleHint,
-  onRoleHintChange,
+  enrichmentAgentId,
+  onEnrichmentAgentIdChange,
   compact = false,
 }: ImportDestinationFieldsProps) {
   return (
@@ -49,7 +42,7 @@ export function ImportDestinationFields({
     >
       <div className="mb-3">
         <h3 className="text-sm font-black text-slate-950">Organize</h3>
-        <p className="mt-1 text-xs text-slate-500">Optional — list, category, tags, and who to find.</p>
+        <p className="mt-1 text-xs text-slate-500">Optional — list, category, tags, and enrichment agent.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
         <div>
@@ -98,13 +91,11 @@ export function ImportDestinationFields({
           />
         </div>
       </div>
-      {onIntentPackChange ? (
+      {onEnrichmentAgentIdChange ? (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          <IntentPackPicker
-            value={intentPack ?? 'decision_maker'}
-            onChange={onIntentPackChange}
-            roleHint={roleHint}
-            onRoleHintChange={onRoleHintChange}
+          <EnrichmentAgentPicker
+            value={enrichmentAgentId ?? ''}
+            onChange={onEnrichmentAgentIdChange}
           />
         </div>
       ) : null}
