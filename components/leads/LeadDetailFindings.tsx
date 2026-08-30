@@ -20,6 +20,21 @@ import {
   IconUser,
 } from '@tabler/icons-react';
 import { LinkedInLink, pickLinkedInUrl } from './LinkedInLink';
+import { PersonLinkedInPanel } from '../enrichment/PersonLinkedInPanel';
+import { CompanyLinkedInPanel, CompanyProfilePanel } from '../enrichment/CompanyPanels';
+import { ContactPanel } from '../enrichment/ContactPanel';
+import { HiringPanel, SignalsPanel } from '../enrichment/HiringPanel';
+import { EvidencePanel } from '../enrichment/EvidencePanel';
+import {
+  fieldValue,
+  isObjectArray,
+  isStringArray,
+  type BuyingSignalDetail,
+  type CanonicalFieldTree,
+  type EnrichmentFact,
+  type LinkedInSnapshot,
+  type OpenRole,
+} from '../enrichment/types';
 import {
   AiIntelligenceData,
   EnrichmentProfile,
@@ -356,6 +371,10 @@ type LeadLike = {
     linkedinUrl?: string | null;
     emailVerificationStatus?: string | null;
     otherEmails?: string[] | null;
+    location?: string | null;
+    emailVerifiedAt?: string | null;
+    isCatchAll?: boolean | null;
+    isDisposable?: boolean | null;
   } | null;
   researchSuggestions?: {
     suggestions?: string[];
@@ -546,6 +565,9 @@ export function LeadDetailFindings({
   aiIntelligence,
   identityNote,
   outreachPanel,
+  linkedinSnapshot,
+  facts,
+  canonicalFields,
   categories,
   lists,
   notes,
@@ -565,6 +587,12 @@ export function LeadDetailFindings({
   aiIntelligence: AiIntelligenceData | null;
   identityNote?: IdentityNote | null;
   outreachPanel: React.ReactNode;
+  /** Cached LinkedIn detail for the person and their employer. */
+  linkedinSnapshot?: LinkedInSnapshot | null;
+  /** Evidence-first facts with their source urls. */
+  facts?: EnrichmentFact[] | null;
+  /** Canonical enrichment field tree, source of hiring and signal detail. */
+  canonicalFields?: CanonicalFieldTree | null;
   categories: LeadCategory[];
   lists: LeadList[];
   notes: string;
@@ -659,10 +687,31 @@ export function LeadDetailFindings({
     signals.length,
   ]);
 
+  // Hiring roles and buying signals are stored as canonical fields, which keep
+  // the structure (role list, per-signal weight and source) that the AI
+  // summaries flatten into prose.
+  const openRoles = fieldValue(canonicalFields, 'company.hiring.openRoles', isObjectArray) as
+    | OpenRole[]
+    | undefined;
+  const hiringSources = fieldValue(canonicalFields, 'company.hiring.sources', isStringArray);
+  const detailedSignals = fieldValue(canonicalFields, 'lead.intent.buyingSignals', isObjectArray) as
+    | BuyingSignalDetail[]
+    | undefined;
+
+  const hasLinkedInPerson = Boolean(linkedinSnapshot?.person);
+  const hasLinkedInCompany = Boolean(
+    linkedinSnapshot?.company || linkedinSnapshot?.colleagues?.length,
+  );
+  const hasFacts = Boolean(facts?.length);
+
   const navItems: FindingsNavItem[] = [
     ...(showCompany || showPeople ? [{ id: 'verified', label: 'Verified' }] : []),
+    ...(hasLinkedInPerson ? [{ id: 'person-linkedin', label: 'Profile' }] : []),
+    { id: 'company-profile', label: 'Company' },
+    ...(openRoles?.length ? [{ id: 'hiring', label: 'Hiring' }] : []),
     ...(showSignals ? [{ id: 'signals', label: 'Signals' }] : []),
     ...(showOutreach ? [{ id: 'outreach', label: 'Outreach' }] : []),
+    ...(hasFacts ? [{ id: 'evidence', label: 'Evidence' }] : []),
     ...(showCustom ? [{ id: 'custom', label: 'Custom' }] : []),
     { id: 'my-data', label: 'My Data' },
   ];
@@ -1069,6 +1118,38 @@ export function LeadDetailFindings({
           </div>
         </SectionCard>
       )}
+
+      {/* The shared enrichment panels. Same components the capture detail page
+          renders, so a capture and the lead it becomes look the same. */}
+      {hasLinkedInPerson ? (
+        <PersonLinkedInPanel
+          person={linkedinSnapshot?.person}
+          fromCapture={linkedinSnapshot?.personFromCapture}
+        />
+      ) : null}
+
+      <ContactPanel contact={lead.contact} />
+
+      <CompanyProfilePanel company={lead.company} />
+
+      {hasLinkedInCompany ? (
+        <CompanyLinkedInPanel
+          company={linkedinSnapshot?.company}
+          colleagues={linkedinSnapshot?.colleagues}
+        />
+      ) : null}
+
+      {openRoles?.length ? <HiringPanel roles={openRoles} sources={hiringSources} /> : null}
+
+      {detailedSignals?.length ? (
+        <SignalsPanel
+          signals={detailedSignals}
+          intentScore={lead.intentScore ?? undefined}
+          id="signals-detail"
+        />
+      ) : null}
+
+      {hasFacts ? <EvidencePanel facts={facts} /> : null}
 
       {showSignals && (signals.length > 0 || hiring) && (
         <SectionCard

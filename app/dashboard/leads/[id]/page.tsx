@@ -32,6 +32,11 @@ import {
 } from '../../../../components/leads/IdentityConfirmModal';
 import { IdentityNoteBanner } from '../../../../components/leads/IdentityNoteBanner';
 import { LinkedInLink, pickLinkedInUrl } from '../../../../components/leads/LinkedInLink';
+import { useLinkedInSnapshot } from '../../../../components/enrichment/useEnrichmentData';
+import type {
+  CanonicalFieldTree,
+  EnrichmentFact,
+} from '../../../../components/enrichment/types';
 import {
   buildIdentityNote,
   identityNoteToPlainText,
@@ -934,6 +939,8 @@ export default function LeadDetailPage() {
   const [researchQueries, setResearchQueries] = useState<ResearchQuery[]>([]);
   const [aiIntelligence, setAiIntelligence] = useState<AiIntelligenceData | null>(null);
   const [canonicalProfile, setCanonicalProfile] = useState<CanonicalLeadProfile | null>(null);
+  const [facts, setFacts] = useState<EnrichmentFact[]>([]);
+  const { snapshot: linkedinSnapshot } = useLinkedInSnapshot(id ? `/api/leads/${id}` : null);
   const [showJourney, setShowJourney] = useState(true);
   const [reEnriching, setReEnriching] = useState(false);
   const [enrichmentAgentId, setEnrichmentAgentId] = useState('');
@@ -978,13 +985,15 @@ export default function LeadDetailPage() {
   const loadEnrichmentData = useCallback(async () => {
     if (!id) return;
     try {
-      const [logsRes, activitiesRes, queriesRes, aiRes, profileRes] = await Promise.all([
+      const [logsRes, activitiesRes, queriesRes, aiRes, profileRes, factsRes] = await Promise.all([
         api.get(`/api/leads/${id}/enrichment-logs`),
         api.get(`/api/leads/${id}/research-activities`),
         api.get(`/api/leads/${id}/research-queries`),
         api.get(`/api/leads/${id}/ai-intelligence`),
         api.get(`/api/leads/${id}/profile`),
+        api.get(`/api/leads/${id}/facts`),
       ]);
+      setFacts(factsRes.data.data ?? []);
       setEnrichmentLogs(logsRes.data.data ?? []);
       setResearchActivities(activitiesRes.data.data ?? []);
       setResearchQueries(queriesRes.data.data ?? []);
@@ -1697,6 +1706,9 @@ export default function LeadDetailPage() {
             enrichProfileJson={enrichProfileJson}
             aiIntelligence={aiIntelligence}
             identityNote={identityNote}
+            linkedinSnapshot={linkedinSnapshot}
+            facts={facts}
+            canonicalFields={canonicalProfile as CanonicalFieldTree | null}
             categories={categories}
             lists={lists}
             notes={notes}

@@ -421,6 +421,10 @@ export type LeadRow = {
     linkedinUrl?: string | null;
     emailVerificationStatus?: string | null;
     location?: string | null;
+    emailVerifiedAt?: string | null;
+    /** The domain accepts every address, so delivery proves nothing. */
+    isCatchAll?: boolean | null;
+    isDisposable?: boolean | null;
   } | null;
 };
 

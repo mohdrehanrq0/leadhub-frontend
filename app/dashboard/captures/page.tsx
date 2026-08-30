@@ -10,6 +10,7 @@ import {
   CAPTURE_STATUS_STYLE,
   formatCapturedAt,
   hasBlockingGap,
+  isEnrichmentPending,
   RESOLUTION_STYLE,
   type CaptureListRow,
   type CaptureType,
@@ -84,7 +85,7 @@ export default function CapturesPage() {
 
   // Enrichment runs in a worker, so the list refreshes itself while any row is mid-flight.
   useEffect(() => {
-    if (!rows.some((row) => row.status === 'enriching')) return;
+    if (!rows.some(isEnrichmentPending)) return;
     const timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [rows, load]);

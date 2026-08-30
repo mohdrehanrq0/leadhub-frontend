@@ -6,11 +6,13 @@ import {
 } from '@tabler/icons-react';
 import { LinkedInLink } from '@/components/leads/LinkedInLink';
 import {
+  DOMAIN_SOURCE_LABEL,
   gapsByField,
   RESOLUTION_STYLE,
   type CaptureCompanyResolution,
   type CaptureDataGap,
 } from '@/lib/captures';
+import { CompanyWebsitePanel } from './CompanyWebsitePanel';
 import { GapValue } from './DataGaps';
 
 /**
@@ -39,7 +41,8 @@ export function CompanyResolutionCard({
         <h2 className="mt-3 text-sm font-semibold text-text-100">Company not resolved yet</h2>
         <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-text-300">
           LeadHub reads the current role from this profile, follows it to the company&apos;s
-          LinkedIn page, and pulls the company details from there.
+          LinkedIn page, finds their website and reads that too. This runs on its own right
+          after a capture — use the button if it needs another go.
         </p>
         <button
           type="button"
@@ -113,9 +116,18 @@ export function CompanyResolutionCard({
               <IconWorld size={13} className="shrink-0" />
               {resolution.domain ?? resolution.website}
             </a>
+          ) : resolution.domain ? (
+            <span className="font-medium text-text-100">{resolution.domain}</span>
           ) : (
             <GapValue gap={byField.get('website') ?? byField.get('domain')} />
           )}
+          {resolution.domain && resolution.domainSource ? (
+            // A searched-for domain is a good guess, not a fact from LinkedIn,
+            // and the difference matters before anyone emails it.
+            <span className="ml-2 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">
+              {DOMAIN_SOURCE_LABEL[resolution.domainSource]}
+            </span>
+          ) : null}
         </Field>
         <Field label="Company size">
           <GapValue value={size} gap={byField.get('employeeCount')} />
@@ -138,6 +150,8 @@ export function CompanyResolutionCard({
           </Field>
         </div>
       </div>
+
+      <CompanyWebsitePanel profile={resolution.profile} />
 
       <footer className="flex flex-wrap items-center gap-2 border-t border-slate-100 px-5 py-3">
         {resolution.companyLinkedinUrl ? (

@@ -48,6 +48,39 @@ export interface CaptureCurrentRole {
   source: 'current_position' | 'experience' | 'headline' | 'manual';
 }
 
+export type CaptureDomainSource = 'linkedin_company' | 'known_company' | 'web_search' | 'manual';
+
+/**
+ * Everything read from the company's own website, after LinkedIn.
+ *
+ * Arrives as `pending` while the background chain is still running, so the
+ * card can show a placeholder instead of an empty section.
+ */
+export interface CaptureCompanyProfile {
+  status: 'pending' | 'ready' | 'failed' | 'skipped';
+  message: string;
+  fetchedAt?: string;
+  website?: string;
+  tagline?: string;
+  description?: string;
+  industry?: string;
+  subIndustry?: string;
+  businessModel?: string;
+  companyStage?: string;
+  size?: string;
+  foundedYear?: number;
+  estimatedRevenue?: string;
+  headquarters?: string;
+  products?: string[];
+  services?: string[];
+  technologies?: string[];
+  targetAudience?: string[];
+  valueProposition?: string;
+  socialLinks?: Record<string, string>;
+  contactInfo?: Record<string, unknown>;
+  sourcePages?: string[];
+}
+
 /** Employer resolved from the captured LinkedIn profile or post. */
 export interface CaptureCompanyResolution {
   status: 'resolved' | 'partial' | 'unresolved';
@@ -68,6 +101,33 @@ export interface CaptureCompanyResolution {
   description?: string;
   foundedYear?: number;
   specialities?: string[];
+  domainSource?: CaptureDomainSource;
+  profile?: CaptureCompanyProfile;
+  /** True when the person's profile had to be scraped to find their employer. */
+  personScraped?: boolean;
+}
+
+/** Labels for how a domain was found, so a searched-for one is never mistaken for fact. */
+export const DOMAIN_SOURCE_LABEL: Record<CaptureDomainSource, string> = {
+  linkedin_company: 'From LinkedIn',
+  known_company: 'Known company',
+  web_search: 'Found by search',
+  manual: 'Entered manually',
+};
+
+/**
+ * True while the background chain still owes this capture data.
+ *
+ * Drives polling: a capture sits in `saved` the whole time its company is
+ * being worked out, so status alone cannot tell the page to keep refreshing.
+ */
+export function isEnrichmentPending(capture: {
+  status: CaptureStatus;
+  companyResolution: CaptureCompanyResolution | null;
+}): boolean {
+  if (capture.status === 'enriching') return true;
+  if (!capture.companyResolution) return capture.status === 'saved';
+  return capture.companyResolution.profile?.status === 'pending';
 }
 
 export interface CaptureListRow {

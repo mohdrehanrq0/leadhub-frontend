@@ -9,17 +9,20 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedInLink } from '@/components/leads/LinkedInLink';
 import { CompanyResolutionCard } from '@/components/captures/CompanyResolutionCard';
 import { DataGapsPanel } from '@/components/captures/DataGaps';
+import { CompanyLinkedInPanel } from '@/components/enrichment/CompanyPanels';
+import { PersonLinkedInPanel } from '@/components/enrichment/PersonLinkedInPanel';
+import { useLinkedInSnapshot } from '@/components/enrichment/useEnrichmentData';
 import {
   CAPTURE_STATUS_STYLE,
   formatCapturedAt,
   hasBlockingGap,
+  isEnrichmentPending,
   type CaptureDetail,
 } from '@/lib/captures';
 import {
   IconAlertTriangle,
   IconArrowLeft,
   IconArrowRight,
-  IconBriefcase,
   IconDeviceFloppy,
   IconHeart,
   IconMapPin,
@@ -45,6 +48,8 @@ export default function CaptureDetailPage() {
   const [companyProfileUrl, setCompanyProfileUrl] = useState('');
   const [personProfileUrl, setPersonProfileUrl] = useState('');
 
+  const { snapshot } = useLinkedInSnapshot(captureId ? `/api/captures/${captureId}` : null);
+
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
       if (!opts.silent) setLoading(true);
@@ -69,11 +74,15 @@ export default function CaptureDetailPage() {
     void load();
   }, [load]);
 
+  // The company chain runs in the background while the capture still reads
+  // `saved`, so status alone is not enough to know whether to keep refreshing.
+  const pending = capture ? isEnrichmentPending(capture) : false;
+
   useEffect(() => {
-    if (capture?.status !== 'enriching') return;
+    if (!pending) return;
     const timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [capture?.status, load]);
+  }, [pending, load]);
 
   async function saveCorrections() {
     setSaving(true);
@@ -150,8 +159,6 @@ export default function CaptureDetailPage() {
   }
 
   const badge = CAPTURE_STATUS_STYLE[capture.status];
-  const person = capture.personSnapshot ?? {};
-  const experience = person.experience ?? [];
   const blocked = hasBlockingGap(capture.dataGaps);
   const authorMissing = capture.error === 'author_unresolved';
 
@@ -318,52 +325,17 @@ export default function CaptureDetailPage() {
             </div>
           </section>
 
-          {/* ── Profile detail ───────────────────────────────── */}
-          {person.about ? (
-            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-text-100">About</h2>
-              <p className="mt-2 whitespace-pre-line text-sm leading-6 text-text-200">
-                {person.about}
-              </p>
-            </section>
-          ) : null}
-
-          {experience.length ? (
-            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-              <h2 className="text-sm font-semibold text-text-100">Experience</h2>
-              <ol className="mt-3 space-y-0">
-                {experience.map((row, index) => (
-                  <li
-                    key={`${row.company ?? 'role'}-${index}`}
-                    className="relative flex gap-3 pb-4 last:pb-0"
-                  >
-                    {index < experience.length - 1 ? (
-                      <span className="absolute left-[13px] top-7 h-full w-px bg-slate-200" />
-                    ) : null}
-                    <span className="relative z-10 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-400 ring-4 ring-white">
-                      <IconBriefcase size={13} />
-                    </span>
-                    <div className="min-w-0 pt-0.5">
-                      <p className="text-sm font-medium text-text-100">
-                        {row.title ?? 'Role'}
-                        {row.isCurrent ? (
-                          <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700">
-                            current
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-0.5 text-xs text-text-300">
-                        {[row.company, row.dateRange, row.location].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </section>
-          ) : null}
+          {/* The same profile panel the lead page uses, so a capture and the
+              lead it becomes show the person identically. */}
+          <PersonLinkedInPanel
+            person={snapshot?.person}
+            fromCapture={snapshot?.personFromCapture}
+          />
         </div>
 
         <div className="space-y-6">
+          <CompanyLinkedInPanel company={snapshot?.company} colleagues={snapshot?.colleagues} />
+
           {capture.type === 'post' ? (
             <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
               <div className="flex items-center justify-between">
