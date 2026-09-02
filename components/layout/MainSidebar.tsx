@@ -12,6 +12,7 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCoin,
+  IconBuilding,
   IconKey,
   IconLogout,
   IconMailOpened,
@@ -48,6 +49,7 @@ const NAV_MAIN = [
 ];
 
 const NAV_SETTINGS = [
+  { name: 'Workspaces', href: '/dashboard/settings/workspace', icon: IconBuilding },
   { name: 'API Keys', href: '/dashboard/settings/api-keys', icon: IconKey },
   { name: 'Enrichment Agents', href: '/dashboard/settings/enrichment-agents', icon: IconRobot },
   { name: 'Browser Extension', href: '/dashboard/settings/extension', icon: IconPuzzle },

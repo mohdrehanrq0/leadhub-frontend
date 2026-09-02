@@ -1,7 +1,11 @@
 export type WorkspaceSummary = {
   id: string;
   name: string;
+  slug?: string;
+  role?: 'owner' | 'admin' | 'member';
   leadCount?: number;
+  createdAt?: string;
+  joinedAt?: string;
 };
 
 const STORAGE_KEY = 'leadhub_workspace_id';

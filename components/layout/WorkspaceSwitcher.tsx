@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { IconBuilding, IconChevronDown, IconCheck } from '@tabler/icons-react';
+import { IconBuilding, IconChevronDown, IconCheck, IconPlus, IconSettings } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -22,6 +23,9 @@ export function WorkspaceSwitcher({
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
   const [open, setOpen] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [creating, setCreating] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -61,28 +65,43 @@ export function WorkspaceSwitcher({
     }
     onWorkspaceChange(id);
     setOpen(false);
+    setShowCreate(false);
     toast.success('Workspace switched');
     router.refresh();
   }
 
-  if (workspaces.length === 1) {
+  async function createWorkspace(e: React.FormEvent) {
+    e.preventDefault();
+    const name = newName.trim();
+    if (!name) return;
+
+    setCreating(true);
+    try {
+      const res = await api.post('/api/workspaces', { name });
+      const created = res.data.data as WorkspaceSummary;
+      setNewName('');
+      setShowCreate(false);
+      onWorkspaceChange(created.id);
+      toast.success(`Workspace "${created.name}" created.`);
+      await load();
+      router.refresh();
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        'Failed to create workspace.';
+      toast.error(message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  if (workspaces.length === 1 && compact) {
     return (
       <div
-        className={cn(
-          'flex items-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-bg/60 text-sidebar-text',
-          compact ? 'px-2 py-2' : 'px-3 py-2.5',
-        )}
+        className="flex items-center justify-center gap-2 rounded-lg border border-sidebar-border bg-sidebar-bg/60 px-2 py-2 text-sidebar-text"
         title={active?.name ?? 'Workspace'}
       >
         <IconBuilding size={16} className="shrink-0 text-brand-main" />
-        {!compact ? (
-          <div className="min-w-0">
-            <p className="truncate text-xs font-semibold">{active?.name ?? 'Workspace'}</p>
-            <p className="text-[10px] text-sidebar-muted">
-              {(active?.leadCount ?? 0).toLocaleString()} leads
-            </p>
-          </div>
-        ) : null}
       </div>
     );
   }
@@ -104,7 +123,8 @@ export function WorkspaceSwitcher({
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold">{active?.name ?? 'Select workspace'}</p>
               <p className="text-[10px] text-sidebar-muted">
-                {(active?.leadCount ?? 0).toLocaleString()} leads · {workspaces.length} workspaces
+                {(active?.leadCount ?? 0).toLocaleString()} leads
+                {workspaces.length > 1 ? ` · ${workspaces.length} workspaces` : ''}
               </p>
             </div>
             <IconChevronDown
@@ -146,6 +166,57 @@ export function WorkspaceSwitcher({
                 </button>
               );
             })}
+            <div className="border-t border-sidebar-border p-2">
+              {showCreate ? (
+                <form onSubmit={(e) => void createWorkspace(e)} className="space-y-2">
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Workspace name"
+                    maxLength={255}
+                    className="w-full rounded-md border border-sidebar-border bg-sidebar-bg px-2 py-1.5 text-xs text-sidebar-text focus:border-brand-main focus:outline-none"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="submit"
+                      disabled={creating || !newName.trim()}
+                      className="flex-1 rounded-md bg-brand-main px-2 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {creating ? 'Creating…' : 'Create'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCreate(false);
+                        setNewName('');
+                      }}
+                      className="rounded-md border border-sidebar-border px-2 py-1.5 text-xs text-sidebar-muted hover:bg-sidebar-hover"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowCreate(true)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold text-sidebar-text hover:bg-sidebar-hover"
+                >
+                  <IconPlus size={14} className="text-brand-main" />
+                  New workspace
+                </button>
+              )}
+              <Link
+                href="/dashboard/settings/workspace"
+                onClick={() => setOpen(false)}
+                className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-medium text-sidebar-muted hover:bg-sidebar-hover hover:text-sidebar-text"
+              >
+                <IconSettings size={14} />
+                Manage workspaces
+              </Link>
+            </div>
           </div>
         </>
       ) : null}
