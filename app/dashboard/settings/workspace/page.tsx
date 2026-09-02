@@ -123,7 +123,6 @@ export default function WorkspaceSettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-8 animate-fade-in text-text">
       <PageHeader
-        eyebrow="Settings"
         title="Workspaces"
         description="Create workspaces for separate teams or clients. Leads, enrichment, credits, and captures are scoped to the active workspace."
       />

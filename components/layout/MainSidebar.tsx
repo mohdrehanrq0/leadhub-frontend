@@ -12,13 +12,9 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconCoin,
-  IconBuilding,
-  IconKey,
   IconLogout,
   IconMailOpened,
-  IconPuzzle,
-  IconRobot,
-  IconUser,
+  IconSettings,
   IconUsers,
   IconX,
 } from '@tabler/icons-react';
@@ -46,14 +42,7 @@ const NAV_MAIN = [
   { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark },
   { name: 'Sign-ups', href: '/dashboard/signups', icon: IconMailOpened },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
-];
-
-const NAV_SETTINGS = [
-  { name: 'Workspaces', href: '/dashboard/settings/workspace', icon: IconBuilding },
-  { name: 'API Keys', href: '/dashboard/settings/api-keys', icon: IconKey },
-  { name: 'Enrichment Agents', href: '/dashboard/settings/enrichment-agents', icon: IconRobot },
-  { name: 'Browser Extension', href: '/dashboard/settings/extension', icon: IconPuzzle },
-  { name: 'Founder Profile', href: '/dashboard/settings/founder-profile', icon: IconUser },
+  { name: 'Settings', href: '/dashboard/settings', icon: IconSettings },
 ];
 
 export function MainSidebar({
@@ -107,6 +96,9 @@ export function MainSidebar({
     }
     if (href === '/dashboard/captures') {
       return pathname === href || pathname.startsWith('/dashboard/captures/');
+    }
+    if (href === '/dashboard/settings') {
+      return pathname === href || pathname.startsWith('/dashboard/settings/');
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   };
@@ -239,16 +231,6 @@ export function MainSidebar({
               )}
             >
               <div className="mb-6 space-y-1">{renderNav(NAV_MAIN)}</div>
-              <div className="mb-6">
-                {showExpandedChrome ? (
-                  <h3 className="mb-2 px-3 text-xs font-semibold tracking-wider text-sidebar-muted uppercase whitespace-nowrap">
-                    Settings
-                  </h3>
-                ) : (
-                  <div className="mx-2 mb-3 border-t border-sidebar-border" />
-                )}
-                <div className="space-y-1">{renderNav(NAV_SETTINGS)}</div>
-              </div>
             </nav>
 
             <div className="shrink-0 border-t border-sidebar-border bg-sidebar-bg/90 p-3">

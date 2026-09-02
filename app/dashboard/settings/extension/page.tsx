@@ -69,7 +69,6 @@ export default function ExtensionSettingsPage() {
   return (
     <div className="mx-auto max-w-4xl animate-fade-in space-y-6 text-text">
       <PageHeader
-        eyebrow="Settings"
         title="Browser extension"
         description="Connect the LeadHub extension so you can save LinkedIn profiles and posts straight into this workspace."
         actions={

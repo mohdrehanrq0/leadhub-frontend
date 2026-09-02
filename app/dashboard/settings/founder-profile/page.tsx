@@ -90,7 +90,6 @@ export default function FounderProfilePage() {
   return (
     <div className="max-w-2xl mx-auto space-y-8 animate-fade-in text-text">
       <PageHeader
-        eyebrow="Settings"
         title="Founder profile"
         description="Contact details used in personalized sign-up onboarding emails."
       />

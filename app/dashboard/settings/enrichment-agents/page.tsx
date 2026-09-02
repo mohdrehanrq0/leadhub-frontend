@@ -590,7 +590,6 @@ export default function EnrichmentAgentsPage() {
   return (
     <div className="mx-auto max-w-6xl animate-fade-in space-y-4 text-text">
       <PageHeader
-        eyebrow="Settings"
         title="Enrichment Agents"
         description="Build reusable enrichment recipes — pick modules, who to find, and free-text research questions."
         actions={

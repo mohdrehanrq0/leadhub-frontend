@@ -312,7 +312,6 @@ function ApiKeysPageInner() {
   return (
     <div className="mx-auto max-w-6xl animate-fade-in space-y-6 text-text">
       <PageHeader
-        eyebrow="Settings"
         title="API keys"
         description="Add provider credentials and configure enrichment preferences. Keys are encrypted at rest using AES-256-GCM."
       />
