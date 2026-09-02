@@ -158,3 +158,18 @@ export function formatAge(iso?: string): string | undefined {
   if (days < 30) return `${days}d ago`;
   return `${Math.floor(days / 30)}mo ago`;
 }
+
+/** LinkedIn / Apify may return a plain string or `{ number, extension }`. */
+export function formatPhoneValue(
+  phone?: string | { number?: string | null; extension?: string | null } | null,
+): string | undefined {
+  if (!phone) return undefined;
+  if (typeof phone === 'string') {
+    const trimmed = phone.trim();
+    return trimmed || undefined;
+  }
+  const number = phone.number?.trim();
+  const extension = phone.extension?.trim();
+  if (number && extension) return `${number} ext. ${extension}`;
+  return number || extension || undefined;
+}

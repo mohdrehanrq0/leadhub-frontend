@@ -67,7 +67,7 @@ export interface LinkedInCompanyView {
   headquarters?: string;
   locations: string[];
   logo?: string;
-  phone?: string;
+  phone?: string | { number?: string | null; extension?: string | null } | null;
   similarCompanies: Array<{ name?: string; linkedinUrl?: string; industry?: string }>;
   fetchedAt?: string;
 }

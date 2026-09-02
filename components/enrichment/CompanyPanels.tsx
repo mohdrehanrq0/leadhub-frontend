@@ -10,7 +10,7 @@
 
 import { IconBrandLinkedin, IconBuilding, IconUsers, IconWorld } from '@tabler/icons-react';
 import { LinkedInLink } from '@/components/leads/LinkedInLink';
-import { Chip, ChipRow, EmptyNote, EnrichmentSection, FactRow, formatAge } from './primitives';
+import { Chip, ChipRow, EmptyNote, EnrichmentSection, FactRow, formatAge, formatPhoneValue } from './primitives';
 import type { LinkedInColleagueView, LinkedInCompanyView } from './types';
 
 /** The website-derived company record, as stored on the `companies` row. */
@@ -178,7 +178,7 @@ export function CompanyLinkedInPanel({
               </FactRow>
               <FactRow label="Founded">{company.foundedYear}</FactRow>
               <FactRow label="Headquarters">{company.headquarters}</FactRow>
-              <FactRow label="Phone">{company.phone}</FactRow>
+              <FactRow label="Phone">{formatPhoneValue(company.phone)}</FactRow>
             </dl>
 
             {company.description ? (
