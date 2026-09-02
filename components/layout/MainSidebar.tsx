@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
+import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import {
   IconBookmark,
   IconChevronLeft,
@@ -32,6 +33,8 @@ type MainSidebarProps = {
   onClose: () => void;
   user: User;
   onLogout: () => void;
+  activeWorkspaceId: string | null;
+  onWorkspaceChange: (id: string) => void;
 };
 
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
@@ -51,7 +54,14 @@ const NAV_SETTINGS = [
   { name: 'Founder Profile', href: '/dashboard/settings/founder-profile', icon: IconUser },
 ];
 
-export function MainSidebar({ isOpen, onClose, user, onLogout }: MainSidebarProps) {
+export function MainSidebar({
+  isOpen,
+  onClose,
+  user,
+  onLogout,
+  activeWorkspaceId,
+  onWorkspaceChange,
+}: MainSidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
@@ -210,6 +220,14 @@ export function MainSidebar({ isOpen, onClose, user, onLogout }: MainSidebarProp
               >
                 <IconX className="h-5 w-5" />
               </button>
+            </div>
+
+            <div className={cn('mb-4', showExpandedChrome ? 'px-3' : 'px-2')}>
+              <WorkspaceSwitcher
+                activeWorkspaceId={activeWorkspaceId}
+                onWorkspaceChange={onWorkspaceChange}
+                compact={!showExpandedChrome}
+              />
             </div>
 
             <nav

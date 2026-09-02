@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { getApiBaseUrl } from './api-base';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001',
+  baseURL: getApiBaseUrl(),
   withCredentials: true, // Send httpOnly cookies automatically
   headers: {
     'Content-Type': 'application/json',
@@ -35,7 +36,7 @@ api.interceptors.response.use(
       // Try to refresh the token first
       try {
         await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/auth/refresh`,
+          `${getApiBaseUrl()}/api/auth/refresh`,
           {},
           { withCredentials: true },
         );

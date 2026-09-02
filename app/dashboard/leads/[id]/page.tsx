@@ -19,6 +19,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../../lib/api';
+import { getApiBaseUrl } from '../../../../lib/api-base';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { useAuth } from '../../../../context/AuthContext';
 import { EnrichmentAgentPicker } from '../../../../components/leads/EnrichmentAgentPicker';
@@ -33,10 +34,7 @@ import {
 import { IdentityNoteBanner } from '../../../../components/leads/IdentityNoteBanner';
 import { LinkedInLink, pickLinkedInUrl } from '../../../../components/leads/LinkedInLink';
 import { useLinkedInSnapshot } from '../../../../components/enrichment/useEnrichmentData';
-import type {
-  CanonicalFieldTree,
-  EnrichmentFact,
-} from '../../../../components/enrichment/types';
+import type { EnrichmentFact } from '../../../../components/enrichment/types';
 import {
   buildIdentityNote,
   identityNoteToPlainText,
@@ -1023,7 +1021,7 @@ export default function LeadDetailPage() {
     if (lead.enrichmentStatus !== 'in_progress') return;
 
     // Connect SSE
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4001';
+    const baseUrl = getApiBaseUrl();
     const es = new EventSource(`${baseUrl}/api/leads/${id}/enrichment-status`, { withCredentials: true });
     sseRef.current = es;
 
@@ -1708,7 +1706,7 @@ export default function LeadDetailPage() {
             identityNote={identityNote}
             linkedinSnapshot={linkedinSnapshot}
             facts={facts}
-            canonicalFields={canonicalProfile as CanonicalFieldTree | null}
+            canonicalFields={canonicalProfile?.fields ?? null}
             categories={categories}
             lists={lists}
             notes={notes}

@@ -8,7 +8,8 @@ import { MainSidebar } from '../../components/layout/MainSidebar';
 import { spinnerClass } from '../../components/ui/styles';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, loading, logout, onboardingStep, onboardingLoading } = useAuth();
+  const { user, loading, logout, onboardingStep, onboardingLoading, activeWorkspaceId, setActiveWorkspaceId } =
+    useAuth();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -48,6 +49,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         onClose={() => setIsSidebarOpen(false)}
         user={user}
         onLogout={logout}
+        activeWorkspaceId={activeWorkspaceId}
+        onWorkspaceChange={setActiveWorkspaceId}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

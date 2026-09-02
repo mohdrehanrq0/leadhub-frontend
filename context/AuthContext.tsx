@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '../lib/api';
+import { fetchAndResolveWorkspaceId, readStoredWorkspaceId } from '../lib/workspace';
 
 interface User {
   id: string;
@@ -41,10 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Initial check
     if (typeof window !== 'undefined') {
-      const storedId = localStorage.getItem('leadhub_workspace_id');
-      setActiveWorkspaceIdState(storedId);
+      setActiveWorkspaceIdState(readStoredWorkspaceId());
     }
     refreshUser();
   }, []);
@@ -90,21 +89,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const currentUser = res.data.data;
       setUser(currentUser);
 
-      // Auto-set workspace if none active
-      let storedId = localStorage.getItem('leadhub_workspace_id');
-      if (!storedId) {
-        const wRes = await api.get('/api/workspaces');
-        if (wRes.data.data?.length > 0) {
-          storedId = wRes.data.data[0].id;
-          setActiveWorkspaceId(storedId);
-        }
+      const workspaceId = await fetchAndResolveWorkspaceId(readStoredWorkspaceId());
+      if (workspaceId) {
+        setActiveWorkspaceId(workspaceId);
       }
 
-      if (currentUser && storedId) {
+      if (currentUser && workspaceId) {
         setOnboardingLoading(true);
         try {
           const obRes = await api.get('/api/onboarding', {
-            headers: { 'X-Workspace-ID': storedId }
+            headers: { 'X-Workspace-ID': workspaceId },
           });
           setOnboardingStep(obRes.data.data?.onboardingStep ?? 'company');
         } catch {
@@ -131,11 +125,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const loggedInUser = res.data.data.user;
       setUser(loggedInUser);
 
-      // Fetch workspaces and set active
-      const wRes = await api.get('/api/workspaces');
-      let workspaceId = null;
-      if (wRes.data.data?.length > 0) {
-        workspaceId = wRes.data.data[0].id;
+      const workspaceId = await fetchAndResolveWorkspaceId(readStoredWorkspaceId());
+      if (workspaceId) {
         setActiveWorkspaceId(workspaceId);
       }
 
