@@ -10,6 +10,7 @@
 import { IconAddressBook, IconMail, IconMapPin, IconPhone } from '@tabler/icons-react';
 import { LinkedInLink } from '@/components/leads/LinkedInLink';
 import { Chip, EmptyNote, EnrichmentSection, FactRow, type ChipTone } from './primitives';
+import { emailSourceHost } from '@/lib/email-display';
 
 export interface ContactView {
   firstName?: string | null;
@@ -25,6 +26,11 @@ export interface ContactView {
   isCatchAll?: boolean | null;
   isDisposable?: boolean | null;
 }
+
+export type ContactEmailSourceMeta = {
+  sourceUrl?: string | null;
+  sourceTitle?: string | null;
+};
 
 const STATUS_TONE: Record<string, ChipTone> = {
   valid: 'emerald',
@@ -42,9 +48,12 @@ function statusLabel(status: string): string {
 export function ContactPanel({
   contact,
   id = 'contact',
+  emailSources,
 }: {
   contact?: ContactView | null;
   id?: string;
+  /** Optional published-source evidence keyed by email. */
+  emailSources?: Record<string, ContactEmailSourceMeta> | null;
 }) {
   if (!contact) {
     return (
@@ -59,6 +68,7 @@ export function ContactPanel({
   // the same address from appearing twice.
   const others = (contact.otherEmails ?? []).filter((email) => email && email !== contact.email);
   const name = [contact.firstName, contact.lastName].filter(Boolean).join(' ').trim();
+  const sourceFor = (email: string) => emailSources?.[email.toLowerCase()];
 
   return (
     <EnrichmentSection
@@ -103,9 +113,16 @@ export function ContactPanel({
                 isCatchAll={contact.isCatchAll}
                 isDisposable={contact.isDisposable}
                 primary
+                sourceUrl={sourceFor(contact.email)?.sourceUrl}
+                sourceTitle={sourceFor(contact.email)?.sourceTitle}
               />
               {others.map((email) => (
-                <EmailRow key={email} email={email} />
+                <EmailRow
+                  key={email}
+                  email={email}
+                  sourceUrl={sourceFor(email)?.sourceUrl}
+                  sourceTitle={sourceFor(email)?.sourceTitle}
+                />
               ))}
             </div>
           ) : (
@@ -123,13 +140,18 @@ function EmailRow({
   isCatchAll,
   isDisposable,
   primary,
+  sourceUrl,
+  sourceTitle,
 }: {
   email: string;
   status?: string;
   isCatchAll?: boolean | null;
   isDisposable?: boolean | null;
   primary?: boolean;
+  sourceUrl?: string | null;
+  sourceTitle?: string | null;
 }) {
+  const host = emailSourceHost(sourceUrl);
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
       <IconMail size={13} className="shrink-0 text-slate-400" />
@@ -139,7 +161,10 @@ function EmailRow({
       {primary ? <Chip tone="blue">Primary</Chip> : null}
       {status ? <Chip tone={STATUS_TONE[status] ?? 'slate'}>{statusLabel(status)}</Chip> : null}
       {isCatchAll ? (
-        <Chip tone="amber" title="The domain accepts all addresses, so delivery is not proof this mailbox exists.">
+        <Chip
+          tone="amber"
+          title="The domain accepts all addresses, so delivery is not proof this mailbox exists — a published page is stronger evidence."
+        >
           Catch-all
         </Chip>
       ) : null}
@@ -147,6 +172,17 @@ function EmailRow({
         <Chip tone="rose" title="Throwaway address provider.">
           Disposable
         </Chip>
+      ) : null}
+      {sourceUrl && host ? (
+        <a
+          href={sourceUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-700"
+          title={sourceTitle ?? sourceUrl}
+        >
+          Found on {host}
+        </a>
       ) : null}
     </div>
   );

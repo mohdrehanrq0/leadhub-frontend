@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { IdentityNoteBanner } from './IdentityNoteBanner';
 import { AffiliationBadge } from './AffiliationBadge';
 import type { IdentityNote } from '../../lib/identity-reasons';
-import { displayEmailStatus, isShowableEmailStatus } from '../../lib/email-display';
+import { displayEmailStatus, emailSourceHost, isShowableEmailStatus } from '../../lib/email-display';
 import {
   IconBuilding,
   IconCheck,
@@ -419,7 +419,14 @@ type LeadLike = {
   rawData?: Record<string, unknown>;
 };
 
-type EmailEntry = { email: string; status: string | null; isPrimary: boolean };
+type EmailEntry = {
+  email: string;
+  status: string | null;
+  isPrimary: boolean;
+  sourceUrl?: string | null;
+  sourceTitle?: string | null;
+  source?: string | null;
+};
 
 function verificationTone(status?: string | null) {
   if (status === 'valid') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
@@ -1083,13 +1090,28 @@ export function LeadDetailFindings({
                             primary
                           </span>
                         )}
-                        {entry.status && isShowableEmailStatus(displayEmailStatus(entry.status)) && (
+                        {entry.status &&
+                          isShowableEmailStatus(displayEmailStatus(entry.status), {
+                            sourceUrl: entry.sourceUrl,
+                            source: entry.source,
+                          }) && (
                           <span
                             className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${verificationTone(displayEmailStatus(entry.status))}`}
                           >
                             {displayEmailStatus(entry.status)!.replace(/_/g, ' ')}
                           </span>
                         )}
+                        {entry.sourceUrl ? (
+                          <a
+                            href={entry.sourceUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                            title={entry.sourceTitle ?? entry.sourceUrl}
+                          >
+                            Found on {emailSourceHost(entry.sourceUrl) ?? 'source'}
+                          </a>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
@@ -1128,7 +1150,17 @@ export function LeadDetailFindings({
         />
       ) : null}
 
-      <ContactPanel contact={lead.contact} />
+      <ContactPanel
+        contact={lead.contact}
+        emailSources={Object.fromEntries(
+          (enrichment?.emails?.validated ?? [])
+            .filter((v) => v.sourceUrl)
+            .map((v) => [
+              v.email.toLowerCase(),
+              { sourceUrl: v.sourceUrl, sourceTitle: v.sourceTitle },
+            ]),
+        )}
+      />
 
       <CompanyProfilePanel company={lead.company} />
 

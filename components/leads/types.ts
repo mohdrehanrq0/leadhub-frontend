@@ -468,6 +468,9 @@ export type EnrichmentSnapshot = {
       status: string;
       confidence: number;
       assignedTo: string | null;
+      source?: string | null;
+      sourceUrl?: string | null;
+      sourceTitle?: string | null;
     }>;
   };
   updatedAt: string;

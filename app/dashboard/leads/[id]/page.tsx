@@ -40,7 +40,7 @@ import {
   identityNoteToPlainText,
   type IdentityNote,
 } from '../../../../lib/identity-reasons';
-import { displayEmailStatus, isShowableEmailStatus } from '../../../../lib/email-display';
+import { displayEmailStatus, emailSourceHost, isShowableEmailStatus } from '../../../../lib/email-display';
 import {
   apolloCategoryLabel,
   EnrichmentProfile,
@@ -121,35 +121,83 @@ function verificationTone(status?: string | null) {
 }
 
 function allEmailsForLead(lead: LeadDetail, enrichment: ReturnType<typeof enrichmentFromLead>) {
-  const byEmail = new Map<string, string | null>();
+  const byEmail = new Map<
+    string,
+    { status: string | null; sourceUrl?: string | null; sourceTitle?: string | null; source?: string | null }
+  >();
   const primary = lead.contact?.email?.trim().toLowerCase();
 
-  const add = (raw: string | null | undefined, status?: string | null) => {
+  const add = (
+    raw: string | null | undefined,
+    status?: string | null,
+    meta?: { sourceUrl?: string | null; sourceTitle?: string | null; source?: string | null },
+  ) => {
     const email = raw?.trim().toLowerCase();
     if (!email) return;
     const normalized = displayEmailStatus(status);
-    if (!isShowableEmailStatus(normalized ?? status)) return;
+    const effective = normalized ?? status;
+    const allowCatchAllPrimary =
+      effective === 'catch_all' && lead.contact?.isCatchAll === true && email === primary;
+    if (
+      !isShowableEmailStatus(effective, {
+        sourceUrl: meta?.sourceUrl,
+        source: meta?.source,
+      }) &&
+      !allowCatchAllPrimary
+    ) {
+      return;
+    }
     if (!byEmail.has(email)) {
-      byEmail.set(email, normalized ?? status ?? null);
+      byEmail.set(email, {
+        status: effective ?? null,
+        sourceUrl: meta?.sourceUrl,
+        sourceTitle: meta?.sourceTitle,
+        source: meta?.source,
+      });
     }
   };
 
-  add(lead.contact?.email, lead.contact?.emailVerificationStatus);
+  const primaryValidated = enrichment?.emails?.validated?.find(
+    (v) => v.email?.toLowerCase() === primary,
+  );
+  add(lead.contact?.email, lead.contact?.emailVerificationStatus, {
+    sourceUrl: primaryValidated?.sourceUrl,
+    sourceTitle: primaryValidated?.sourceTitle,
+    source: primaryValidated?.source,
+  });
   for (const e of lead.contact?.otherEmails ?? []) {
-    const validated = enrichment?.emails?.validated?.find((v) => v.email?.toLowerCase() === e.toLowerCase());
-    add(e, validated?.status ?? null);
+    const validated = enrichment?.emails?.validated?.find(
+      (v) => v.email?.toLowerCase() === e.toLowerCase(),
+    );
+    add(e, validated?.status ?? null, {
+      sourceUrl: validated?.sourceUrl,
+      sourceTitle: validated?.sourceTitle,
+      source: validated?.source,
+    });
   }
   for (const v of enrichment?.emails?.validated ?? []) {
-    add(v.email, v.status);
+    add(v.email, v.status, {
+      sourceUrl: v.sourceUrl,
+      sourceTitle: v.sourceTitle,
+      source: v.source,
+    });
   }
 
-  const ordered: Array<{ email: string; status: string | null; isPrimary: boolean }> = [];
+  const ordered: Array<{
+    email: string;
+    status: string | null;
+    isPrimary: boolean;
+    sourceUrl?: string | null;
+    sourceTitle?: string | null;
+    source?: string | null;
+  }> = [];
   if (primary && byEmail.has(primary)) {
-    ordered.push({ email: primary, status: byEmail.get(primary) ?? null, isPrimary: true });
+    const meta = byEmail.get(primary)!;
+    ordered.push({ email: primary, isPrimary: true, ...meta });
     byEmail.delete(primary);
   }
-  for (const [email, status] of byEmail) {
-    ordered.push({ email, status, isPrimary: false });
+  for (const [email, meta] of byEmail) {
+    ordered.push({ email, isPrimary: false, ...meta });
   }
   return ordered;
 }
@@ -1378,6 +1426,17 @@ export default function LeadDetailPage() {
                           {entry.status.replace(/_/g, ' ')}
                         </span>
                       )}
+                      {entry.sourceUrl ? (
+                        <a
+                          href={entry.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                          title={entry.sourceTitle ?? entry.sourceUrl}
+                        >
+                          Found on {emailSourceHost(entry.sourceUrl) ?? 'source'}
+                        </a>
+                      ) : null}
                     </div>
                   ))}
                 </div>
