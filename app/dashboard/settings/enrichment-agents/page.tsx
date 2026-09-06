@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   IconChevronDown,
@@ -13,8 +12,14 @@ import {
   IconTrash,
 } from '@tabler/icons-react';
 import api from '../../../../lib/api';
-import { PageHeader } from '../../../../components/layout/PageHeader';
-import { btnNavy, btnOutline, inputClass } from '../../../../components/ui/styles';
+import {
+  SettingsCard,
+  SettingsPanel,
+  settingsBtnDanger,
+  settingsBtnPrimary,
+  settingsBtnSecondary,
+  settingsInputClass,
+} from '@/components/settings/primitives';
 
 type PersonObjective =
   | 'founder'
@@ -588,65 +593,65 @@ export default function EnrichmentAgentsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl animate-fade-in space-y-4 text-text">
-      <PageHeader
-        title="Enrichment Agents"
-        description="Build reusable enrichment recipes — pick modules, who to find, and free-text research questions."
-        actions={
-          <button type="button" onClick={startNew} className={btnNavy}>
-            <IconPlus size={16} /> New agent
-          </button>
-        }
-      />
-
+    <SettingsPanel wide>
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <IconLoader2 className="animate-spin" size={16} /> Loading agents…
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-          <aside className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm h-fit">
-            {agents.map((agent) => (
-              <button
-                key={agent.id}
-                type="button"
-                onClick={() => selectAgent(agent)}
-                className={`flex w-full items-start gap-2 rounded-lg px-3 py-2 text-left text-sm transition ${
-                  selectedId === agent.id
-                    ? 'bg-slate-950 text-white'
-                    : 'text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <IconRobot size={16} className="mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block font-semibold truncate">{agent.name}</span>
-                  {agent.isDefault ? (
-                    <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">
-                      Default
-                    </span>
-                  ) : null}
-                  <span
-                    className={`mt-0.5 block text-[10px] truncate ${
-                      selectedId === agent.id ? 'text-slate-300' : 'text-slate-400'
+        <div className="flex min-w-0 flex-col gap-5 xl:flex-row xl:items-start">
+          <aside className="min-w-0 xl:w-64 xl:shrink-0">
+            <SettingsCard
+              icon={IconRobot}
+              title="Agents"
+              actions={
+                <button type="button" onClick={startNew} className={settingsBtnPrimary}>
+                  <IconPlus size={16} /> New
+                </button>
+              }
+              padded={false}
+            >
+              <div className="no-scrollbar flex gap-2 overflow-x-auto p-3 xl:block xl:space-y-1 xl:overflow-visible">
+                {agents.map((agent) => (
+                  <button
+                    key={agent.id}
+                    type="button"
+                    onClick={() => selectAgent(agent)}
+                    className={`flex min-w-44 items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition xl:min-w-0 xl:w-full ${
+                      selectedId === agent.id
+                        ? 'bg-settings-accent text-white shadow-sm'
+                        : 'bg-settings-canvas text-settings-ink hover:bg-settings-mid/60 xl:bg-transparent'
                     }`}
                   >
-                    {(agent.config.people?.targets ?? [])
-                      .map((t) => objectiveLabel(t.objective))
-                      .slice(0, 3)
-                      .join(', ') || 'No people'}
-                  </span>
-                </span>
-              </button>
-            ))}
-            <Link
-              href="/dashboard/leads"
-              className="mt-3 block text-center text-[11px] font-semibold text-slate-500 hover:text-slate-800"
-            >
-              ← Back to Leads
-            </Link>
+                    <IconRobot size={16} className="mt-0.5 shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block truncate font-semibold">{agent.name}</span>
+                      {agent.isDefault ? (
+                        <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Default</span>
+                      ) : null}
+                      <span
+                        className={`mt-0.5 block truncate text-[10px] ${
+                          selectedId === agent.id ? 'text-slate-300' : 'text-slate-400'
+                        }`}
+                      >
+                        {(agent.config.people?.targets ?? [])
+                          .map((t) => objectiveLabel(t.objective))
+                          .slice(0, 3)
+                          .join(', ') || 'No people'}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+                {selectedId === 'new' ? (
+                  <div className="min-w-44 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500 xl:min-w-0">
+                    New agent
+                  </div>
+                ) : null}
+              </div>
+            </SettingsCard>
           </aside>
 
-          <div className="space-y-5 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="min-w-0 flex-1 space-y-5 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block space-y-1.5 sm:col-span-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
@@ -655,7 +660,7 @@ export default function EnrichmentAgentsPage() {
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className={inputClass}
+                  className={settingsInputClass}
                   placeholder="e.g. Founder + Hiring authority"
                 />
               </label>
@@ -666,7 +671,7 @@ export default function EnrichmentAgentsPage() {
                 <input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className={inputClass}
+                  className={settingsInputClass}
                   placeholder="When should your team use this agent?"
                 />
               </label>
@@ -696,7 +701,7 @@ export default function EnrichmentAgentsPage() {
                   <label
                     key={g.id}
                     className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
-                      goal === g.id ? 'border-blue-300 bg-blue-50/60' : 'border-slate-200 bg-slate-50/40'
+                      goal === g.id ? 'border-settings-accent/30 bg-settings-soft' : 'border-settings-line bg-settings-canvas/60'
                     }`}
                   >
                     <input
@@ -730,7 +735,7 @@ export default function EnrichmentAgentsPage() {
                     Compiled from the goal. Override only if you need something unusual.
                   </span>
                 </span>
-                <span className="text-xs font-bold text-blue-600">
+                <span className="text-xs font-bold text-settings-accent">
                   {showAdvancedModules ? 'Hide' : 'Show'}
                 </span>
               </button>
@@ -740,8 +745,8 @@ export default function EnrichmentAgentsPage() {
                     key={m.key}
                     className={`flex cursor-pointer gap-3 rounded-xl border p-3 ${
                       config.modules[m.key]
-                        ? 'border-blue-200 bg-blue-50/50'
-                        : 'border-slate-200 bg-slate-50/40'
+                        ? 'border-settings-accent/30 bg-settings-soft'
+                        : 'border-settings-line bg-settings-canvas/60'
                     }`}
                   >
                     <input
@@ -840,7 +845,7 @@ export default function EnrichmentAgentsPage() {
                       title that isn&apos;t listed.
                     </p>
                   </div>
-                  <button type="button" className={btnOutline} onClick={addTarget}>
+                  <button type="button" className={settingsBtnSecondary} onClick={addTarget}>
                     <IconPlus size={14} /> Add person
                   </button>
                 </div>
@@ -875,7 +880,7 @@ export default function EnrichmentAgentsPage() {
                             </button>
                           </div>
 
-                          <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-3">
+                          <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-3">
                             <label className="block space-y-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                                 Role #{index + 1}
@@ -887,7 +892,7 @@ export default function EnrichmentAgentsPage() {
                                     objective: e.target.value as PersonObjective,
                                   })
                                 }
-                                className={inputClass}
+                                className={settingsInputClass}
                               >
                                 {OBJECTIVES.map((o) => (
                                   <option key={o.id} value={o.id}>
@@ -906,7 +911,7 @@ export default function EnrichmentAgentsPage() {
                                 onChange={(e) =>
                                   updateTarget(index, { tier: e.target.value as PersonTier })
                                 }
-                                className={inputClass}
+                                className={settingsInputClass}
                               >
                                 {TIER_OPTIONS.map((t) => (
                                   <option key={t.id} value={t.id}>
@@ -923,7 +928,7 @@ export default function EnrichmentAgentsPage() {
                               <input
                                 value={target.roleHint ?? ''}
                                 onChange={(e) => updateTarget(index, { roleHint: e.target.value })}
-                                className={inputClass}
+                                className={settingsInputClass}
                                 placeholder={meta?.hint ?? 'e.g. Head of Talent'}
                               />
                             </label>
@@ -931,7 +936,7 @@ export default function EnrichmentAgentsPage() {
 
                           <button
                             type="button"
-                            className={`${btnOutline} mt-5 shrink-0 px-2`}
+                            className={`${settingsBtnDanger} mt-5`}
                             onClick={() => removeTarget(index)}
                             title="Remove"
                           >
@@ -969,7 +974,7 @@ export default function EnrichmentAgentsPage() {
                           },
                         }))
                       }
-                      className={inputClass}
+                      className={settingsInputClass}
                     />
                   </label>
                   <label className="block space-y-1 sm:col-span-2">
@@ -991,7 +996,7 @@ export default function EnrichmentAgentsPage() {
                           };
                         })
                       }
-                      className={inputClass}
+                      className={settingsInputClass}
                     >
                       {DEFINITION_OPTIONS.map((s) => (
                         <option key={s.id} value={s.id}>
@@ -1016,7 +1021,7 @@ export default function EnrichmentAgentsPage() {
                   </p>
                 </div>
 
-                <p className="rounded-lg border border-blue-100 bg-blue-50/70 px-3 py-2 text-xs font-medium text-blue-900">
+                <p className="rounded-lg border border-settings-mid bg-settings-soft px-3 py-2 text-xs font-medium text-settings-ink">
                   {peopleSummary}
                 </p>
               </section>
@@ -1045,12 +1050,12 @@ export default function EnrichmentAgentsPage() {
                           return { ...prev, hiringKeywords: next };
                         })
                       }
-                      className={inputClass}
+                      className={settingsInputClass}
                       placeholder="e.g. sustainability"
                     />
                     <button
                       type="button"
-                      className={btnOutline}
+                      className={settingsBtnSecondary}
                       onClick={() =>
                         setConfig((prev) => ({
                           ...prev,
@@ -1064,7 +1069,7 @@ export default function EnrichmentAgentsPage() {
                 ))}
                 <button
                   type="button"
-                  className={btnOutline}
+                  className={settingsBtnSecondary}
                   onClick={() =>
                     setConfig((prev) => ({
                       ...prev,
@@ -1099,12 +1104,12 @@ export default function EnrichmentAgentsPage() {
                         return { ...prev, customQuestions: next };
                       })
                     }
-                    className={inputClass}
+                    className={settingsInputClass}
                     placeholder="e.g. Who is their banking partner?"
                   />
                   <button
                     type="button"
-                    className={btnOutline}
+                    className={settingsBtnSecondary}
                     onClick={() =>
                       setConfig((prev) => ({
                         ...prev,
@@ -1118,7 +1123,7 @@ export default function EnrichmentAgentsPage() {
               ))}
               <button
                 type="button"
-                className={btnOutline}
+                className={settingsBtnSecondary}
                 onClick={() =>
                   setConfig((prev) => ({
                     ...prev,
@@ -1131,17 +1136,17 @@ export default function EnrichmentAgentsPage() {
             </section>
 
             <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-              <button type="button" onClick={() => void save()} className={btnNavy} disabled={saving}>
+              <button type="button" onClick={() => void save()} className={settingsBtnPrimary} disabled={saving}>
                 {saving ? <IconLoader2 className="animate-spin" size={16} /> : null}
                 {selectedId === 'new' || !selectedId ? 'Create agent' : 'Save changes'}
               </button>
               {selectedId && selectedId !== 'new' && !isDefault ? (
-                <button type="button" onClick={() => void setDefault()} className={btnOutline}>
+                <button type="button" onClick={() => void setDefault()} className={settingsBtnSecondary}>
                   <IconStar size={14} /> Set as default
                 </button>
               ) : null}
               {selectedId && selectedId !== 'new' ? (
-                <button type="button" onClick={() => void remove()} className={btnOutline}>
+                <button type="button" onClick={() => void remove()} className={settingsBtnDanger}>
                   <IconTrash size={14} /> Delete
                 </button>
               ) : null}
@@ -1149,6 +1154,6 @@ export default function EnrichmentAgentsPage() {
           </div>
         </div>
       )}
-    </div>
+    </SettingsPanel>
   );
 }

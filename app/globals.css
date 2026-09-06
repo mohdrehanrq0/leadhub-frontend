@@ -51,6 +51,18 @@
     --sidebar-border: #1e293b;
     /* Subtle border */
 
+    /* Settings: navy ink + signal blue on ice */
+    --settings-canvas: #f1f5f9;
+    --settings-surface: #ffffff;
+    --settings-ink: #0f172a;
+    --settings-muted: #64748b;
+    --settings-faint: #94a3b8;
+    --settings-accent: #3b82f6;
+    --settings-accent-hover: #2563eb;
+    --settings-accent-soft: #eff6ff;
+    --settings-accent-mid: #dbeafe;
+    --settings-line: #e2e8f0;
+
     --background: 0 0% 98%;
     --foreground: 222.2 47.4% 11.2%;
 

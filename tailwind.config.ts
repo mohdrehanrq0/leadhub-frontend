@@ -104,6 +104,18 @@ const config = {
           light: "#e0f2fe",
           dark: "#0f172a",
         },
+        settings: {
+          canvas: "var(--settings-canvas)",
+          surface: "var(--settings-surface)",
+          ink: "var(--settings-ink)",
+          muted: "var(--settings-muted)",
+          faint: "var(--settings-faint)",
+          accent: "var(--settings-accent)",
+          hover: "var(--settings-accent-hover)",
+          soft: "var(--settings-accent-soft)",
+          mid: "var(--settings-accent-mid)",
+          line: "var(--settings-line)",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

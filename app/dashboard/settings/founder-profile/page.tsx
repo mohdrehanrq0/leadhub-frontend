@@ -3,9 +3,22 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
-import { PageHeader } from '../../../../components/layout/PageHeader';
-import { IconUser, IconMail, IconCalendar, IconBrandWhatsapp, IconBrandLinkedin, IconWorldWww } from '@tabler/icons-react';
+import {
+  IconBrandLinkedin,
+  IconBrandWhatsapp,
+  IconCalendar,
+  IconMail,
+  IconUser,
+  IconWorldWww,
+} from '@tabler/icons-react';
 import { useAuth } from '../../../../context/AuthContext';
+import {
+  SettingsCard,
+  SettingsField,
+  SettingsPanel,
+  settingsBtnPrimary,
+  settingsInputClass,
+} from '@/components/settings/primitives';
 
 interface FounderProfile {
   founderName?: string;
@@ -31,7 +44,7 @@ export default function FounderProfilePage() {
 
   useEffect(() => {
     if (activeWorkspaceId) {
-      fetchFounderProfile();
+      void fetchFounderProfile();
     }
   }, [activeWorkspaceId]);
 
@@ -49,7 +62,7 @@ export default function FounderProfilePage() {
           founderSocialLinks: res.data.data.founderSocialLinks || {},
         });
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to load founder profile.');
     } finally {
       setLoading(false);
@@ -62,7 +75,7 @@ export default function FounderProfilePage() {
     try {
       await api.post('/api/onboarding/founder-profile', formData);
       toast.success('Founder profile saved successfully.');
-    } catch (error) {
+    } catch {
       toast.error('Failed to save founder profile.');
     } finally {
       setSaving(false);
@@ -84,138 +97,118 @@ export default function FounderProfilePage() {
   };
 
   if (loading) {
-    return <div className="h-40 skeleton max-w-2xl mx-auto" />;
+    return <div className="mx-auto h-40 max-w-4xl skeleton" />;
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-fade-in text-text">
-      <PageHeader
-        title="Founder profile"
-        description="Contact details used in personalized sign-up onboarding emails."
-      />
-
-      <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Founder Name */}
-          <div className="space-y-1">
-            <label htmlFor="founderName" className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconUser size={14} />
-              <span>Founder Name</span>
-            </label>
-            <input
-              id="founderName"
-              type="text"
-              value={formData.founderName}
-              onChange={(e) => handleChange('founderName', e.target.value)}
-              placeholder="John Doe"
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-            />
-            <p className="text-[11px] text-text-300">Your name that will appear in onboarding emails.</p>
+    <SettingsPanel>
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <SettingsCard
+          icon={IconUser}
+          title="Identity"
+          description="Name and email that appear in onboarding messages."
+        >
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <SettingsField label="Founder name" htmlFor="founderName" hint="Shown as the sender in onboarding emails.">
+              <span className="relative block">
+                <IconUser className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="founderName"
+                  type="text"
+                  value={formData.founderName}
+                  onChange={(e) => handleChange('founderName', e.target.value)}
+                  placeholder="Jane Doe"
+                  className={`${settingsInputClass} pl-9`}
+                />
+              </span>
+            </SettingsField>
+            <SettingsField label="Founder email" htmlFor="founderEmail" hint="Where sign-up users can reach you.">
+              <span className="relative block">
+                <IconMail className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="founderEmail"
+                  type="email"
+                  value={formData.founderEmail}
+                  onChange={(e) => handleChange('founderEmail', e.target.value)}
+                  placeholder="jane@company.com"
+                  className={`${settingsInputClass} pl-9`}
+                />
+              </span>
+            </SettingsField>
           </div>
+        </SettingsCard>
 
-          {/* Founder Email */}
-          <div className="space-y-1">
-            <label htmlFor="founderEmail" className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconMail size={14} />
-              <span>Founder Email</span>
-            </label>
-            <input
-              id="founderEmail"
-              type="email"
-              value={formData.founderEmail}
-              onChange={(e) => handleChange('founderEmail', e.target.value)}
-              placeholder="john@company.com"
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-            />
-            <p className="text-[11px] text-text-300">Contact email for sign-up users to reach you.</p>
+        <SettingsCard icon={IconCalendar} title="Booking & chat" description="Optional links included in outreach emails.">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+            <SettingsField label="Calendar link" htmlFor="founderCalendarLink" hint="Calendly, Cal.com, or any scheduling URL.">
+              <span className="relative block">
+                <IconCalendar className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="founderCalendarLink"
+                  type="url"
+                  value={formData.founderCalendarLink}
+                  onChange={(e) => handleChange('founderCalendarLink', e.target.value)}
+                  placeholder="https://calendly.com/jane/30min"
+                  className={`${settingsInputClass} pl-9`}
+                />
+              </span>
+            </SettingsField>
+            <SettingsField label="WhatsApp number" htmlFor="founderWhatsapp" hint="Include country code, e.g. +1 for US.">
+              <span className="relative block">
+                <IconBrandWhatsapp className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="founderWhatsapp"
+                  type="tel"
+                  value={formData.founderWhatsapp}
+                  onChange={(e) => handleChange('founderWhatsapp', e.target.value)}
+                  placeholder="+1234567890"
+                  className={`${settingsInputClass} pl-9`}
+                />
+              </span>
+            </SettingsField>
           </div>
+        </SettingsCard>
 
-          {/* Calendar Link */}
-          <div className="space-y-1">
-            <label htmlFor="founderCalendarLink" className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconCalendar size={14} />
-              <span>Calendar Link</span>
-            </label>
-            <input
-              id="founderCalendarLink"
-              type="url"
-              value={formData.founderCalendarLink}
-              onChange={(e) => handleChange('founderCalendarLink', e.target.value)}
-              placeholder="https://calendly.com/johndoe/30min"
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-            />
-            <p className="text-[11px] text-text-300">Calendly, Cal.com, or any scheduling link.</p>
-          </div>
+        <SettingsCard icon={IconWorldWww} title="Social" description="LinkedIn and optional extra profiles.">
+          <div className="space-y-4">
+            <SettingsField label="LinkedIn profile" htmlFor="founderLinkedin">
+              <span className="relative block">
+                <IconBrandLinkedin className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  id="founderLinkedin"
+                  type="url"
+                  value={formData.founderLinkedin}
+                  onChange={(e) => handleChange('founderLinkedin', e.target.value)}
+                  placeholder="https://linkedin.com/in/janedoe"
+                  className={`${settingsInputClass} pl-9`}
+                />
+              </span>
+            </SettingsField>
 
-          {/* WhatsApp */}
-          <div className="space-y-1">
-            <label htmlFor="founderWhatsapp" className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconBrandWhatsapp size={14} />
-              <span>WhatsApp Number</span>
-            </label>
-            <input
-              id="founderWhatsapp"
-              type="tel"
-              value={formData.founderWhatsapp}
-              onChange={(e) => handleChange('founderWhatsapp', e.target.value)}
-              placeholder="+1234567890"
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-            />
-            <p className="text-[11px] text-text-300">Include country code (e.g., +1 for US).</p>
-          </div>
-
-          {/* LinkedIn */}
-          <div className="space-y-1">
-            <label htmlFor="founderLinkedin" className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconBrandLinkedin size={14} />
-              <span>LinkedIn Profile</span>
-            </label>
-            <input
-              id="founderLinkedin"
-              type="url"
-              value={formData.founderLinkedin}
-              onChange={(e) => handleChange('founderLinkedin', e.target.value)}
-              placeholder="https://linkedin.com/in/johndoe"
-              className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
-            />
-            <p className="text-[11px] text-text-300">Your LinkedIn profile URL.</p>
-          </div>
-
-          {/* Additional Social Links */}
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-text-200 flex items-center space-x-1">
-              <IconWorldWww size={14} />
-              <span>Additional Social Links (Optional)</span>
-            </label>
             <div className="space-y-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Additional links</p>
               {['Twitter', 'Facebook', 'Instagram'].map((platform) => (
-                <div key={platform} className="flex items-center space-x-2">
-                  <span className="text-xs text-text-300 w-20">{platform}</span>
+                <div key={platform} className="flex min-w-0 items-center gap-3">
+                  <span className="w-20 shrink-0 text-xs text-slate-500">{platform}</span>
                   <input
                     type="url"
                     value={formData.founderSocialLinks?.[platform.toLowerCase()] || ''}
                     onChange={(e) => handleSocialLinkChange(platform.toLowerCase(), e.target.value)}
                     placeholder={`https://${platform.toLowerCase()}.com/...`}
-                    className="flex-1 bg-bg-200 border border-border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                    className={settingsInputClass}
                   />
                 </div>
               ))}
             </div>
-            <p className="text-[11px] text-text-300">Optional social media links to include in emails.</p>
           </div>
+        </SettingsCard>
 
-          {/* Submit Button */}
-          <div className="pt-4 flex items-center space-x-3">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-600 transition-colors disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Founder Profile'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="flex justify-end">
+          <button type="submit" disabled={saving} className={settingsBtnPrimary}>
+            {saving ? 'Saving…' : 'Save founder profile'}
+          </button>
+        </div>
+      </form>
+    </SettingsPanel>
   );
 }

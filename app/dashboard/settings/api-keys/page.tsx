@@ -5,7 +5,16 @@ import { useSearchParams } from 'next/navigation';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { toast } from 'sonner';
-import { PageHeader } from '../../../../components/layout/PageHeader';
+import {
+  SettingsCard,
+  SettingsEmpty,
+  SettingsField,
+  SettingsPanel,
+  settingsBtnDanger,
+  settingsBtnPrimary,
+  settingsBtnSecondary,
+  settingsInputClass,
+} from '@/components/settings/primitives';
 import {
   IconAlertTriangle,
   IconCheck,
@@ -310,27 +319,20 @@ function ApiKeysPageInner() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-6xl animate-fade-in space-y-6 text-text">
-      <PageHeader
-        title="API keys"
-        description="Add provider credentials and configure enrichment preferences. Keys are encrypted at rest using AES-256-GCM."
-      />
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="h-fit space-y-4 rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm xl:col-span-1">
-          <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
-            <IconKey size={16} className="text-primary" />
-            Add Credentials
-          </h2>
-
+    <SettingsPanel wide>
+      <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+        <SettingsCard
+          icon={IconKey}
+          title="Add credentials"
+          description="Keys are encrypted at rest with AES-256-GCM."
+        >
           <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-1">
-              <label htmlFor="provider" className="text-xs font-semibold text-text-200">Provider</label>
+            <SettingsField label="Provider" htmlFor="provider">
               <select
                 id="provider"
                 value={provider}
                 onChange={(e) => setProvider(e.target.value as Provider)}
-                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                className={settingsInputClass}
               >
                 {APOLLO_UI_ENABLED && <option value="apollo">Apollo API</option>}
                 <option value="apify">Apify Platform</option>
@@ -339,10 +341,9 @@ function ApiKeysPageInner() {
                 <option value="openrouter">OpenRouter</option>
                 <option value="reoon">Reoon Email Verification</option>
               </select>
-            </div>
+            </SettingsField>
 
-            <div className="space-y-1">
-              <label htmlFor="key" className="text-xs font-semibold text-text-200">API Key</label>
+            <SettingsField label="API key" htmlFor="key">
               <input
                 id="key"
                 type="password"
@@ -355,7 +356,7 @@ function ApiKeysPageInner() {
                     setSelectedNewKeyModel('');
                   }
                 }}
-                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                className={settingsInputClass}
                 placeholder={
                   provider === 'openai'
                     ? 'sk-...'
@@ -366,19 +367,19 @@ function ApiKeysPageInner() {
                         : 'Paste API key'
                 }
               />
-            </div>
+            </SettingsField>
 
-            {isLlmProvider(provider) && (
-              <div className="space-y-3 rounded-lg border border-border bg-bg-200/40 p-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-text-200">{PROVIDER_LABEL[provider]} models</p>
+            {isLlmProvider(provider) ? (
+              <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-600">{PROVIDER_LABEL[provider]} models</p>
                   <button
                     type="button"
-                    onClick={fetchModelsForNewKey}
+                    onClick={() => void fetchModelsForNewKey()}
                     disabled={fetchingNewKeyModels || keyValue.trim().length < 10}
-                    className="text-[11px] px-2 py-1 rounded border border-border bg-bg-300 hover:bg-bg-300/70 text-text-200 disabled:opacity-50"
+                    className={settingsBtnSecondary}
                   >
-                    {fetchingNewKeyModels ? 'Fetching...' : 'Fetch Models'}
+                    {fetchingNewKeyModels ? 'Fetching…' : 'Fetch models'}
                   </button>
                 </div>
 
@@ -386,7 +387,7 @@ function ApiKeysPageInner() {
                   <select
                     value={selectedNewKeyModel}
                     onChange={(e) => setSelectedNewKeyModel(e.target.value)}
-                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                    className={settingsInputClass}
                   >
                     {newKeyModels.map((model) => (
                       <option key={model.id} value={model.id}>
@@ -395,86 +396,74 @@ function ApiKeysPageInner() {
                     ))}
                   </select>
                 ) : (
-                  <p className="text-[11px] text-text-300">
-                    Enter key and fetch models to select one before saving.
-                  </p>
+                  <p className="text-xs text-slate-400">Enter a key and fetch models before saving.</p>
                 )}
               </div>
-            )}
+            ) : null}
 
-            <button
-              type="submit"
-              disabled={submitting}
-              className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {submitting ? 'Saving...' : `Add ${PROVIDER_LABEL[provider]} Key`}
+            <button type="submit" disabled={submitting} className={`${settingsBtnPrimary} w-full`}>
+              {submitting ? 'Saving…' : `Add ${PROVIDER_LABEL[provider]} key`}
             </button>
           </form>
-        </div>
+        </SettingsCard>
 
-        <div className="h-fit space-y-4 rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm xl:col-span-1">
-          <h2 className="text-sm font-semibold text-text-100 flex items-center gap-2">
-            <IconSparkles size={16} className="text-primary" />
-            Enrichment Preferences
-          </h2>
-          <p className="text-[11px] text-text-300 leading-5">
-            Choose LLM routing and which email verifier to use. Only the selected verifier runs —
-            no fallback — so you only spend credits on that provider. Verified emails are cached for 30 days.
-          </p>
-          <form onSubmit={savePreferences} className="space-y-4">
-            <div className="space-y-1">
-              <label htmlFor="emailVerificationProvider" className="text-xs font-semibold text-text-200">
-                Email verification provider
-              </label>
+        <SettingsCard
+          icon={IconSparkles}
+          title="Enrichment preferences"
+          description="Only the selected verifier runs — no fallback. Verified emails are cached for 30 days."
+        >
+          <form onSubmit={(e) => void savePreferences(e)} className="space-y-4">
+            <SettingsField
+              label="Email verification"
+              htmlFor="emailVerificationProvider"
+              hint={
+                emailVerificationProvider === 'reoon'
+                  ? 'Requires a Reoon API key. Apify is not used as a fallback.'
+                  : 'Requires an Apify API key. Bounceverify runs for email checks — Reoon is not called.'
+              }
+            >
               <select
                 id="emailVerificationProvider"
                 value={emailVerificationProvider}
                 onChange={(e) =>
                   setEmailVerificationProvider(e.target.value as EmailVerificationProviderPreference)
                 }
-                className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                className={settingsInputClass}
               >
                 <option value="reoon">Reoon only</option>
                 <option value="apify">Apify Bounceverify only</option>
               </select>
-              <p className="text-[11px] text-text-300 leading-4 pt-1">
-                {emailVerificationProvider === 'reoon'
-                  ? 'Requires a Reoon API key. Results (including unknown) are stored as returned — Apify is not used as a fallback.'
-                  : 'Requires an Apify API key. Bounceverify runs for email checks — Reoon is not called.'}
-              </p>
-              {emailVerificationProvider === 'reoon' && !keys.some((k) => k.provider === 'reoon') && (
-                <p className="text-[11px] text-warning leading-4">Add a Reoon key below before enriching.</p>
-              )}
-              {emailVerificationProvider === 'apify' && !keys.some((k) => k.provider === 'apify') && (
-                <p className="text-[11px] text-warning leading-4">Add an Apify key below before enriching.</p>
-              )}
-            </div>
+            </SettingsField>
+            {emailVerificationProvider === 'reoon' && !keys.some((k) => k.provider === 'reoon') ? (
+              <p className="text-xs text-amber-600">Add a Reoon key before enriching.</p>
+            ) : null}
+            {emailVerificationProvider === 'apify' && !keys.some((k) => k.provider === 'apify') ? (
+              <p className="text-xs text-amber-600">Add an Apify key before enriching.</p>
+            ) : null}
 
-            <div className="border-t border-border pt-4 space-y-4">
-              <p className="text-[11px] font-semibold text-text-200 uppercase tracking-wide">LLM routing</p>
-              <div className="space-y-1">
-                <label htmlFor="llmMode" className="text-xs font-semibold text-text-200">Mode</label>
+            <div className="space-y-4 border-t border-slate-100 pt-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">LLM routing</p>
+              <SettingsField label="Mode" htmlFor="llmMode">
                 <select
                   id="llmMode"
                   value={llmMode}
                   onChange={(e) => void handleModeChange(e.target.value as LlmMode)}
-                  className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                  className={settingsInputClass}
                 >
                   <option value="openai">OpenAI only</option>
                   <option value="gemini">Gemini only</option>
                   <option value="openrouter">OpenRouter only</option>
                   <option value="mix">Mix mode (dynamic)</option>
                 </select>
-              </div>
+              </SettingsField>
 
-              {(llmMode === 'openai' || llmMode === 'mix') && (
-                <div className="space-y-1">
-                  <label htmlFor="openaiModel" className="text-xs font-semibold text-text-200">OpenAI model</label>
+              {llmMode === 'openai' || llmMode === 'mix' ? (
+                <SettingsField label="OpenAI model" htmlFor="openaiModel">
                   <select
                     id="openaiModel"
                     value={openaiModel}
                     onChange={(e) => setOpenaiModel(e.target.value)}
-                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                    className={settingsInputClass}
                   >
                     {openaiModels.length ? (
                       openaiModels.map((model) => (
@@ -486,17 +475,16 @@ function ApiKeysPageInner() {
                       <option value={openaiModel}>No OpenAI key/models found</option>
                     )}
                   </select>
-                </div>
-              )}
+                </SettingsField>
+              ) : null}
 
-              {(llmMode === 'gemini' || llmMode === 'mix') && (
-                <div className="space-y-1">
-                  <label htmlFor="geminiModel" className="text-xs font-semibold text-text-200">Gemini model</label>
+              {llmMode === 'gemini' || llmMode === 'mix' ? (
+                <SettingsField label="Gemini model" htmlFor="geminiModel">
                   <select
                     id="geminiModel"
                     value={geminiModel}
                     onChange={(e) => setGeminiModel(e.target.value)}
-                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                    className={settingsInputClass}
                   >
                     {geminiModels.length ? (
                       geminiModels.map((model) => (
@@ -508,19 +496,16 @@ function ApiKeysPageInner() {
                       <option value={geminiModel}>No Gemini key/models found</option>
                     )}
                   </select>
-                </div>
-              )}
+                </SettingsField>
+              ) : null}
 
-              {llmMode === 'openrouter' && (
-                <div className="space-y-1">
-                  <label htmlFor="openrouterModel" className="text-xs font-semibold text-text-200">
-                    OpenRouter model
-                  </label>
+              {llmMode === 'openrouter' ? (
+                <SettingsField label="OpenRouter model" htmlFor="openrouterModel">
                   <select
                     id="openrouterModel"
                     value={openrouterModel}
                     onChange={(e) => setOpenrouterModel(e.target.value)}
-                    className="w-full bg-bg-200 border border-border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-text-100"
+                    className={settingsInputClass}
                   >
                     {openrouterModels.length ? (
                       openrouterModels.map((model) => (
@@ -532,130 +517,103 @@ function ApiKeysPageInner() {
                       <option value={openrouterModel}>No OpenRouter key/models found</option>
                     )}
                   </select>
-                </div>
-              )}
+                </SettingsField>
+              ) : null}
 
-              {loadingModeModels && (
-                <p className="text-[11px] text-text-300">Refreshing available models...</p>
-              )}
+              {loadingModeModels ? <p className="text-xs text-slate-400">Refreshing available models…</p> : null}
             </div>
 
-            <button
-              type="submit"
-              disabled={savingPrefs}
-              className="w-full bg-primary hover:bg-primary-200 text-white font-medium py-2 rounded-lg text-xs shadow-sm active:scale-[0.98] transition-all disabled:opacity-50"
-            >
-              {savingPrefs ? 'Saving...' : 'Save preferences'}
+            <button type="submit" disabled={savingPrefs} className={`${settingsBtnPrimary} w-full`}>
+              {savingPrefs ? 'Saving…' : 'Save preferences'}
             </button>
           </form>
-        </div>
+        </SettingsCard>
+      </div>
 
-        <div className="xl:col-span-1 space-y-4">
-          {loading ? (
-            <div className="space-y-3">
-              <div className="h-16 skeleton" />
-              <div className="h-16 skeleton" />
-            </div>
-          ) : keys.length === 0 ? (
-            <div className="bg-card p-8 border border-border rounded-xl shadow-input text-center text-text-300 text-xs">
-              No API keys configured yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {keys
-                .filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo')
-                .map((key) => (
-                <div
-                  key={key.id}
-                  className="bg-card p-4 border border-border rounded-2xl flex items-center justify-between hover:border-primary/50 transition-all shadow-sm"
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-center space-x-2">
-                      <span className="text-sm font-semibold capitalize text-text-100">
-                        {PROVIDER_LABEL[key.provider]}
-                      </span>
+      <SettingsCard title="Saved keys" padded={false}>
+        {loading ? (
+          <div className="space-y-3 p-5">
+            <div className="h-16 skeleton" />
+            <div className="h-16 skeleton" />
+          </div>
+        ) : keys.filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo').length === 0 ? (
+          <div className="p-5">
+            <SettingsEmpty>No API keys configured yet.</SettingsEmpty>
+          </div>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {keys
+              .filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo')
+              .map((key) => (
+                <li key={key.id} className="flex min-w-0 items-center justify-between gap-3 px-5 py-3.5">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-slate-900">{PROVIDER_LABEL[key.provider]}</span>
                       <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full flex items-center space-x-1 border ${
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                           key.isValid
-                            ? 'bg-success/10 text-success border-success/20'
-                            : 'bg-warning/10 text-warning border-warning/20'
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700'
                         }`}
                       >
-                        {key.isValid ? (
-                          <>
-                            <IconCheck size={10} className="mr-0.5" />
-                            <span>Valid</span>
-                          </>
-                        ) : (
-                          <>
-                            <IconAlertTriangle size={10} className="mr-0.5" />
-                            <span>Invalid / Untested</span>
-                          </>
-                        )}
+                        {key.isValid ? <IconCheck size={10} /> : <IconAlertTriangle size={10} />}
+                        {key.isValid ? 'Valid' : 'Invalid / untested'}
                       </span>
                     </div>
-                    <p className="text-xs font-mono text-text-300">{key.maskedKey}</p>
-                    {key.lastTestedAt && (
-                      <p className="text-[10px] text-text-300">
-                        Tested: {new Date(key.lastTestedAt).toLocaleString()}
-                      </p>
-                    )}
+                    <p className="truncate font-mono text-xs text-slate-400">{key.maskedKey}</p>
+                    {key.lastTestedAt ? (
+                      <p className="text-[11px] text-slate-400">Tested {new Date(key.lastTestedAt).toLocaleString()}</p>
+                    ) : null}
                   </div>
 
-                  <div className="flex items-center space-x-2">
+                  <div className="flex shrink-0 items-center gap-2">
                     <button
-                      onClick={() => handleTest(key.provider, key.id)}
+                      type="button"
+                      onClick={() => void handleTest(key.provider, key.id)}
                       disabled={testingId === key.id}
-                      className="p-1.5 rounded bg-bg-300 hover:bg-bg-300/80 border border-border text-text-200 hover:text-primary transition-all disabled:opacity-50 cursor-pointer"
-                      title="Test Key"
+                      className={settingsBtnSecondary}
+                      title="Test key"
                     >
                       <IconRefresh size={14} className={testingId === key.id ? 'animate-spin' : ''} />
                     </button>
                     <button
-                      onClick={() => handleDelete(key.id)}
-                      className="p-1.5 rounded bg-bg-300 hover:bg-bg-300/80 border border-border text-text-200 hover:text-error transition-all cursor-pointer"
-                      title="Delete Key"
+                      type="button"
+                      onClick={() => void handleDelete(key.id)}
+                      className={settingsBtnDanger}
+                      title="Delete key"
                     >
                       <IconTrash size={14} />
                     </button>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-          )}
-        </div>
-      </div>
+          </ul>
+        )}
+      </SettingsCard>
 
-      {/* LeadSniper Autopilot — service API keys */}
-      <div className="rounded-xl border border-border bg-bg-200 p-5 space-y-4 mt-6">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-text-100">LeadSniper Autopilot keys</h2>
-            <p className="text-sm text-text-300 mt-1">
-              Create a service API key (starts with lh_) for LeadSniper Autopilot and Sign-up ingest/pull APIs.
-              Includes scopes: leads:read, enrich:write, signups:read, signups:write. The full key is shown
-              only once when you create it — copy it immediately. Existing keys stay masked forever.
-            </p>
-          </div>
+      <SettingsCard
+        title="LeadSniper Autopilot keys"
+        description="Service keys start with lh_ and include leads:read, enrich:write, signups:read, and signups:write. The full key is shown only once."
+        actions={
           <button
             type="button"
             onClick={() => void createServiceKey()}
             disabled={creatingServiceKey}
-            className="shrink-0 px-3 py-1.5 rounded-lg bg-primary text-white text-sm hover:opacity-90 disabled:opacity-50"
+            className={settingsBtnPrimary}
           >
             {creatingServiceKey ? 'Creating…' : 'Create key'}
           </button>
-        </div>
-
-        {plainServiceKey && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm space-y-2">
+        }
+      >
+        {plainServiceKey ? (
+          <div className="mb-4 space-y-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm">
             <p className="font-medium text-amber-900">Copy this key now — it won&apos;t be shown again.</p>
-            <code className="block break-all text-xs font-mono text-amber-950 bg-white/70 p-2 rounded">
+            <code className="block break-all rounded-lg bg-white/80 p-2 font-mono text-xs text-amber-950">
               {plainServiceKey}
             </code>
             <button
               type="button"
-              className="text-xs underline text-amber-900"
+              className="text-xs font-semibold text-amber-900 underline"
               onClick={() => {
                 void navigator.clipboard.writeText(plainServiceKey);
                 toast.success('Copied');
@@ -664,35 +622,32 @@ function ApiKeysPageInner() {
               Copy to clipboard
             </button>
           </div>
-        )}
+        ) : null}
 
         {serviceKeys.length === 0 ? (
-          <p className="text-sm text-text-300">No active service keys.</p>
+          <SettingsEmpty>No active service keys.</SettingsEmpty>
         ) : (
-          <div className="space-y-2">
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-100">
             {serviceKeys.map((key) => (
-              <div
-                key={key.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-100 px-3 py-2"
-              >
-                <div>
-                  <p className="text-sm font-medium text-text-100">{key.name}</p>
-                  <p className="text-xs font-mono text-text-300">{key.maskedKey}</p>
+              <li key={key.id} className="flex min-w-0 items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900">{key.name}</p>
+                  <p className="truncate font-mono text-xs text-slate-400">{key.maskedKey}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => void revokeServiceKey(key.id)}
-                  className="p-1.5 rounded border border-border text-text-200 hover:text-error"
+                  className={settingsBtnDanger}
                   title="Revoke"
                 >
                   <IconTrash size={14} />
                 </button>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
-    </div>
+      </SettingsCard>
+    </SettingsPanel>
   );
 }
 

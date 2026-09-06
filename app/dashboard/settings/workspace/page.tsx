@@ -13,7 +13,14 @@ import {
 } from '@tabler/icons-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
-import { PageHeader } from '@/components/layout/PageHeader';
+import {
+  SettingsCard,
+  SettingsField,
+  SettingsPanel,
+  settingsBtnPrimary,
+  settingsBtnSecondary,
+  settingsInputClass,
+} from '@/components/settings/primitives';
 import type { WorkspaceSummary } from '@/lib/workspace';
 
 function canEditWorkspace(role?: WorkspaceSummary['role']): boolean {
@@ -117,84 +124,63 @@ export default function WorkspaceSettingsPage() {
   }
 
   if (loading) {
-    return <div className="mx-auto h-40 max-w-3xl skeleton" />;
+    return <div className="mx-auto h-40 max-w-4xl skeleton" />;
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8 animate-fade-in text-text">
-      <PageHeader
-        title="Workspaces"
-        description="Create workspaces for separate teams or clients. Leads, enrichment, credits, and captures are scoped to the active workspace."
-      />
-
-      {/* Create */}
-      <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <IconPlus size={18} className="text-primary" />
-          <h2 className="text-base font-semibold text-text-100">Create workspace</h2>
-        </div>
-        <form onSubmit={(e) => void createWorkspace(e)} className="flex flex-col gap-3 sm:flex-row">
+    <SettingsPanel>
+      <SettingsCard
+        icon={IconPlus}
+        title="Create workspace"
+        description="Spin up a separate space for a team or client. Switching scopes leads, enrichment, and credits."
+      >
+        <form onSubmit={(e) => void createWorkspace(e)} className="flex min-w-0 flex-col gap-3 sm:flex-row">
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             placeholder="e.g. Acme Sales, Agency clients…"
             maxLength={255}
-            className="flex-1 rounded-lg border border-border bg-bg-200 px-3 py-2.5 text-sm text-text-100 focus:border-primary focus:outline-none"
+            className={settingsInputClass}
           />
-          <button
-            type="submit"
-            disabled={creating || !newName.trim()}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
+          <button type="submit" disabled={creating || !newName.trim()} className={settingsBtnPrimary}>
             <IconPlus size={16} />
             {creating ? 'Creating…' : 'Create'}
           </button>
         </form>
-      </section>
+      </SettingsCard>
 
-      {/* Active workspace detail */}
       {active ? (
-        <section className="overflow-hidden rounded-xl border border-blue-200 bg-blue-50/50 p-6 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <IconBuilding size={18} className="text-blue-600" />
-            <h2 className="text-base font-semibold text-text-100">Active workspace</h2>
-          </div>
-          <p className="text-lg font-bold text-text-100">{active.name}</p>
-          <p className="mt-1 text-sm text-text-200">
-            {(active.leadCount ?? 0).toLocaleString()} leads · {roleLabel(active.role)}
-          </p>
-          <div className="mt-4 space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-200">Workspace ID</p>
-            <p className="text-xs text-text-200">
-              Paste into LeadSniper → Settings → Integrations when connecting LeadHub Autopilot.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 break-all rounded-lg border border-border bg-white px-3 py-2 text-xs text-text-100">
+        <SettingsCard
+          icon={IconBuilding}
+          title="Active workspace"
+          description={`${(active.leadCount ?? 0).toLocaleString()} leads · ${roleLabel(active.role)}`}
+        >
+          <p className="text-xl font-semibold tracking-tight text-slate-900">{active.name}</p>
+          <SettingsField
+            className="mt-4"
+            label="Workspace ID"
+            hint="Paste into LeadSniper → Settings → Integrations when connecting LeadHub Autopilot."
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <code className="min-w-0 flex-1 break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
                 {active.id}
               </code>
-              <button
-                type="button"
-                onClick={() => void copyId(active.id)}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-white px-3 py-2 text-xs font-medium text-text-100 hover:bg-bg-200"
-              >
+              <button type="button" onClick={() => void copyId(active.id)} className={settingsBtnSecondary}>
                 <IconCopy size={14} />
                 Copy
               </button>
             </div>
-          </div>
-        </section>
+          </SettingsField>
+        </SettingsCard>
       ) : null}
 
-      {/* All workspaces */}
-      <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-text-100">Your workspaces</h2>
-          <p className="mt-1 text-sm text-text-200">
-            Switch from the sidebar dropdown, or set active here.
-          </p>
-        </div>
-
+      <SettingsCard
+        icon={IconUsers}
+        title="Your workspaces"
+        description="Switch from the sidebar dropdown, or set active here."
+        padded={false}
+      >
         <ul className="divide-y divide-slate-100">
           {workspaces.map((workspace) => {
             const isActive = workspace.id === activeWorkspaceId;
@@ -202,8 +188,8 @@ export default function WorkspaceSettingsPage() {
             const editable = canEditWorkspace(workspace.role);
 
             return (
-              <li key={workspace.id} className="px-6 py-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+              <li key={workspace.id} className="px-5 py-4">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     {isEditing ? (
                       <input
@@ -211,29 +197,27 @@ export default function WorkspaceSettingsPage() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={255}
-                        className="w-full max-w-md rounded-lg border border-border bg-bg-200 px-3 py-2 text-sm text-text-100 focus:border-primary focus:outline-none"
+                        className={`${settingsInputClass} max-w-md`}
                         autoFocus
                       />
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-semibold text-text-100">{workspace.name}</p>
+                        <p className="text-sm font-semibold text-slate-900">{workspace.name}</p>
                         {isActive ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
                             <IconCheck size={10} />
                             Active
                           </span>
                         ) : null}
                       </div>
                     )}
-                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-200">
+                    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
                       <span className="inline-flex items-center gap-1">
                         <IconUsers size={12} />
                         {(workspace.leadCount ?? 0).toLocaleString()} leads
                       </span>
                       <span>{roleLabel(workspace.role)}</span>
-                      {workspace.slug ? (
-                        <span className="font-mono text-text-300">{workspace.slug}</span>
-                      ) : null}
+                      {workspace.slug ? <span className="font-mono text-slate-400">{workspace.slug}</span> : null}
                     </p>
                   </div>
 
@@ -244,15 +228,11 @@ export default function WorkspaceSettingsPage() {
                           type="button"
                           onClick={() => void saveEdit(workspace.id)}
                           disabled={savingId === workspace.id || !editName.trim()}
-                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                          className={settingsBtnPrimary}
                         >
                           {savingId === workspace.id ? 'Saving…' : 'Save'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={cancelEdit}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-200 hover:bg-bg-200"
-                        >
+                        <button type="button" onClick={cancelEdit} className={settingsBtnSecondary}>
                           Cancel
                         </button>
                       </>
@@ -265,28 +245,24 @@ export default function WorkspaceSettingsPage() {
                               setActiveWorkspaceId(workspace.id);
                               toast.success(`Switched to "${workspace.name}".`);
                             }}
-                            className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-100 hover:bg-bg-200"
+                            className={settingsBtnSecondary}
                           >
                             Switch
                           </button>
                         ) : null}
                         {editable ? (
-                          <button
-                            type="button"
-                            onClick={() => startEdit(workspace)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-100 hover:bg-bg-200"
-                          >
-                            <IconPencil size={12} />
+                          <button type="button" onClick={() => startEdit(workspace)} className={settingsBtnSecondary}>
+                            <IconPencil size={14} />
                             Rename
                           </button>
                         ) : null}
                         <button
                           type="button"
                           onClick={() => void copyId(workspace.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-text-200 hover:bg-bg-200"
+                          className={settingsBtnSecondary}
                           title="Copy workspace ID"
                         >
-                          <IconCopy size={12} />
+                          <IconCopy size={14} />
                         </button>
                       </>
                     )}
@@ -298,19 +274,17 @@ export default function WorkspaceSettingsPage() {
         </ul>
 
         {!workspaces.length ? (
-          <p className="px-6 py-8 text-center text-sm text-text-200">
-            No workspaces yet. Create one above to get started.
-          </p>
+          <p className="px-5 py-8 text-center text-sm text-slate-500">No workspaces yet. Create one above to get started.</p>
         ) : null}
-      </section>
+      </SettingsCard>
 
-      <p className="text-xs text-text-300">
+      <p className="text-xs text-slate-400">
         Need a fresh pipeline?{' '}
-        <Link href="/dashboard/leads/import" className="font-semibold text-primary hover:underline">
+        <Link href="/dashboard/leads/import" className="font-semibold text-settings-accent hover:underline">
           Import leads
         </Link>{' '}
         after switching to the right workspace.
       </p>
-    </div>
+    </SettingsPanel>
   );
 }

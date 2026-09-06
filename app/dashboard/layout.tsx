@@ -1,16 +1,19 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { IconMenu2 } from '@tabler/icons-react';
 import { useAuth } from '../../context/AuthContext';
 import { MainSidebar } from '../../components/layout/MainSidebar';
 import { spinnerClass } from '../../components/ui/styles';
+import { cn } from '../../lib/utils';
+import { isSettingsPath } from '../../lib/settings-nav';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, onboardingStep, onboardingLoading, activeWorkspaceId, setActiveWorkspaceId } =
     useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   useEffect(() => {
@@ -65,7 +68,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </button>
           <span className="ml-3 font-semibold text-text-100">LeadHub</span>
         </header>
-        <main className="thin-scrollbar min-w-0 flex-1 overflow-auto p-6">{children}</main>
+        <main
+          className={cn(
+            'thin-scrollbar min-w-0 flex-1 overflow-auto',
+            isSettingsPath(pathname) ? 'p-0' : 'p-6',
+          )}
+        >
+          {children}
+        </main>
       </div>
     </div>
   );
