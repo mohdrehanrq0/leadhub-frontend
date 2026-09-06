@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../lib/api';
 
 export type EnrichmentAgentSummary = {
@@ -19,8 +19,10 @@ export type EnrichmentAgentSummary = {
 type Props = {
   value: string;
   onChange: (agentId: string) => void;
+  onSelectedAgentChange?: (agent: EnrichmentAgentSummary | null) => void;
   className?: string;
   compact?: boolean;
+  showDescription?: boolean;
 };
 
 function agentOptionLabel(a: EnrichmentAgentSummary) {
@@ -34,7 +36,14 @@ function agentOptionLabel(a: EnrichmentAgentSummary) {
   return `${a.name}${a.isDefault ? ' (default)' : ''}${peopleBit}`;
 }
 
-export function EnrichmentAgentPicker({ value, onChange, className = '', compact = false }: Props) {
+export function EnrichmentAgentPicker({
+  value,
+  onChange,
+  onSelectedAgentChange,
+  className = '',
+  compact = false,
+  showDescription = false,
+}: Props) {
   const [agents, setAgents] = useState<EnrichmentAgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -62,28 +71,47 @@ export function EnrichmentAgentPicker({ value, onChange, className = '', compact
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const selectedAgent = useMemo(
+    () => agents.find((agent) => agent.id === value) ?? null,
+    [agents, value],
+  );
+
+  useEffect(() => {
+    onSelectedAgentChange?.(selectedAgent);
+  }, [onSelectedAgentChange, selectedAgent]);
+
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
-      <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Agent</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={loading || agents.length === 0}
-        className={`rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 ${
-          compact ? 'max-w-[260px]' : ''
-        }`}
-        title={agents.find((a) => a.id === value)?.description ?? undefined}
-      >
-        {agents.length === 0 ? (
-          <option value="">No agents</option>
-        ) : (
-          agents.map((a) => (
-            <option key={a.id} value={a.id}>
-              {agentOptionLabel(a)}
-            </option>
-          ))
+      <div className={showDescription ? 'min-w-0 flex-1' : ''}>
+        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Research agent</label>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={loading || agents.length === 0}
+          className={`mt-1 block rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-800 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-100 ${
+            compact ? 'max-w-[260px]' : 'w-full'
+          }`}
+          title={selectedAgent?.description ?? undefined}
+        >
+          {agents.length === 0 ? (
+            <option value="">{loading ? 'Loading agents…' : 'No agents configured'}</option>
+          ) : (
+            agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {agentOptionLabel(a)}
+              </option>
+            ))
+          )}
+        </select>
+        {showDescription && (
+          <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-slate-500">
+            {selectedAgent?.description ||
+              (loading
+                ? 'Loading the agents available to this workspace…'
+                : 'Create an enrichment agent to control the data your team researches.')}
+          </p>
         )}
-      </select>
+      </div>
     </div>
   );
 }

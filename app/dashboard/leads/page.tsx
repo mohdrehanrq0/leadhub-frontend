@@ -36,7 +36,8 @@ import {
 } from '../../../components/leads/types';
 import { AddLeadModal } from '../../../components/leads/AddLeadModal';
 import { LeadsToolbar } from '../../../components/leads/LeadsToolbar';
-import { EnrichmentAgentPicker } from '../../../components/leads/EnrichmentAgentPicker';
+import { EnrichmentAgentPicker, type EnrichmentAgentSummary } from '../../../components/leads/EnrichmentAgentPicker';
+import { CrmCommandCenter } from '../../../components/leads/CrmCommandCenter';
 import { SelectionActionBar } from '../../../components/leads/SelectionActionBar';
 import { LeadsTable } from '../../../components/leads/LeadsTable';
 import type { ColumnFilterKey } from '../../../components/leads/columnFilters';
@@ -94,6 +95,7 @@ export default function LeadsPage() {
   const [bulkCategoryId, setBulkCategoryId] = useState('');
   const [bulkListId, setBulkListId] = useState('');
   const [enrichmentAgentId, setEnrichmentAgentId] = useState('');
+  const [selectedEnrichmentAgent, setSelectedEnrichmentAgent] = useState<EnrichmentAgentSummary | null>(null);
 
   const [showAddLeadModal, setShowAddLeadModal] = useState(false);
   const [showDeduplicateModal, setShowDeduplicateModal] = useState(false);
@@ -162,6 +164,11 @@ export default function LeadsPage() {
     if (key === 'emailVerificationStatus') setEmailVerificationStatuses(values);
     else if (key === 'enrichmentStatus') setEnrichmentStatuses(values);
     else if (key === 'priority') setPriorities(values);
+  }, []);
+
+  const selectEnrichmentAgent = useCallback((agentId: string) => {
+    setEnrichmentAgentId(agentId);
+    setSelectedEnrichmentAgent(null);
   }, []);
 
   const fetchMatchingIds = useCallback(async (filters: LeadQueryFilters) => {
@@ -421,6 +428,10 @@ export default function LeadsPage() {
 
   const startEnrichment = async (leadIds: string[], reEnrich: boolean) => {
     if (leadIds.length === 0) return;
+    if (!enrichmentAgentId) {
+      toast.error('Choose an enrichment agent before starting research.');
+      return;
+    }
     if (hasLlmKey === false) {
       toast.error('AI API key required. Add OpenAI, Gemini, or OpenRouter in Settings › API Keys.', {
         duration: 6000,
@@ -495,7 +506,8 @@ export default function LeadsPage() {
 
       const confirmed = window.confirm(
         `${reEnrich ? 'Re-run research on' : 'Enrich'} ${runIds.length} lead(s)? ` +
-          `Uses up to ${runIds.length} credit(s), only charged on success.` +
+          `Uses up to ${runIds.length} credit(s), only charged on success.\n\n` +
+          `Research agent: ${selectedEnrichmentAgent?.name ?? 'Selected workspace agent'}.` +
           (notes.length ? `\n\n${notes.join('. ')}.` : ''),
       );
       if (!confirmed) return;
@@ -515,7 +527,7 @@ export default function LeadsPage() {
           leadIds: chunk,
           reEnrich,
           allowDiscovery,
-          ...(enrichmentAgentId ? { enrichmentAgentId } : {}),
+          enrichmentAgentId,
         });
         leadCount += res.data.data?.leadCount ?? chunk.length;
         skipped += res.data.data?.skippedCount ?? 0;
@@ -766,6 +778,20 @@ export default function LeadsPage() {
         }
       />
 
+      <CrmCommandCenter
+        leads={leads}
+        totalCount={totalCount}
+        selectedCount={selected.size}
+        selectedAgentId={enrichmentAgentId}
+        onAgentChange={selectEnrichmentAgent}
+        onSelectedAgentChange={setSelectedEnrichmentAgent}
+        onEnrich={handleEnrich}
+        enriching={enriching || reEnriching}
+        hasLlmKey={hasLlmKey}
+        activeStage={stage}
+        onStageChange={setStage}
+      />
+
       <LeadsToolbar
         query={query}
         onQueryChange={setQuery}
@@ -825,7 +851,8 @@ export default function LeadsPage() {
         intentPackSlot={
           <EnrichmentAgentPicker
             value={enrichmentAgentId}
-            onChange={setEnrichmentAgentId}
+            onChange={selectEnrichmentAgent}
+            onSelectedAgentChange={setSelectedEnrichmentAgent}
             compact
           />
         }
