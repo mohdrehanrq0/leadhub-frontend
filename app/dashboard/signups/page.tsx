@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import api from '../../../lib/api';
 import { toast } from 'sonner';
-import { IconFilter, IconRefresh, IconFileText, IconLink } from '@tabler/icons-react';
+import { IconFilter, IconRefresh, IconFileText, IconLink, IconAlertTriangle, IconArrowRight } from '@tabler/icons-react';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import { btnOutline, btnPrimary } from '../../../components/ui/styles';
 import EmailPromptModal from '../../../components/signups/EmailPromptModal';
@@ -32,10 +32,29 @@ export default function SignupsPage() {
   }>({});
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [showResourceLinksModal, setShowResourceLinksModal] = useState(false);
+  const [founderProfileStatus, setFounderProfileStatus] = useState<{
+    isComplete?: boolean;
+    missingFields?: string[];
+  } | null>(null);
 
   useEffect(() => {
     fetchSignupLeads();
+    checkFounderProfile();
   }, [filter]);
+
+  const checkFounderProfile = async () => {
+    try {
+      const res = await api.get('/api/onboarding/founder-profile');
+      if (res.data.success && res.data.data) {
+        setFounderProfileStatus({
+          isComplete: res.data.data.isComplete,
+          missingFields: res.data.data.missingFields || [],
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
+  };
 
   const fetchSignupLeads = async () => {
     try {
@@ -116,6 +135,33 @@ export default function SignupsPage() {
           </>
         }
       />
+
+      {/* Founder Profile Gating / Warning Banner */}
+      {founderProfileStatus && !founderProfileStatus.isComplete && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <IconAlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
+                  Founder Profile Incomplete — Sign-up Email Automation Paused
+                </h3>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                  Automated onboarding emails require your complete composite founder persona (missing: {founderProfileStatus.missingFields?.join(', ')}). 
+                  General lead storage and enrichment remain unaffected.
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/dashboard/settings/founder-profile"
+              className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm transition"
+            >
+              <span>Complete Founder Profile</span>
+              <IconArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Info Banner */}
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">

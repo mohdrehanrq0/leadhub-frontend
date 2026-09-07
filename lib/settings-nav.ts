@@ -1,5 +1,7 @@
 import {
   IconBuilding,
+  IconBuildingSkyscraper,
+  IconCode,
   IconKey,
   IconPuzzle,
   IconRobot,
@@ -23,10 +25,22 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: 'Create, rename, and switch workspaces. Leads, credits, and captures stay scoped to the active one.',
   },
   {
+    name: 'Company Profile',
+    href: '/dashboard/settings/company',
+    icon: IconBuildingSkyscraper,
+    description: 'View and update company identity, offerings, tech stack, ICP, and target niches from onboarding.',
+  },
+  {
+    name: 'Developer API',
+    href: '/dashboard/settings/developer-api',
+    icon: IconCode,
+    description: 'Create API tokens and access the LeadCRM REST API with interactive documentation and code snippets.',
+  },
+  {
     name: 'API Keys',
     href: '/dashboard/settings/api-keys',
     icon: IconKey,
-    description: 'Store provider credentials and choose how enrichment routes LLM and email verification.',
+    description: 'Store AI and data provider credentials (OpenAI, Gemini, Apify, Reoon) and choose LLM routing.',
   },
   {
     name: 'Enrichment',
@@ -44,7 +58,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     name: 'Founders',
     href: '/dashboard/settings/founder-profile',
     icon: IconUser,
-    description: 'Contact details used in personalized sign-up onboarding emails.',
+    description: 'Composite founder persona and company context. Optional for CRM, required for Sign-up email automation.',
   },
   {
     name: 'Profile',

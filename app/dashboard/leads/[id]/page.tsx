@@ -5,15 +5,20 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   IconActivity,
+  IconAlertTriangle,
   IconArrowLeft,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
+  IconCopy,
   IconExternalLink,
+  IconFileDescription,
   IconLoader2,
   IconMail,
+  IconPlus,
   IconSparkles,
   IconTrash,
+  IconWorld,
   IconX,
   IconRefresh,
 } from '@tabler/icons-react';
@@ -1169,6 +1174,45 @@ export default function LeadDetailPage() {
 
   const saveNotes = () => patch({ notes });
 
+  const [showAddWebsite, setShowAddWebsite] = useState(false);
+  const [websiteInput, setWebsiteInput] = useState('');
+  const [savingWebsite, setSavingWebsite] = useState(false);
+
+  const suggestedDomain = useMemo(() => {
+    if (lead?.company?.domain) return null;
+    const email = lead?.contact?.email?.trim();
+    if (!email || !email.includes('@')) return null;
+    const domain = email.split('@')[1]?.toLowerCase().trim();
+    if (!domain) return null;
+    const generic = new Set([
+      'gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+      'live.com', 'msn.com', 'icloud.com', 'me.com', 'proton.me', 'protonmail.com',
+      'aol.com', 'zoho.com', 'mail.com', 'yandex.com', 'gmx.com'
+    ]);
+    return generic.has(domain) ? null : domain;
+  }, [lead?.company?.domain, lead?.contact?.email]);
+
+  const handleSaveWebsite = async (domainToSave: string) => {
+    const clean = domainToSave.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!clean) return;
+    setSavingWebsite(true);
+    try {
+      await patch({
+        company: {
+          ...(lead?.company ?? {}),
+          name: lead?.company?.name || clean,
+          domain: clean,
+        },
+      });
+      setShowAddWebsite(false);
+      toast.success(`Company website set to ${clean}`);
+    } catch {
+      toast.error('Failed to save company website');
+    } finally {
+      setSavingWebsite(false);
+    }
+  };
+
   const addToList = async () => {
     if (!listToAdd) return;
     try {
@@ -1214,14 +1258,21 @@ export default function LeadDetailPage() {
   const formatDate = (v?: string | null) =>
     v ? new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(v)) : '—';
 
-  const scoreBar = (n: number | null | undefined) => (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-      <div
-        className={`h-full rounded-full ${(n ?? 0) >= 70 ? 'bg-emerald-500' : (n ?? 0) >= 40 ? 'bg-amber-400' : 'bg-rose-400'}`}
-        style={{ width: `${n ?? 0}%` }}
-      />
-    </div>
-  );
+  const scoreBar = (n: number | null | undefined) => {
+    if (n == null) {
+      return <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100" />;
+    }
+    const val = Math.max(0, Math.min(100, n));
+    const tone = val >= 70 ? 'bg-emerald-500' : val >= 40 ? 'bg-amber-400' : 'bg-rose-400';
+    return (
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className={`h-full rounded-full ${tone} transition-all duration-300`}
+          style={{ width: `${val}%` }}
+        />
+      </div>
+    );
+  };
 
   // Determine current active step log index for progress calculation
   const completedCount = enrichmentLogs.filter((l) => ['completed', 'skipped'].includes(l.status)).length;
@@ -1389,104 +1440,191 @@ export default function LeadDetailPage() {
         </Link>
 
         {enrichBlock && (
-          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
-            <p className="text-sm font-bold">⚠ {enrichBlock}</p>
-            <p className="mt-1 text-xs leading-5 text-amber-800">{enrichDisabledMsg}</p>
-          </div>
-        )}
+          <div className="mb-5 rounded-2xl border border-amber-200/80 bg-linear-to-r from-amber-500/10 via-amber-500/5 to-transparent p-4 text-amber-950 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-700">
+                  <IconAlertTriangle size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-amber-900">{enrichBlock}</h3>
+                  <p className="mt-0.5 text-xs text-amber-800 leading-relaxed max-w-2xl">{enrichDisabledMsg}</p>
+                </div>
+              </div>
 
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-blue-500 to-violet-600 text-2xl font-black text-white shadow-lg">
-              {contactName.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-950">{contactName}</h1>
-              <p className="mt-0.5 text-sm text-slate-600">{lead.contact?.role ?? 'No role'} at {lead.company?.name ?? 'Unknown company'}</p>
-              {allEmails.length > 0 && (
-                <div className="mt-1.5 flex flex-col gap-1.5">
-                  {allEmails.map((entry) => (
-                    <div key={entry.email} className="flex flex-wrap items-center gap-2">
-                      <a
-                        href={`mailto:${entry.email}`}
-                        className={`inline-flex items-center gap-1.5 font-mono text-sm font-semibold hover:underline ${entry.isPrimary ? 'text-blue-700' : 'text-slate-700'}`}
-                      >
-                        <IconMail size={14} className="shrink-0" />
-                        {entry.email}
-                        {entry.isPrimary && (
-                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-blue-700">
-                            primary
-                          </span>
-                        )}
-                      </a>
-                      {entry.status && (
-                        <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] font-bold capitalize ${verificationTone(entry.status)}`}
-                        >
-                          {entry.status.replace(/_/g, ' ')}
-                        </span>
-                      )}
-                      {entry.sourceUrl ? (
-                        <a
-                          href={entry.sourceUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:border-blue-200 hover:text-blue-700"
-                          title={entry.sourceTitle ?? entry.sourceUrl}
-                        >
-                          Found on {emailSourceHost(entry.sourceUrl) ?? 'source'}
-                        </a>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {(headerContactLinkedIn || headerCompanyLinkedIn) && (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  {headerContactLinkedIn ? (
-                    <LinkedInLink url={headerContactLinkedIn} kind="person" compact />
-                  ) : null}
-                  {headerCompanyLinkedIn ? (
-                    <LinkedInLink url={headerCompanyLinkedIn} kind="company" compact />
-                  ) : null}
-                </div>
-              )}
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span
-                  title={INPUT_TIER_META[inputTier].description}
-                  className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${INPUT_TIER_META[inputTier].tone}`}
-                >
-                  Input: {INPUT_TIER_META[inputTier].label}
-                </span>
-                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${stageMeta(lead.pipelineStage).tone}`}>
-                  {stageMeta(lead.pipelineStage).label}
-                </span>
-                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-black ${priorityTone(lead.priority)}`}>
-                  {lead.priority}
-                </span>
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-black ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}>
-                  {enrichMeta.icon} {enrichMeta.label}
-                </span>
-                <EnrichmentAgentBadge
-                  agent={lead.enrichmentAgent}
-                  agentId={lead.enrichmentAgentId}
-                />
-                <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-600 capitalize">{lead.source}</span>
-                {lead.importFileName && (
-                  <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700" title={lead.importFileName}>
-                    {lead.importFileName}
-                  </span>
+              {/* Quick Actions in Banner */}
+              <div className="flex items-center gap-2 shrink-0 sm:self-center pl-12 sm:pl-0">
+                {suggestedDomain && (
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveWebsite(suggestedDomain)}
+                    disabled={savingWebsite}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-xs transition"
+                  >
+                    <IconWorld size={13} />
+                    <span>Use {suggestedDomain} from email</span>
+                  </button>
+                )}
+                {!showAddWebsite ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWebsiteInput(suggestedDomain || '');
+                      setShowAddWebsite(true);
+                    }}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-amber-300/80 bg-white/80 hover:bg-white text-amber-900 text-xs font-semibold shadow-xs transition"
+                  >
+                    <IconPlus size={13} />
+                    <span>Add Website</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={websiteInput}
+                      onChange={(e) => setWebsiteInput(e.target.value)}
+                      placeholder="e.g. company.com"
+                      className="h-8 px-2.5 text-xs rounded-lg border border-amber-300 bg-white text-slate-800 outline-none focus:ring-2 focus:ring-amber-200"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveWebsite(websiteInput)}
+                      disabled={savingWebsite || !websiteInput.trim()}
+                      className="h-8 px-2.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white text-xs font-semibold shadow-xs"
+                    >
+                      {savingWebsite ? 'Saving…' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddWebsite(false)}
+                      className="h-8 px-2 text-slate-500 hover:text-slate-700 text-xs"
+                    >
+                      <IconX size={14} />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
           </div>
+        )}
+
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-4">
+            <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-blue-600 via-indigo-600 to-violet-600 text-2xl font-bold text-white shadow-md ring-4 ring-white/60">
+              {contactName.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-950">{contactName}</h1>
+              <p className="mt-0.5 text-sm font-medium text-slate-600 flex items-center gap-1.5">
+                <span>{lead.contact?.role ?? 'No role'}</span>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-800 font-semibold">{lead.company?.name ?? 'Unknown company'}</span>
+              </p>
+
+              {/* Contact channels (Email & Socials) */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {allEmails.length > 0 && allEmails.map((entry) => (
+                  <div key={entry.email} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white/80 px-2.5 py-1 shadow-2xs">
+                    <IconMail size={13} className="text-slate-400 shrink-0" />
+                    <a
+                      href={`mailto:${entry.email}`}
+                      className={`font-mono text-xs font-semibold hover:underline ${entry.isPrimary ? 'text-blue-700' : 'text-slate-700'}`}
+                    >
+                      {entry.email}
+                    </a>
+                    {entry.isPrimary && (
+                      <span className="rounded bg-blue-100/80 px-1.5 py-0.2 text-[9px] font-bold uppercase text-blue-700">
+                        Primary
+                      </span>
+                    )}
+                    {entry.status && entry.status !== 'unknown' && (
+                      <span
+                        className={`rounded-full border px-1.5 py-0.2 text-[9px] font-bold capitalize ${verificationTone(entry.status)}`}
+                      >
+                        {entry.status === 'valid' ? '✓ Verified' : entry.status.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                    {entry.sourceUrl ? (
+                      <a
+                        href={entry.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.2 text-[9px] font-medium text-slate-600 hover:text-blue-700"
+                        title={entry.sourceTitle ?? entry.sourceUrl}
+                      >
+                        {emailSourceHost(entry.sourceUrl) ?? 'source'}
+                      </a>
+                    ) : null}
+                  </div>
+                ))}
+
+                {(headerContactLinkedIn || headerCompanyLinkedIn) && (
+                  <div className="flex items-center gap-1.5">
+                    {headerContactLinkedIn ? (
+                      <LinkedInLink url={headerContactLinkedIn} kind="person" compact />
+                    ) : null}
+                    {headerCompanyLinkedIn ? (
+                      <LinkedInLink url={headerCompanyLinkedIn} kind="company" compact />
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* Status Badges Row (Organized) */}
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <span className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${stageMeta(lead.pipelineStage).tone}`}>
+                  {stageMeta(lead.pipelineStage).label}
+                </span>
+
+                <span className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}>
+                  {enrichMeta.icon} {enrichMeta.label}
+                </span>
+
+                <span
+                  title={INPUT_TIER_META[inputTier].description}
+                  className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${INPUT_TIER_META[inputTier].tone}`}
+                >
+                  Input: {INPUT_TIER_META[inputTier].label}
+                </span>
+
+                {lead.priority && (lead.priority as string) !== 'unknown' && (
+                  <span className={`inline-flex items-center rounded-lg border px-2.5 py-0.5 text-xs font-semibold capitalize ${priorityTone(lead.priority)}`}>
+                    {lead.priority} priority
+                  </span>
+                )}
+
+                <EnrichmentAgentBadge
+                  agent={lead.enrichmentAgent}
+                  agentId={lead.enrichmentAgentId}
+                  hideEmpty
+                />
+              </div>
+
+              {/* Source & File Provenance (Subtle footer note) */}
+              {(lead.source || lead.importFileName) && (
+                <div className="mt-2.5 flex items-center gap-2 text-xs text-slate-400 font-medium">
+                  <span className="capitalize">Source: {lead.source}</span>
+                  {lead.importFileName && (
+                    <>
+                      <span>•</span>
+                      <span className="inline-flex items-center gap-1 text-slate-500 font-mono text-[11px]" title={lead.importFileName}>
+                        <IconFileDescription size={13} className="text-slate-400" />
+                        {lead.importFileName}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           {/* Quick scores + enrich actions */}
-          <div className="flex flex-col items-end gap-3 shrink-0">
+          <div className="flex flex-col items-end gap-3.5 shrink-0">
             <div className="flex flex-wrap items-center justify-end gap-2">
               {lead.enrichmentStatus === 'in_progress' ? (
-                <span className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-bold text-blue-800">
-                  <IconLoader2 size={14} className="animate-spin" />
+                <span className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-blue-200 bg-blue-50 text-xs font-bold text-blue-800 shadow-xs">
+                  <IconLoader2 size={15} className="animate-spin text-blue-600" />
                   Enrichment in progress…
                 </span>
               ) : (
@@ -1495,6 +1633,7 @@ export default function LeadDetailPage() {
                     value={enrichmentAgentId}
                     onChange={setEnrichmentAgentId}
                     compact
+                    hideLabel
                   />
                   {lead.enrichmentStatus === 'needs_identity_confirmation' ? (
                     <button
@@ -1503,7 +1642,7 @@ export default function LeadDetailPage() {
                         setIdentityDismissed(false);
                         setShowIdentityModal(true);
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100"
+                      className="inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl border border-amber-300 bg-amber-50 text-xs font-bold text-amber-900 hover:bg-amber-100 transition shadow-xs"
                     >
                       Confirm company
                     </button>
@@ -1513,18 +1652,17 @@ export default function LeadDetailPage() {
                     onClick={() => void handleReEnrich()}
                     disabled={!canRunEnrich || reEnriching || deleting}
                     title={canRunEnrich ? undefined : (enrichDisabledMsg ?? undefined)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    className={`inline-flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                      canRunEnrich
+                        ? 'bg-linear-to-r from-violet-600 to-indigo-600 text-white hover:from-violet-700 hover:to-indigo-700 shadow-violet-200/50 active:scale-[0.98]'
+                        : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed'
+                    }`}
                   >
-                    {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
+                    {reEnriching ? <IconLoader2 size={15} className="animate-spin" /> : <IconSparkles size={15} />}
                     {lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial'
                       ? 'Re-enrich'
                       : 'Run enrichment'}
                   </button>
-                  {!canRunEnrich && enrichDisabledMsg && (
-                    <span className="max-w-[240px] text-right text-[11px] font-semibold leading-snug text-amber-700">
-                      {enrichDisabledMsg}
-                    </span>
-                  )}
                 </>
               )}
               <button
@@ -1536,13 +1674,14 @@ export default function LeadDetailPage() {
                     ? 'Wait for enrichment to finish before deleting'
                     : 'Delete this lead permanently'
                 }
-                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 transition shadow-xs disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {deleting ? <IconLoader2 size={14} className="animate-spin" /> : <IconTrash size={14} />}
-                {deleting ? 'Deleting…' : 'Delete'}
+                {deleting ? <IconLoader2 size={15} className="animate-spin" /> : <IconTrash size={15} />}
               </button>
             </div>
-            <div className="flex gap-4">
+
+            {/* Score Cards Row */}
+            <div className="flex gap-2.5">
             {(() => {
               const modules = (lead.enrichmentPolicy as { modules?: Record<string, boolean> } | null)
                 ?.modules;
@@ -1552,15 +1691,28 @@ export default function LeadDetailPage() {
                 { label: 'ICP', val: lead.icpScore },
                 { label: 'Intent', val: lead.intentScore },
                 { label: 'Confidence', val: lead.confidence },
-              ].map(({ label, val }) => (
-              <div key={label} className="w-24 rounded-2xl border border-slate-200 bg-white p-3 text-center shadow-sm">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-                <p className="mt-1 text-xl font-black text-slate-950">
-                  {!enrichmentDone && val == null ? '—' : `${val ?? 0}%`}
-                </p>
-                {scoreBar(enrichmentDone || val != null ? (val ?? 0) : null)}
-              </div>
-            ));
+              ].map(({ label, val }) => {
+                const isAvailable = enrichmentDone || val != null;
+                const score = isAvailable ? val ?? 0 : null;
+                const scoreColor =
+                  score == null
+                    ? 'text-slate-300 font-medium text-lg'
+                    : score >= 70
+                      ? 'text-emerald-600 font-black text-xl'
+                      : score >= 40
+                        ? 'text-amber-600 font-black text-xl'
+                        : 'text-slate-700 font-black text-xl';
+
+                return (
+                  <div key={label} className="w-24 rounded-2xl border border-slate-200/90 bg-white/95 p-3 text-center shadow-xs backdrop-blur-xs">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+                    <p className={`mt-1 ${scoreColor}`}>
+                      {score == null ? '—' : `${score}%`}
+                    </p>
+                    {scoreBar(score)}
+                  </div>
+                );
+              });
             })()}
             </div>
           </div>

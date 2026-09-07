@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '../../../../lib/api';
 import { toast } from 'sonner';
-import { IconArrowLeft, IconMail, IconBuilding, IconUser, IconCalendar, IconCopy } from '@tabler/icons-react';
+import { IconArrowLeft, IconMail, IconBuilding, IconUser, IconCalendar, IconCopy, IconAlertTriangle, IconArrowRight } from '@tabler/icons-react';
 import Link from 'next/link';
 
 interface SignupLead {
@@ -32,12 +32,31 @@ export default function SignupDetailPage() {
   const [signupLead, setSignupLead] = useState<SignupLead | null>(null);
   const [loading, setLoading] = useState(true);
   const [showHtmlPreview, setShowHtmlPreview] = useState(false);
+  const [founderProfileStatus, setFounderProfileStatus] = useState<{
+    isComplete?: boolean;
+    missingFields?: string[];
+  } | null>(null);
 
   useEffect(() => {
     if (params.id) {
       fetchSignupLead(params.id as string);
+      checkFounderProfile();
     }
   }, [params.id]);
+
+  const checkFounderProfile = async () => {
+    try {
+      const res = await api.get('/api/onboarding/founder-profile');
+      if (res.data.success && res.data.data) {
+        setFounderProfileStatus({
+          isComplete: res.data.data.isComplete,
+          missingFields: res.data.data.missingFields || [],
+        });
+      }
+    } catch {
+      // Non-blocking
+    }
+  };
 
   const fetchSignupLead = async (id: string) => {
     try {
@@ -177,7 +196,7 @@ export default function SignupDetailPage() {
       </div>
 
       {/* Generated Email */}
-      {signupLead.generatedEmailSubject && (
+      {signupLead.generatedEmailSubject ? (
         <div className="bg-card p-6 border border-border rounded-xl shadow-input space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-text-100 flex items-center space-x-2">
@@ -227,6 +246,37 @@ export default function SignupDetailPage() {
               </p>
             )}
           </div>
+        </div>
+      ) : founderProfileStatus && !founderProfileStatus.isComplete ? (
+        <div className="bg-card p-6 border border-amber-500/30 bg-amber-500/5 rounded-xl shadow-input space-y-3">
+          <div className="flex items-start gap-3">
+            <IconAlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-amber-900 dark:text-amber-100">
+                Onboarding Email Generation Pending Founder Profile
+              </h2>
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                Automatic email generation for this signup is paused until your composite founder profile is completed. Missing required fields: {founderProfileStatus.missingFields?.join(', ')}.
+              </p>
+            </div>
+          </div>
+          <div className="pt-2 flex justify-end">
+            <Link
+              href="/dashboard/settings/founder-profile"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm transition"
+            >
+              <span>Complete Founder Profile</span>
+              <IconArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-card p-6 border border-border rounded-xl shadow-input text-center py-8">
+          <IconMail className="h-8 w-8 text-text-300 mx-auto mb-2 opacity-50" />
+          <h2 className="text-sm font-semibold text-text-100">No Email Generated Yet</h2>
+          <p className="text-xs text-text-300 mt-1 max-w-sm mx-auto">
+            Once background lead enrichment completes, an AI onboarding email will be drafted according to your founder persona guidelines.
+          </p>
         </div>
       )}
     </div>

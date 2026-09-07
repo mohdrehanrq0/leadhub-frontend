@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import api from '../../../../lib/api';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
@@ -18,9 +19,11 @@ import {
 import {
   IconAlertTriangle,
   IconCheck,
+  IconChevronRight,
   IconKey,
   IconRefresh,
   IconSparkles,
+  IconTerminal2,
   IconTrash,
 } from '@tabler/icons-react';
 
@@ -320,6 +323,28 @@ function ApiKeysPageInner() {
 
   return (
     <SettingsPanel wide>
+      {/* ─── Developer API Callout ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-indigo-50/90 via-white to-indigo-50/50 p-4 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow">
+            <IconTerminal2 className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">Looking for the LeadCRM REST API & Tokens?</h2>
+            <p className="text-xs text-slate-500">
+              Create LeadCRM API tokens, push leads, run enrichment via API, and explore interactive documentation.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/dashboard/settings/developer-api"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow transition hover:bg-indigo-500"
+        >
+          Open Developer API & Docs
+          <IconChevronRight size={14} />
+        </Link>
+      </div>
+
       <div className="grid min-w-0 gap-5 lg:grid-cols-2">
         <SettingsCard
           icon={IconKey}

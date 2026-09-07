@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { IconRobot } from '@tabler/icons-react';
 import api from '../../lib/api';
 
 export type EnrichmentAgentSummary = {
@@ -22,6 +23,7 @@ type Props = {
   onSelectedAgentChange?: (agent: EnrichmentAgentSummary | null) => void;
   className?: string;
   compact?: boolean;
+  hideLabel?: boolean;
   showDescription?: boolean;
 };
 
@@ -42,6 +44,7 @@ export function EnrichmentAgentPicker({
   onSelectedAgentChange,
   className = '',
   compact = false,
+  hideLabel = false,
   showDescription = false,
 }: Props) {
   const [agents, setAgents] = useState<EnrichmentAgentSummary[]>([]);
@@ -79,6 +82,35 @@ export function EnrichmentAgentPicker({
   useEffect(() => {
     onSelectedAgentChange?.(selectedAgent);
   }, [onSelectedAgentChange, selectedAgent]);
+
+  if (hideLabel) {
+    return (
+      <div className={`relative inline-flex items-center ${className}`}>
+        <div className="pointer-events-none absolute left-3 flex items-center text-slate-400">
+          <IconRobot size={14} />
+        </div>
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={loading || agents.length === 0}
+          className={`h-10 min-w-[210px] max-w-[320px] rounded-xl border border-slate-200 bg-white/90 pl-8 pr-7 text-xs font-semibold text-slate-700 shadow-xs outline-none transition hover:border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
+            compact ? 'max-w-[280px]' : 'w-full'
+          }`}
+          title={selectedAgent?.description ?? undefined}
+        >
+          {agents.length === 0 ? (
+            <option value="">{loading ? 'Loading agents…' : 'No agents configured'}</option>
+          ) : (
+            agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {agentOptionLabel(a)}
+              </option>
+            ))
+          )}
+        </select>
+      </div>
+    );
+  }
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>

@@ -189,6 +189,84 @@ const GOAL_META: Array<{ id: AgentGoal; label: string; help: string }> = [
   { id: 'full', label: 'Full intelligence', help: 'Everything, including signals, scoring, outreach' },
 ];
 
+type AgentPersonality = 'outbound' | 'signal_scout' | 'talent_spotter' | 'account_strategist' | 'partner_builder';
+type ResearchPriority = 'best_fit' | 'hiring' | 'intent' | 'contact';
+
+const AGENT_PERSONALITIES: Array<{
+  id: AgentPersonality;
+  name: string;
+  tagline: string;
+  description: string;
+  target: PersonObjective;
+  goal: AgentGoal;
+  hiring: boolean;
+  intent: boolean;
+  outreach: Pick<OutreachPolicy, 'objective' | 'style' | 'ctaType'>;
+}> = [
+  {
+    id: 'outbound',
+    name: 'The Outbound Hunter',
+    tagline: 'Find decision makers ready for a relevant conversation',
+    description: 'Balances account fit, timing signals, and a personal opening line.',
+    target: 'sales_leader',
+    goal: 'full',
+    hiring: false,
+    intent: true,
+    outreach: { objective: 'book_meeting', style: 'direct', ctaType: 'specific_time' },
+  },
+  {
+    id: 'signal_scout',
+    name: 'The Signal Scout',
+    tagline: 'Surface accounts with a reason to act now',
+    description: 'Prioritizes fresh company changes, momentum, and buying triggers.',
+    target: 'marketing_leader',
+    goal: 'full',
+    hiring: true,
+    intent: true,
+    outreach: { objective: 'start_conversation', style: 'thought_provoking', ctaType: 'open_question' },
+  },
+  {
+    id: 'talent_spotter',
+    name: 'The Talent Spotter',
+    tagline: 'Find companies growing their teams and who owns hiring',
+    description: 'Watches live roles and routes research to the hiring decision maker.',
+    target: 'hiring_authority',
+    goal: 'full',
+    hiring: true,
+    intent: true,
+    outreach: { objective: 'offer_audit', style: 'consultative', ctaType: 'resource_offer' },
+  },
+  {
+    id: 'account_strategist',
+    name: 'The Account Strategist',
+    tagline: 'Build a clear picture before your team reaches out',
+    description: 'Maps company fit, stakeholders, pain points, and account context.',
+    target: 'founder',
+    goal: 'full',
+    hiring: false,
+    intent: false,
+    outreach: { objective: 'start_conversation', style: 'consultative', ctaType: 'soft_interest' },
+  },
+  {
+    id: 'partner_builder',
+    name: 'The Partner Builder',
+    tagline: 'Discover people who can open strategic partnerships',
+    description: 'Looks for complementary companies, partnership owners, and shared opportunities.',
+    target: 'operations',
+    goal: 'full',
+    hiring: false,
+    intent: true,
+    outreach: { objective: 'partnership', style: 'casual', ctaType: 'open_question' },
+  },
+];
+
+const RESEARCH_PRIORITIES: Array<{ id: ResearchPriority; label: string; help: string }> = [
+  { id: 'best_fit', label: 'Best-fit accounts', help: 'Rank companies against your ICP.' },
+  { id: 'hiring', label: 'Hiring momentum', help: 'Spot teams actively growing.' },
+  { id: 'intent', label: 'Buying signals', help: 'Prioritize fresh reason-to-act-now triggers.' },
+  { id: 'contact', label: 'Reliable contact data', help: 'Find and verify a work email first.' },
+];
+
 function modulesForGoal(goal: AgentGoal): Modules {
   switch (goal) {
     case 'identity':
@@ -208,6 +286,24 @@ function goalFromModules(modules: Modules): AgentGoal {
   if (modules.people && modules.email) return 'contact';
   if (modules.people) return 'person';
   return 'identity';
+}
+
+function personalityFromConfig(config: AgentConfig): AgentPersonality {
+  const target = config.people.targets[0]?.objective;
+  if (target === 'hiring_authority' && config.modules.hiring) return 'talent_spotter';
+  if (config.outreachPolicy.objective === 'partnership') return 'partner_builder';
+  if (config.modules.signals && config.outreachPolicy.style === 'thought_provoking') return 'signal_scout';
+  if (target === 'sales_leader' && config.outreachPolicy.style === 'direct') return 'outbound';
+  return 'account_strategist';
+}
+
+function priorityFromConfig(config: AgentConfig): ResearchPriority {
+  if (config.modules.hiring && config.hiringPolicy.departmentRules?.some((rule) => rule.importance !== 'ignore')) {
+    return 'hiring';
+  }
+  if (config.modules.signals && config.intentPolicy.enabled) return 'intent';
+  if (config.modules.email && config.email.verify) return 'contact';
+  return 'best_fit';
 }
 
 const MODULE_META: Array<{ key: keyof Modules; label: string; help: string }> = [
@@ -629,6 +725,9 @@ export default function EnrichmentAgentsPage() {
   const [isDefault, setIsDefault] = useState(false);
   const [config, setConfig] = useState<AgentConfig>(defaultConfig());
   const [activeTab, setActiveTab] = useState<TabKey>('goal');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [personality, setPersonality] = useState<AgentPersonality>('outbound');
+  const [researchPriority, setResearchPriority] = useState<ResearchPriority>('intent');
   const [newForbiddenInput, setNewForbiddenInput] = useState('');
   const [customDeptInput, setCustomDeptInput] = useState('');
 
@@ -654,13 +753,18 @@ export default function EnrichmentAgentsPage() {
         setName(pick.name);
         setDescription(pick.description ?? '');
         setIsDefault(pick.isDefault);
-        setConfig(normalizeConfig(pick.config));
+        const normalized = normalizeConfig(pick.config);
+        setConfig(normalized);
+        setPersonality(personalityFromConfig(normalized));
+        setResearchPriority(priorityFromConfig(normalized));
       } else {
         setSelectedId('new');
         setName('');
         setDescription('');
         setIsDefault(true);
         setConfig(defaultConfig());
+        setPersonality('outbound');
+        setResearchPriority('intent');
       }
     } catch {
       toast.error('Failed to load enrichment agents.');
@@ -678,7 +782,11 @@ export default function EnrichmentAgentsPage() {
     setName(agent.name);
     setDescription(agent.description ?? '');
     setIsDefault(agent.isDefault);
-    setConfig(normalizeConfig(agent.config));
+    const normalized = normalizeConfig(agent.config);
+    setConfig(normalized);
+    setPersonality(personalityFromConfig(normalized));
+    setResearchPriority(priorityFromConfig(normalized));
+    setShowAdvanced(false);
   };
 
   const startNew = () => {
@@ -687,6 +795,9 @@ export default function EnrichmentAgentsPage() {
     setDescription('');
     setIsDefault(false);
     setConfig(defaultConfig());
+    setPersonality('outbound');
+    setResearchPriority('intent');
+    setShowAdvanced(false);
   };
 
   const goal = goalFromModules(config.modules);
@@ -704,6 +815,101 @@ export default function EnrichmentAgentsPage() {
         signals: { ...prev.signals, whyNow: modules.signals ? prev.signals.whyNow !== false : false },
       };
     });
+  };
+
+  const setPrimaryTarget = (objective: PersonObjective) => {
+    setConfig((prev) => {
+      const current = prev.people.targets[0] ?? defaultTarget(1);
+      return {
+        ...prev,
+        modules: { ...prev.modules, people: true },
+        people: {
+          ...prev.people,
+          mode: 'single',
+          maxPeople: 1,
+          targets: [
+            {
+              ...current,
+              objective,
+              roleHint: objective === 'custom' ? current.roleHint ?? '' : undefined,
+              priority: 1,
+              required: true,
+              tier: 'required',
+            },
+          ],
+        },
+      };
+    });
+  };
+
+  const applyPersonality = (nextPersonality: AgentPersonality) => {
+    const profile = AGENT_PERSONALITIES.find((item) => item.id === nextPersonality)!;
+    setPersonality(nextPersonality);
+    setConfig((prev) => {
+      const modules = {
+        ...modulesForGoal(profile.goal),
+        hiring: profile.hiring,
+        signals: profile.intent,
+      };
+      return {
+        ...prev,
+        modules,
+        people: {
+          ...prev.people,
+          mode: 'single',
+          maxPeople: 1,
+          strictness: 'smart',
+          targets: [{ objective: profile.target, priority: 1, required: true, tier: 'required' }],
+        },
+        email: { discover: modules.email, verify: modules.email },
+        signals: { ...prev.signals, whyNow: profile.intent, maxAgeDays: 90 },
+        hiringPolicy: { ...prev.hiringPolicy, maxAgeDays: 45, requireLiveUrl: true },
+        icpPolicy: { ...prev.icpPolicy, enabled: modules.scoring },
+        intentPolicy: { ...prev.intentPolicy, enabled: profile.intent, maxAgeDays: 90 },
+        outreachPolicy: {
+          ...prev.outreachPolicy,
+          ...profile.outreach,
+          personalizationPriority: profile.hiring ? ['hiring', 'role_context', 'pain_points'] : ['recent_news', 'pain_points', 'role_context'],
+        },
+      };
+    });
+  };
+
+  const applyResearchPriority = (nextPriority: ResearchPriority) => {
+    setResearchPriority(nextPriority);
+    setConfig((prev) => {
+      const hiring = nextPriority === 'hiring';
+      const intent = nextPriority === 'intent' || hiring;
+      const contact = nextPriority === 'contact';
+      return {
+        ...prev,
+        modules: {
+          ...prev.modules,
+          people: true,
+          hiring,
+          signals: intent,
+          scoring: nextPriority === 'best_fit' || prev.modules.scoring,
+          email: contact || prev.modules.email,
+          outreach: true,
+        },
+        email: {
+          discover: contact || prev.email.discover,
+          verify: contact || prev.email.verify,
+        },
+        signals: { ...prev.signals, whyNow: intent },
+        hiringPolicy: { ...prev.hiringPolicy, maxAgeDays: hiring ? 45 : prev.hiringPolicy.maxAgeDays, requireLiveUrl: hiring || prev.hiringPolicy.requireLiveUrl },
+        icpPolicy: { ...prev.icpPolicy, enabled: nextPriority === 'best_fit' || prev.icpPolicy.enabled },
+        intentPolicy: {
+          ...prev.intentPolicy,
+          enabled: intent,
+          allowedSignalTypes: hiring ? ['hiring'] : prev.intentPolicy.allowedSignalTypes,
+        },
+      };
+    });
+  };
+
+  const applyOutreachStyle = (style: OutreachStyle) => {
+    setConfig((prev) => ({ ...prev, modules: { ...prev.modules, outreach: true }, outreachPolicy: { ...prev.outreachPolicy, style } }));
   };
 
   const toggleModule = (key: keyof Modules) => {
@@ -1138,8 +1344,141 @@ export default function EnrichmentAgentsPage() {
               </label>
             </div>
 
+            {/* A few familiar choices configure the full research policy beneath the surface. */}
+            {!showAdvanced && (
+              <section className="space-y-6 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/70 via-white to-blue-50/60 p-4 sm:p-5">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">Agent blueprint</p>
+                  <h2 className="mt-1 text-lg font-bold text-slate-950">Pick the personality that fits your motion</h2>
+                  <p className="mt-1 text-xs leading-5 text-slate-600">Answer a few natural questions. We will translate them into research depth, lead scoring, live signals, and outreach rules.</p>
+                </div>
+
+                <fieldset>
+                  <legend className="text-sm font-bold text-slate-900">1. How should this agent think about leads?</legend>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {AGENT_PERSONALITIES.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => applyPersonality(item.id)}
+                        className={`rounded-xl border p-3 text-left transition ${
+                          personality === item.id
+                            ? 'border-violet-400 bg-white shadow-sm ring-2 ring-violet-100'
+                            : 'border-slate-200 bg-white/70 hover:border-violet-200 hover:bg-white'
+                        }`}
+                      >
+                        <span className="block text-sm font-bold text-slate-900">{item.name}</span>
+                        <span className="mt-1 block text-[11px] font-semibold leading-4 text-violet-700">{item.tagline}</span>
+                        <span className="mt-1.5 block text-[11px] leading-4 text-slate-500">{item.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="grid gap-5 border-t border-violet-100 pt-5 lg:grid-cols-2">
+                  <fieldset>
+                    <legend className="text-sm font-bold text-slate-900">2. Who should it try to reach?</legend>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">The personality suggests a role; change it whenever your motion needs someone else.</p>
+                    <select
+                      value={config.people.targets[0]?.objective ?? 'founder'}
+                      onChange={(event) => setPrimaryTarget(event.target.value as PersonObjective)}
+                      className={`${settingsInputClass} mt-3`}
+                    >
+                      {OBJECTIVES.map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
+                      ))}
+                    </select>
+                    {config.people.targets[0]?.objective === 'custom' && (
+                      <input
+                        value={config.people.targets[0]?.roleHint ?? ''}
+                        onChange={(event) => updateTarget(0, { roleHint: event.target.value })}
+                        className={`${settingsInputClass} mt-2`}
+                        placeholder="Describe the role, e.g. Head of Partnerships"
+                      />
+                    )}
+                  </fieldset>
+
+                  <fieldset>
+                    <legend className="text-sm font-bold text-slate-900">3. What should make a lead stand out?</legend>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">This decides how the agent prioritizes ICP fit, hiring, intent, and contact verification.</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {RESEARCH_PRIORITIES.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => applyResearchPriority(item.id)}
+                          className={`rounded-lg border px-3 py-2 text-left transition ${
+                            researchPriority === item.id
+                              ? 'border-violet-400 bg-white shadow-sm ring-2 ring-violet-100'
+                              : 'border-slate-200 bg-white/70 hover:border-violet-200 hover:bg-white'
+                          }`}
+                        >
+                          <span className="block text-xs font-bold text-slate-900">{item.label}</span>
+                          <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">{item.help}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                </div>
+
+                <fieldset className="border-t border-violet-100 pt-5">
+                  <legend className="text-sm font-bold text-slate-900">4. How should its outreach feel?</legend>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {([
+                      ['consultative', 'Helpful and consultative'],
+                      ['direct', 'Clear and direct'],
+                      ['casual', 'Warm and casual'],
+                      ['thought_provoking', 'Insight-led'],
+                    ] as Array<[OutreachStyle, string]>).map(([style, label]) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => applyOutreachStyle(style)}
+                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+                          config.outreachPolicy.style === style
+                            ? 'border-violet-500 bg-violet-600 text-white'
+                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:bg-violet-50'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="rounded-xl border border-slate-200 bg-white/75 p-3.5">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">What LeadHub will configure for you</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-slate-700">
+                    <span className="rounded-full bg-slate-100 px-2 py-1">Goal: {GOAL_META.find((item) => item.id === goal)?.label}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">Person: {objectiveLabel(config.people.targets[0]?.objective ?? 'founder')}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.hiring ? 'Hiring signals on' : 'Hiring signals off'}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.icpPolicy.enabled ? 'ICP scoring on' : 'ICP scoring off'}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.intentPolicy.enabled ? 'Intent triggers on' : 'Intent triggers off'}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.email && config.email.verify ? 'Email verification on' : 'No email verification'}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-1">Outreach: {config.outreachPolicy.style ?? 'consultative'}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 pt-4">
+                  <p className="text-xs text-slate-600">Want to change the individual rules? They are still available whenever you need them.</p>
+                  <button type="button" onClick={() => setShowAdvanced(true)} className={settingsBtnSecondary}>
+                    Customize research
+                  </button>
+                </div>
+              </section>
+            )}
+
             {/* Tab Navigation Pill Bar */}
-            <div className="border-b border-slate-100 pb-2">
+            {showAdvanced && <div className="border-b border-slate-100 pb-2">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold text-slate-800">Advanced research settings</p>
+                  <p className="text-[11px] text-slate-500">Fine-tune modules, targeting, policies, and custom research questions.</p>
+                </div>
+                <button type="button" onClick={() => setShowAdvanced(false)} className={settingsBtnSecondary}>
+                  Simple view
+                </button>
+              </div>
               <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
                 {TABS.map((tab) => {
                   const Icon = tab.icon;
@@ -1173,10 +1512,10 @@ export default function EnrichmentAgentsPage() {
                   );
                 })}
               </div>
-            </div>
+            </div>}
 
             {/* TAB 1: GOAL & SCOPE */}
-            {activeTab === 'goal' && (
+            {showAdvanced && activeTab === 'goal' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <section className="space-y-3">
                   <div>
@@ -1282,7 +1621,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 2: PEOPLE TARGETS */}
-            {activeTab === 'people' && (
+            {showAdvanced && activeTab === 'people' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 {!config.modules.people && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -1457,7 +1796,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 3: HIRING SIGNALS */}
-            {activeTab === 'hiring' && (
+            {showAdvanced && activeTab === 'hiring' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 {!config.modules.hiring && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -1668,7 +2007,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 4: ICP POLICY */}
-            {activeTab === 'icp' && (
+            {showAdvanced && activeTab === 'icp' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                   <div>
@@ -1841,7 +2180,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 5: INTENT POLICY */}
-            {activeTab === 'intent' && (
+            {showAdvanced && activeTab === 'intent' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                   <div>
@@ -1972,7 +2311,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 6: OUTREACH POLICY */}
-            {activeTab === 'outreach' && (
+            {showAdvanced && activeTab === 'outreach' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="block space-y-1">
@@ -2207,7 +2546,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 7: RESEARCH QUESTIONS */}
-            {activeTab === 'research' && (
+            {showAdvanced && activeTab === 'research' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
@@ -2263,7 +2602,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* Agent Live Preview Summary Strip */}
-            <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
+            {showAdvanced && <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                   Live Agent Summary
@@ -2308,7 +2647,7 @@ export default function EnrichmentAgentsPage() {
                     : 'Disabled'}
                 </div>
               </div>
-            </div>
+            </div>}
 
             {/* Bottom Form Actions */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">

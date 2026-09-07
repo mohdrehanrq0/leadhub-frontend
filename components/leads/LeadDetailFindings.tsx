@@ -536,11 +536,14 @@ function EnrichmentJson({ data, emptyLabel }: { data: unknown; emptyLabel: strin
 export function EnrichmentAgentBadge({
   agent,
   agentId,
+  hideEmpty = false,
 }: {
   agent?: LeadLike['enrichmentAgent'];
   agentId?: string | null;
+  hideEmpty?: boolean;
 }) {
   if (!agent && !agentId) {
+    if (hideEmpty) return null;
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-500">
         <IconRobot size={13} />
