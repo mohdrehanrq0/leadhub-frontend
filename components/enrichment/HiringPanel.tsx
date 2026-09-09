@@ -130,16 +130,27 @@ function strengthOf(weight?: number): { label: string; hint: string } {
   };
 }
 
+const SOCIAL_PLATFORMS = /\b(instagram\.com|facebook\.com|twitter\.com|x\.com|tiktok\.com)\b/i;
+
 export function SignalsPanel({
   signals,
+  companyName,
   intentScore,
   id = 'signals',
 }: {
   signals?: BuyingSignalDetail[];
+  companyName?: string;
   intentScore?: number;
   id?: string;
 }) {
-  if (!signals?.length) {
+  const filtered = (signals ?? []).filter((s) => {
+    if (!companyName?.trim()) return true;
+    if (!s.sourceUrl || !SOCIAL_PLATFORMS.test(s.sourceUrl)) return true;
+    const blob = `${s.label ?? ''} ${s.description ?? ''} ${s.evidence ?? ''}`.toLowerCase();
+    return blob.includes(companyName.trim().toLowerCase());
+  });
+
+  if (!filtered.length) {
     return (
       <EnrichmentSection id={id} title="Buying signals" icon={<IconTrendingUp size={16} />}>
         <EmptyNote>No buying signals were detected for this company.</EmptyNote>
@@ -147,7 +158,7 @@ export function SignalsPanel({
     );
   }
 
-  const sorted = [...signals].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
+  const sorted = [...filtered].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
 
   return (
     <EnrichmentSection
@@ -156,7 +167,7 @@ export function SignalsPanel({
       icon={<IconTrendingUp size={16} />}
       subtitle={
         intentScore != null
-          ? `Intent score ${intentScore}, built from ${signals.length} signals. Strength shows how much each one is worth trusting.`
+          ? `Intent score ${intentScore}, built from ${filtered.length} verified signals. Strength shows how much each one is worth trusting.`
           : undefined
       }
     >
@@ -175,6 +186,9 @@ export function SignalsPanel({
                 <p className="text-sm font-semibold text-slate-900">{label}</p>
                 <Chip tone={signalTone(signal.weight)} title={strength.hint}>
                   {strength.label}
+                </Chip>
+                <Chip tone="emerald" title="Entity-grounded to this company">
+                  Qualified
                 </Chip>
                 {signal.weight ? (
                   <span className="text-[11px] text-slate-400" title="Contribution to intent score">

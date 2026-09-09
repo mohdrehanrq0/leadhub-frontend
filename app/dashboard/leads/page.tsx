@@ -1055,6 +1055,14 @@ export default function LeadsPage() {
         onClose={() => setShowAddLeadModal(false)}
         categories={categories}
         lists={lists}
+        onListCreated={(list) =>
+          setLists((prev) => (prev.some((item) => item.id === list.id) ? prev : [list, ...prev]))
+        }
+        onCategoryCreated={(category) =>
+          setCategories((prev) =>
+            prev.some((item) => item.id === category.id) ? prev : [category, ...prev],
+          )
+        }
         onCreated={async () => {
           setLoading(true);
           try {

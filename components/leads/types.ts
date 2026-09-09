@@ -269,6 +269,20 @@ export type AiIntelligenceData = {
   recentAchievements?: Achievement[] | null;
   emailOpener?: AiIntelligenceField<string>;
   emailOpenerContext?: AiIntelligenceField<string>;
+  outreachIntelligence?: {
+    recommendedAngle?: string;
+    primaryTrigger?: {
+      type: string;
+      summary: string;
+      date?: string;
+      confidence: number;
+    } | null;
+    secondaryTriggers?: Array<{ type: string; summary: string; confidence: number }>;
+    relevantPainPoints?: string[];
+    recommendedEvidence?: string[];
+    objections?: string[];
+    recommendedTemplateTypes?: string[];
+  } | null;
   icpBreakdown?: { score: number; matched: string[]; missing: string[] } | null;
   intentBreakdown?: {
     score: number;
@@ -380,6 +394,17 @@ export type LeadRow = {
     id: string;
     name: string;
     description?: string | null;
+    mission?: string | null;
+    config?: {
+      mission?: string;
+      modules?: Record<string, boolean>;
+      people?: { targets?: Array<{ objective?: string; roleHint?: string }> };
+      outreachPolicy?: {
+        objective?: string;
+        style?: string;
+        ctaType?: string;
+      };
+    };
   } | null;
   identityCandidates?: Array<{
     name?: string;

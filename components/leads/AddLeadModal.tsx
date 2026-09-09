@@ -1,13 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { IconLoader2, IconPlus, IconX } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../lib/api';
 import { btnNavy, btnOutline, inputClass } from '../ui/styles';
 import { BodyPortal } from '../ui/BodyPortal';
+import CreatableSelect from '../common/CreatableSelect';
 import { companyDomainFromEmail } from '../../lib/lead-field-mapping';
 import { PIPELINE_STAGES, PRIORITIES, type LeadCategory, type LeadList, type PipelineStage, type Priority } from './types';
+
+type SelectOption = { id: string; name: string; color?: string };
 
 type AddLeadModalProps = {
   open: boolean;
@@ -15,6 +18,8 @@ type AddLeadModalProps = {
   categories: LeadCategory[];
   lists: LeadList[];
   onCreated: () => void | Promise<void>;
+  onListCreated?: (list: LeadList) => void;
+  onCategoryCreated?: (category: LeadCategory) => void;
 };
 
 type FormState = {
@@ -70,14 +75,85 @@ function trimOrUndefined(value: string) {
   return next ? next : undefined;
 }
 
-export function AddLeadModal({ open, onClose, categories, lists, onCreated }: AddLeadModalProps) {
+export function AddLeadModal({
+  open,
+  onClose,
+  categories,
+  lists,
+  onCreated,
+  onListCreated,
+  onCategoryCreated,
+}: AddLeadModalProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [extraLists, setExtraLists] = useState<SelectOption[]>([]);
+  const [extraCategories, setExtraCategories] = useState<SelectOption[]>([]);
+  const [creatingList, setCreatingList] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+
+  const listOptions = useMemo(() => {
+    const byId = new Map<string, SelectOption>();
+    for (const list of lists) byId.set(list.id, { id: list.id, name: list.name });
+    for (const opt of extraLists) byId.set(opt.id, opt);
+    return Array.from(byId.values());
+  }, [lists, extraLists]);
+
+  const categoryOptions = useMemo(() => {
+    const byId = new Map<string, SelectOption>();
+    for (const cat of categories) {
+      byId.set(cat.id, { id: cat.id, name: cat.name, color: cat.color });
+    }
+    for (const opt of extraCategories) byId.set(opt.id, opt);
+    return Array.from(byId.values());
+  }, [categories, extraCategories]);
+
+  const selectedList = form.listId ? listOptions.filter((item) => item.id === form.listId) : [];
+  const selectedCategory = form.categoryId
+    ? categoryOptions.filter((item) => item.id === form.categoryId)
+    : [];
 
   if (!open) return null;
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleCreateList = async (name: string): Promise<SelectOption> => {
+    setCreatingList(true);
+    try {
+      const res = await api.post('/api/lists', { name });
+      const created = res.data.data as LeadList;
+      const option = { id: created.id, name: created.name };
+      setExtraLists((prev) => (prev.some((item) => item.id === created.id) ? prev : [...prev, option]));
+      onListCreated?.(created);
+      toast.success(`List "${created.name}" created`);
+      return option;
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to create list'));
+      throw err;
+    } finally {
+      setCreatingList(false);
+    }
+  };
+
+  const handleCreateCategory = async (name: string): Promise<SelectOption> => {
+    setCreatingCategory(true);
+    try {
+      const res = await api.post('/api/categories', { name, color: '#3b82f6' });
+      const created = res.data.data as LeadCategory;
+      const option = { id: created.id, name: created.name, color: created.color };
+      setExtraCategories((prev) =>
+        prev.some((item) => item.id === created.id) ? prev : [...prev, option],
+      );
+      onCategoryCreated?.(created);
+      toast.success(`Category "${created.name}" created`);
+      return option;
+    } catch (err) {
+      toast.error(errorMessage(err, 'Failed to create category'));
+      throw err;
+    } finally {
+      setCreatingCategory(false);
+    }
   };
 
   const resetAndClose = () => {
@@ -345,33 +421,27 @@ export function AddLeadModal({ open, onClose, categories, lists, onCreated }: Ad
                 )}
                 {field(
                   'Category',
-                  <select
-                    value={form.categoryId}
-                    onChange={(e) => update('categoryId', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">None</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>,
+                  <CreatableSelect
+                    options={categoryOptions}
+                    value={selectedCategory}
+                    onChange={(selected) => update('categoryId', selected[0]?.id ?? '')}
+                    onCreateNew={handleCreateCategory}
+                    isMulti={false}
+                    isLoading={creatingCategory}
+                    placeholder="Select or create category"
+                  />,
                 )}
                 {field(
                   'List',
-                  <select
-                    value={form.listId}
-                    onChange={(e) => update('listId', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">None</option>
-                    {lists.map((list) => (
-                      <option key={list.id} value={list.id}>
-                        {list.name}
-                      </option>
-                    ))}
-                  </select>,
+                  <CreatableSelect
+                    options={listOptions}
+                    value={selectedList}
+                    onChange={(selected) => update('listId', selected[0]?.id ?? '')}
+                    onCreateNew={handleCreateList}
+                    isMulti={false}
+                    isLoading={creatingList}
+                    placeholder="Select or create list"
+                  />,
                 )}
                 <div className="sm:col-span-2">
                   {field(

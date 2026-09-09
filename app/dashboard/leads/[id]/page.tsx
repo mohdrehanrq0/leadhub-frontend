@@ -28,6 +28,7 @@ import { getApiBaseUrl } from '../../../../lib/api-base';
 import { APOLLO_UI_ENABLED } from '../../../../lib/features';
 import { useAuth } from '../../../../context/AuthContext';
 import { EnrichmentAgentPicker } from '../../../../components/leads/EnrichmentAgentPicker';
+import { OutreachEmailPanel } from '../../../../components/leads/OutreachEmailPanel';
 import {
   EnrichmentAgentBadge,
   LeadDetailFindings,
@@ -382,29 +383,22 @@ function EvidenceFirstOutreachPanel({
   profile,
   legacy,
   identityNote,
+  leadId,
+  enrichmentStatus,
+  fallbackSubject,
+  fallbackBody,
+  onOutreachGenerated,
 }: {
   profile: EnrichmentProfile;
   legacy: AiIntelligenceData | null;
   identityNote?: IdentityNote | null;
+  leadId: string;
+  enrichmentStatus?: string | null;
+  fallbackSubject?: string | null;
+  fallbackBody?: string | null;
+  onOutreachGenerated?: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
   const si = profile.salesIntelligence ?? {};
-  const emailOpener =
-    si.emailOpener ||
-    legacy?.emailOpener?.value ||
-    legacy?.suggestedEmailOpening?.value ||
-    '';
-
-  const copyOpener = async () => {
-    if (!emailOpener) return;
-    try {
-      await navigator.clipboard.writeText(emailOpener);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
 
   const companyLine = [
     profile.identity.companyName,
@@ -424,6 +418,15 @@ function EvidenceFirstOutreachPanel({
   return (
     <div className="space-y-3">
       {identityNote && <IdentityNoteBanner note={identityNote} />}
+
+      <OutreachEmailPanel
+        leadId={leadId}
+        enrichmentStatus={enrichmentStatus}
+        outreachIntelligence={legacy?.outreachIntelligence}
+        fallbackSubject={fallbackSubject}
+        fallbackBody={fallbackBody || si.emailOpener || null}
+        onGenerated={onOutreachGenerated}
+      />
 
       <CompactOutreachCard title="Company">
         <p className="text-sm font-semibold text-slate-900">{companyLine || '—'}</p>
@@ -518,34 +521,6 @@ function EvidenceFirstOutreachPanel({
         </CompactOutreachCard>
       )}
 
-      <CompactOutreachCard title="Outreach">
-        {(si.painPoints?.length ?? 0) > 0 && (
-          <ul className="list-disc pl-4 space-y-1 mb-3">
-            {si.painPoints!.slice(0, 3).map((p) => (
-              <li key={p} className="text-sm text-slate-800">{p}</li>
-            ))}
-          </ul>
-        )}
-        {si.outreachAngle ? (
-          <p className="text-sm text-slate-800 mb-2">
-            <span className="font-semibold">Angle: </span>
-            {si.outreachAngle}
-          </p>
-        ) : null}
-        {emailOpener ? (
-          <div className="flex items-start justify-between gap-3 border-t border-slate-100 pt-2">
-            <p className="text-sm text-slate-900 leading-relaxed flex-1">{emailOpener}</p>
-            <button
-              type="button"
-              onClick={copyOpener}
-              className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50"
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        ) : null}
-      </CompactOutreachCard>
-
       <CompactOutreachCard title="Quality">
         <p className="text-sm text-slate-800">
           Identity {Math.round((profile.quality.identityConfidence ?? 0) * 100)}%
@@ -570,12 +545,21 @@ function EvidenceFirstOutreachPanel({
 function AiOutreachPanel({
   data,
   identityNote,
+  leadId,
+  enrichmentStatus,
+  fallbackSubject,
+  fallbackBody,
+  onOutreachGenerated,
 }: {
   data: AiIntelligenceData;
   identityNote?: IdentityNote | null;
+  leadId: string;
+  enrichmentStatus?: string | null;
+  fallbackSubject?: string | null;
+  fallbackBody?: string | null;
+  onOutreachGenerated?: () => void;
 }) {
   const [showRaw, setShowRaw] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   if (data.enrichmentProfile) {
     return (
@@ -583,6 +567,11 @@ function AiOutreachPanel({
         profile={data.enrichmentProfile}
         legacy={data}
         identityNote={identityNote}
+        leadId={leadId}
+        enrichmentStatus={enrichmentStatus}
+        fallbackSubject={fallbackSubject}
+        fallbackBody={fallbackBody}
+        onOutreachGenerated={onOutreachGenerated}
       />
     );
   }
@@ -618,64 +607,47 @@ function AiOutreachPanel({
     Boolean(data.companySummary?.value) ||
     Boolean(data.personSummary?.value) ||
     Boolean(outreachAngle) ||
+    Boolean(data.outreachIntelligence?.recommendedAngle) ||
     (data.painPoints?.value?.length ?? 0) > 0 ||
     (whyNow?.length ?? 0) > 0;
-
-  const copyOpener = async () => {
-    if (!emailOpener) return;
-    try {
-      await navigator.clipboard.writeText(emailOpener);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* ignore */
-    }
-  };
 
   return (
     <div className="space-y-4">
       {identityNote && <IdentityNoteBanner note={identityNote} />}
+
+      <OutreachEmailPanel
+        leadId={leadId}
+        enrichmentStatus={enrichmentStatus}
+        outreachIntelligence={data.outreachIntelligence}
+        fallbackSubject={fallbackSubject}
+        fallbackBody={fallbackBody || emailOpener || null}
+        onGenerated={onOutreachGenerated}
+      />
+
       {!hasNarrative && (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          No outreach narrative was generated for this lead
-          {identityNote ? ' (company identity could not be locked).' : '.'} Score cards below show what was saved
-          (including 0% when synthesis abstained).
+          Research narrative is thin for this lead
+          {identityNote ? ' (company identity could not be locked).' : '.'} Score cards below show what was saved.
         </div>
       )}
 
-      {/* 1. Email Opener + CTA */}
-      <OutreachSection title="Email Opener">
-        {emailOpener ? (
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-slate-900 leading-relaxed whitespace-pre-wrap flex-1">
-                {emailOpener}
-              </p>
-              <button
-                type="button"
-                onClick={copyOpener}
-                className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-slate-50"
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            {emailOpenerContext ? (
-              <p className="text-xs text-slate-500 border-t border-slate-100 pt-2">
-                <span className="font-bold text-slate-600">Why this opener: </span>
-                {emailOpenerContext}
-              </p>
-            ) : null}
-            {suggestedCta ? (
-              <p className="text-sm text-slate-800">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">CTA · </span>
-                {suggestedCta}
-              </p>
-            ) : null}
-          </div>
-        ) : (
-          <p className="text-xs text-slate-400">—</p>
-        )}
-      </OutreachSection>
+      {/* Supporting research context (email lives in OutreachEmailPanel above) */}
+      {(emailOpenerContext || suggestedCta) && (
+        <OutreachSection title="Research notes">
+          {emailOpenerContext ? (
+            <p className="text-xs text-slate-500">
+              <span className="font-bold text-slate-600">Context: </span>
+              {emailOpenerContext}
+            </p>
+          ) : null}
+          {suggestedCta ? (
+            <p className="mt-2 text-sm text-slate-800">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">CTA · </span>
+              {suggestedCta}
+            </p>
+          ) : null}
+        </OutreachSection>
+      )}
 
       {/* 2. Why Now */}
       <OutreachSection title="Why Now">
@@ -1931,20 +1903,56 @@ export default function LeadDetailPage() {
             formatDate={formatDate}
             outreachPanel={
               aiIntelligence ? (
-                <AiOutreachPanel data={aiIntelligence} identityNote={null} />
-              ) : (
-                <EnrichmentJson
-                  data={null}
-                  emptyLabel={
-                    lead.enrichmentStatus === 'not_started'
-                      ? 'Run enrichment to generate outreach insights.'
-                      : lead.enrichmentStatus === 'in_progress'
-                        ? 'AI research is running. This section updates when it finishes.'
-                        : identityNote
-                          ? `${identityNoteToPlainText(identityNote)} No AI intelligence was saved — re-enrich after fixing company identity.`
-                          : 'No outreach narrative was saved. Re-enrich to regenerate.'
+                <AiOutreachPanel
+                  data={aiIntelligence}
+                  identityNote={null}
+                  leadId={id}
+                  enrichmentStatus={lead.enrichmentStatus}
+                  fallbackSubject={
+                    typeof lead.rawData?.generatedEmailSubject === 'string'
+                      ? lead.rawData.generatedEmailSubject
+                      : null
                   }
+                  fallbackBody={
+                    typeof lead.rawData?.generatedEmailBody === 'string'
+                      ? lead.rawData.generatedEmailBody
+                      : null
+                  }
+                  onOutreachGenerated={() => void loadLead()}
                 />
+              ) : (
+                <div className="space-y-3">
+                  {(lead.enrichmentStatus === 'completed' ||
+                    lead.enrichmentStatus === 'partial' ||
+                    lead.enrichmentStatus === 'in_progress') && (
+                    <OutreachEmailPanel
+                      leadId={id}
+                      enrichmentStatus={lead.enrichmentStatus}
+                      fallbackSubject={
+                        typeof lead.rawData?.generatedEmailSubject === 'string'
+                          ? lead.rawData.generatedEmailSubject
+                          : null
+                      }
+                      fallbackBody={
+                        typeof lead.rawData?.generatedEmailBody === 'string'
+                          ? lead.rawData.generatedEmailBody
+                          : null
+                      }
+                      onGenerated={() => void loadLead()}
+                    />
+                  )}
+                  {lead.enrichmentStatus === 'not_started' ? (
+                    <EnrichmentJson
+                      data={null}
+                      emptyLabel="Run enrichment to generate outreach intelligence and a personalized email."
+                    />
+                  ) : identityNote && !lead.rawData?.generatedEmailBody ? (
+                    <EnrichmentJson
+                      data={null}
+                      emptyLabel={`${identityNoteToPlainText(identityNote)} Research narrative may be incomplete — fix company identity and re-enrich if needed.`}
+                    />
+                  ) : null}
+                </div>
               )
             }
           />

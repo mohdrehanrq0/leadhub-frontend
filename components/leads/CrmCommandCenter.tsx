@@ -126,7 +126,10 @@ export function CrmCommandCenter({
               {enriching ? 'Starting…' : `Enrich ${selectedCount || ''} selected`}
             </button>
           </div>
-          <p className="mt-3 text-[10px] leading-4 text-slate-500">The selected agent controls the research modules, ideal personas, scoring, and outreach output for every run.</p>
+          <p className="mt-3 text-[10px] leading-4 text-slate-500">
+            The selected agent controls research modules, personas, and scoring. After enrichment, Outreach Engine
+            writes the full personalized email from evidence — not a one-line opener.
+          </p>
         </div>
       </div>
     </section>

@@ -391,6 +391,14 @@ export default function LeadSyncPage() {
           onListIdChange={setListId}
           onCategoryIdChange={setCategoryId}
           onTagsChange={setTags}
+          onListCreated={(list) =>
+            setLists((prev) => (prev.some((item) => item.id === list.id) ? prev : [list, ...prev]))
+          }
+          onCategoryCreated={(category) =>
+            setCategories((prev) =>
+              prev.some((item) => item.id === category.id) ? prev : [category, ...prev],
+            )
+          }
         />
       )}
 
@@ -412,6 +420,14 @@ export default function LeadSyncPage() {
           onListIdChange={setListId}
           onCategoryIdChange={setCategoryId}
           onTagsChange={setTags}
+          onListCreated={(list) =>
+            setLists((prev) => (prev.some((item) => item.id === list.id) ? prev : [list, ...prev]))
+          }
+          onCategoryCreated={(category) =>
+            setCategories((prev) =>
+              prev.some((item) => item.id === category.id) ? prev : [category, ...prev],
+            )
+          }
         />
       )}
     </div>
@@ -476,6 +492,8 @@ function ApolloModal({
   onListIdChange,
   onCategoryIdChange,
   onTagsChange,
+  onListCreated,
+  onCategoryCreated,
 }: {
   preview: ApolloPreview | null;
   loading: string | null;
@@ -503,6 +521,8 @@ function ApolloModal({
   onListIdChange: (value: string) => void;
   onCategoryIdChange: (value: string) => void;
   onTagsChange: (value: string) => void;
+  onListCreated?: (list: LeadList) => void;
+  onCategoryCreated?: (category: LeadCategory) => void;
 }) {
   const selectedCount =
     (importAllContacts ? preview?.contacts.length ?? 0 : selectedContactKeys.size) +
@@ -606,6 +626,8 @@ function ApolloModal({
                 onListIdChange={onListIdChange}
                 onCategoryIdChange={onCategoryIdChange}
                 onTagsChange={onTagsChange}
+                onListCreated={onListCreated}
+                onCategoryCreated={onCategoryCreated}
                 compact
               />
             </div>
@@ -647,6 +669,8 @@ function ApifyModal({
   onListIdChange,
   onCategoryIdChange,
   onTagsChange,
+  onListCreated,
+  onCategoryCreated,
 }: {
   preview: ApifyPreview | null;
   loading: string | null;
@@ -664,6 +688,8 @@ function ApifyModal({
   onListIdChange: (value: string) => void;
   onCategoryIdChange: (value: string) => void;
   onTagsChange: (value: string) => void;
+  onListCreated?: (list: LeadList) => void;
+  onCategoryCreated?: (category: LeadCategory) => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
@@ -722,6 +748,8 @@ function ApifyModal({
                 onListIdChange={onListIdChange}
                 onCategoryIdChange={onCategoryIdChange}
                 onTagsChange={onTagsChange}
+                onListCreated={onListCreated}
+                onCategoryCreated={onCategoryCreated}
                 compact
               />
             </div>

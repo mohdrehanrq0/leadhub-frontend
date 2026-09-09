@@ -338,7 +338,18 @@ type LeadLike = {
   enrichmentAgentId?: string | null;
   enrichmentPolicy?: Record<string, unknown> | null;
   enrichmentProfile?: EnrichmentProfile | null;
-  enrichmentAgent?: { id: string; name: string; description?: string | null } | null;
+  enrichmentAgent?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    mission?: string | null;
+    config?: {
+      mission?: string;
+      modules?: Record<string, boolean>;
+      people?: { targets?: Array<{ objective?: string; roleHint?: string }> };
+      outreachPolicy?: { objective?: string; style?: string; ctaType?: string };
+    };
+  } | null;
   icpScore?: number | null;
   intentScore?: number | null;
   confidence?: number | null;
@@ -538,7 +549,7 @@ export function EnrichmentAgentBadge({
   agentId,
   hideEmpty = false,
 }: {
-  agent?: LeadLike['enrichmentAgent'];
+  agent?: LeadLike['enrichmentAgent'] | null;
   agentId?: string | null;
   hideEmpty?: boolean;
 }) {
@@ -551,17 +562,52 @@ export function EnrichmentAgentBadge({
       </span>
     );
   }
+
+  const mission = (agent?.mission || agent?.config?.mission || agent?.description || '').trim();
+  const targets = agent?.config?.people?.targets ?? [];
+  const roleHint = targets
+    .slice(0, 2)
+    .map((t) => t.roleHint?.trim() || t.objective?.replace(/_/g, ' '))
+    .filter(Boolean)
+    .join(', ');
+  const outreachOn = agent?.config?.modules?.outreach !== false;
+  const title = [
+    mission || 'Open enrichment agents',
+    roleHint ? `Targets: ${roleHint}` : null,
+    outreachOn ? 'Writes personalized outreach email after enrichment' : 'Outreach email off',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
-    <Link
-      href="/dashboard/settings/enrichment-agents"
-      className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-800 hover:border-slate-400 hover:bg-slate-50"
-      title={agent?.description ?? 'Open enrichment agents'}
-    >
-      <IconRobot size={13} className="text-slate-600" />
-      <span className="text-slate-500 font-semibold">Agent</span>
-      <span>{agent?.name ?? 'Custom agent'}</span>
-      <IconExternalLink size={11} className="text-slate-400" />
-    </Link>
+    <div className="inline-flex max-w-full flex-col items-start gap-1.5">
+      <Link
+        href="/dashboard/settings/enrichment-agents"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-bold text-slate-800 hover:border-slate-400 hover:bg-slate-50"
+        title={title}
+      >
+        <IconRobot size={13} className="shrink-0 text-slate-600" />
+        <span className="text-slate-500 font-semibold">Agent</span>
+        <span className="truncate">{agent?.name ?? 'Custom agent'}</span>
+        {outreachOn ? (
+          <span className="hidden sm:inline rounded-full bg-violet-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-violet-700">
+            +email
+          </span>
+        ) : null}
+        <IconExternalLink size={11} className="shrink-0 text-slate-400" />
+      </Link>
+      {mission ? (
+        <p className="max-w-xl text-[11px] leading-4 text-slate-500">{mission}</p>
+      ) : null}
+      {outreachOn ? (
+        <p className="text-[10px] leading-4 text-slate-500">
+          After enrichment, Outreach Engine picks a signal-matched template and writes subject + body.
+          {agent?.config?.outreachPolicy?.objective
+            ? ` Objective: ${agent.config.outreachPolicy.objective.replace(/_/g, ' ')}.`
+            : ''}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
@@ -659,12 +705,23 @@ export function LeadDetailFindings({
   const showSignals =
     signals.length > 0 || Boolean(hiring?.isHiring || (hiring?.roles?.length ?? 0) > 0);
   const hasOutreachContent = Boolean(
-    aiIntelligence ||
+    aiIntelligence?.outreachIntelligence ||
+      aiIntelligence?.emailOpener?.value ||
+      aiIntelligence?.suggestedEmailOpening?.value ||
       profile?.salesIntelligence?.emailOpener ||
       profile?.salesIntelligence?.outreachAngle ||
-      (profile?.salesIntelligence?.painPoints?.length ?? 0) > 0,
+      (profile?.salesIntelligence?.painPoints?.length ?? 0) > 0 ||
+      (typeof lead.rawData?.generatedEmailBody === 'string' && lead.rawData.generatedEmailBody.trim()) ||
+      (typeof lead.rawData?.generatedEmailSubject === 'string' &&
+        lead.rawData.generatedEmailSubject.trim()),
   );
-  const showOutreach = hasOutreachContent || (enrichmentDone && modules.outreach !== false);
+  // Always show Outreach after enrichment when the agent has outreach on — panel can generate/poll.
+  const showOutreach =
+    hasOutreachContent ||
+    (enrichmentDone && modules.outreach !== false) ||
+    lead.enrichmentStatus === 'in_progress' ||
+    lead.enrichmentStatus === 'completed' ||
+    lead.enrichmentStatus === 'partial';
   const showCustom = customAnswers.length > 0;
   const showVerifiedEmpty =
     enrichmentDone && people.length === 0 && allEmails.length === 0 && !lead.company?.domain;
@@ -678,13 +735,14 @@ export function LeadDetailFindings({
     if (allEmails.length > 0) chips.push({ label: `${allEmails.length} email${allEmails.length > 1 ? 's' : ''}`, ok: true });
     if (signals.length > 0) chips.push({ label: `${signals.length} signals`, ok: true });
     if (hiring?.isHiring || (hiring?.roles?.length ?? 0) > 0) chips.push({ label: 'Hiring', ok: true });
-    if (hasOutreachContent) chips.push({ label: 'Outreach', ok: true });
+    if (hasOutreachContent || showOutreach) chips.push({ label: 'Outreach', ok: hasOutreachContent || enrichmentDone });
     if (customAnswers.length > 0) chips.push({ label: 'Custom answers', ok: true });
     if (lead.icpScore != null || lead.intentScore != null) chips.push({ label: 'Scores', ok: true });
     return chips;
   }, [
     allEmails.length,
     customAnswers.length,
+    enrichmentDone,
     hasOutreachContent,
     hiring,
     lead.company?.domain,
@@ -694,6 +752,7 @@ export function LeadDetailFindings({
     people.length,
     profile?.identity?.companyName,
     profile?.identity?.domain,
+    showOutreach,
     signals.length,
   ]);
 
@@ -1179,6 +1238,7 @@ export function LeadDetailFindings({
       {detailedSignals?.length ? (
         <SignalsPanel
           signals={detailedSignals}
+          companyName={lead.company?.name ?? undefined}
           intentScore={lead.intentScore ?? undefined}
           id="signals-detail"
         />
@@ -1196,7 +1256,18 @@ export function LeadDetailFindings({
           <div className="grid gap-4 lg:grid-cols-2">
             {signals.length > 0 && (
               <ul className="space-y-2">
-                {signals.slice(0, 6).map((s) => (
+                {signals
+                  .filter((s) => {
+                    const cName = lead.company?.name?.trim().toLowerCase();
+                    if (!cName) return true;
+                    const url = s.sourceUrl ?? s.source;
+                    if (url && /\b(instagram\.com|facebook\.com|twitter\.com|x\.com|tiktok\.com)\b/i.test(url)) {
+                      return s.summary.toLowerCase().includes(cName);
+                    }
+                    return true;
+                  })
+                  .slice(0, 6)
+                  .map((s) => (
                   <li
                     key={`${s.type}-${s.summary}`}
                     className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
@@ -1298,7 +1369,7 @@ export function LeadDetailFindings({
         <SectionCard
           id="outreach"
           title="Outreach"
-          subtitle="Angles, openers, and fit narrative from research"
+          subtitle="Full personalized email from the Outreach Engine — subject, body, evidence, and template"
           icon={<IconSparkles size={16} />}
         >
           {outreachPanel}

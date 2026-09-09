@@ -639,6 +639,14 @@ export default function LeadImportPage() {
             onListIdChange={setListId}
             onCategoryIdChange={setCategoryId}
             onTagsChange={setTags}
+            onListCreated={(list) =>
+              setLists((prev) => (prev.some((item) => item.id === list.id) ? prev : [list, ...prev]))
+            }
+            onCategoryCreated={(category) =>
+              setCategories((prev) =>
+                prev.some((item) => item.id === category.id) ? prev : [category, ...prev],
+              )
+            }
             enrichmentAgentId={enrichmentAgentId}
             onEnrichmentAgentIdChange={setEnrichmentAgentId}
           />

@@ -3,6 +3,7 @@ import {
   IconBuildingSkyscraper,
   IconCode,
   IconKey,
+  IconMail,
   IconPuzzle,
   IconRobot,
   IconUser,
@@ -49,6 +50,12 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: 'Build reusable recipes for who to find, which modules to run, and what to research.',
   },
   {
+    name: 'Outreach',
+    href: '/dashboard/settings/outreach-templates',
+    icon: IconMail,
+    description: 'Signal-specific email templates, evidence rules, and Test Template on enriched leads.',
+  },
+  {
     name: 'Browser',
     href: '/dashboard/settings/extension',
     icon: IconPuzzle,
@@ -79,5 +86,8 @@ export function isSettingsNavActive(pathname: string, href: string): boolean {
 }
 
 export function getActiveSettingsItem(pathname: string): SettingsNavItem {
-  return SETTINGS_NAV.find((item) => isSettingsNavActive(pathname, item.href)) ?? SETTINGS_NAV[0];
+  return (
+    SETTINGS_NAV.find((item) => isSettingsNavActive(pathname, item.href)) ??
+    SETTINGS_NAV[0]
+  );
 }

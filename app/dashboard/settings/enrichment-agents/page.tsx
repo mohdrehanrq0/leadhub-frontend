@@ -10,12 +10,17 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconCompass,
+  IconCopy,
   IconFlame,
   IconHelp,
   IconLoader2,
+  IconMail,
+  IconPencil,
   IconPlus,
   IconRobot,
   IconSend,
+  IconShieldCheck,
+  IconSparkles,
   IconStar,
   IconTarget,
   IconTrash,
@@ -142,16 +147,61 @@ export type PersonalizationSource =
   | 'tech_stack'
   | 'role_context';
 
+export interface PersonalizationFallbackConfig {
+  sendWhenNoPersonalization: boolean;
+  staticFallbackLine: string;
+  fallbackStrategy: 'skip_email' | 'send_generic' | 'send_with_static_line';
+}
+
+export type OutreachTemplateId = string;
+
+export interface OutreachTemplate {
+  id: OutreachTemplateId;
+  name: string;
+  category: AgentPersonality;
+  description: string;
+  subject: string;
+  body: string;
+  style: OutreachStyle;
+  ctaType: OutreachCtaType;
+  objective: OutreachObjective;
+  expectedReplyRate: string;
+  expectedOpenRate: string;
+  personalizationFields: PersonalizationSource[];
+  tags: string[];
+  sampleValues: {
+    firstName: string;
+    companyName: string;
+    title: string;
+    industry: string;
+    signal: string;
+    painPoint: string;
+    personalization: string;
+    proofCompany: string;
+    proofMetric: string;
+    senderName: string;
+    [key: string]: string;
+  };
+}
+
 export interface OutreachPolicy {
   objective?: OutreachObjective;
   style?: OutreachStyle;
   ctaType?: OutreachCtaType;
+  sequenceCount?: number;
+  sequenceDays?: number[];
   forbiddenPhrases?: string[];
   personalizationPriority?: PersonalizationSource[];
   whenNoEvidence?: 'skip' | 'generic' | 'pain_point_only';
+  selectedTemplateId?: OutreachTemplateId;
+  preferredTemplateId?: string;
+  customSubject?: string;
+  customBody?: string;
+  personalizationFallback?: PersonalizationFallbackConfig;
 }
 
 export type AgentConfig = {
+  mission?: string;
   modules: Modules;
   people: {
     mode: 'auto' | 'single' | 'multi';
@@ -174,6 +224,7 @@ export type Agent = {
   id: string;
   name: string;
   description?: string | null;
+  mission?: string | null;
   isDefault: boolean;
   config: AgentConfig;
 };
@@ -207,7 +258,7 @@ const AGENT_PERSONALITIES: Array<{
     id: 'outbound',
     name: 'The Outbound Hunter',
     tagline: 'Find decision makers ready for a relevant conversation',
-    description: 'Balances account fit, timing signals, and a personal opening line.',
+    description: 'Balances account fit, timing signals, then Outreach Engine writes a meeting-ask email.',
     target: 'sales_leader',
     goal: 'full',
     hiring: false,
@@ -312,7 +363,7 @@ const MODULE_META: Array<{ key: keyof Modules; label: string; help: string }> = 
   { key: 'hiring', label: 'Hiring detail', help: 'Open roles and hiring signals' },
   { key: 'signals', label: 'Intent / why-now signals', help: 'Buying and timing triggers' },
   { key: 'scoring', label: 'ICP · Intent · Confidence', help: 'Numeric scores for ranking' },
-  { key: 'outreach', label: 'Outreach copy', help: 'Angle, opener, CTA, pain points' },
+  { key: 'outreach', label: 'Outreach intelligence', help: 'Recommended angle & triggers for the Outreach Engine' },
   { key: 'email', label: 'Email discovery', help: 'Find and verify contact emails' },
 ];
 
@@ -390,6 +441,585 @@ const PERSONALIZATION_SOURCES: Array<{ id: PersonalizationSource; label: string 
   { id: 'tech_stack', label: 'Installed Tech Stack' },
   { id: 'role_context', label: 'Prospect Role & Seniority Context' },
 ];
+
+export const OUTREACH_TEMPLATES: OutreachTemplate[] = [
+  // --- 1. OUTBOUND HUNTER ---
+  {
+    id: 'outbound_direct_ask',
+    name: 'The Direct Meeting Ask',
+    category: 'outbound',
+    description: 'Straight-to-the-point executive outreach tying a detected pain point directly to an ROI-backed case study.',
+    subject: '{{firstName}}, quick question regarding {{companyName}}\'s {{painPoint}}',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+I noticed {{companyName}} is {{signal}} — most {{industry}} teams dealing with this end up spending 2-3x more time on {{painPoint}} than they should.
+
+We helped {{proofCompany}} cut that by {{proofMetric}}, and I think there's a similar play for your team.
+
+Worth a 15-min call this Thursday to see if it fits?
+
+— {{senderName}}`,
+    style: 'direct',
+    ctaType: 'specific_time',
+    objective: 'book_meeting',
+    expectedReplyRate: '21% - 28%',
+    expectedOpenRate: '60% - 68%',
+    personalizationFields: ['pain_points', 'recent_news', 'role_context'],
+    tags: ['High Intent', 'Direct Ask', 'Proof-Driven'],
+    sampleValues: {
+      firstName: 'Alex',
+      companyName: 'HyperScale Corp',
+      title: 'VP of Sales',
+      industry: 'B2B SaaS',
+      signal: 'expanding your enterprise outbound pod this quarter',
+      painPoint: 'pipeline leak in SDR ramp-up',
+      personalization: 'Saw your recent post discussing how SDR onboarding time doubled as you moved upmarket.',
+      proofCompany: 'Datapoint AI',
+      proofMetric: '42% faster rep ramp time',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'outbound_trigger_sniper',
+    name: 'The Trigger-Based Opener',
+    category: 'outbound',
+    description: 'Low-friction conversation starter highlighting a specific business friction point observed in their workflow.',
+    subject: '{{companyName}} + {{painPoint}}?',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Typically when {{title}}s in {{industry}} tackle this, the biggest hurdle is {{painPoint}}.
+
+Curious if this is already on your radar for this quarter, or if you've found a clean workaround?
+
+Best,
+{{senderName}}`,
+    style: 'consultative',
+    ctaType: 'open_question',
+    objective: 'start_conversation',
+    expectedReplyRate: '24% - 32%',
+    expectedOpenRate: '64% - 74%',
+    personalizationFields: ['pain_points', 'role_context'],
+    tags: ['Low Friction', 'Question CTA', 'Problem Focus'],
+    sampleValues: {
+      firstName: 'Sarah',
+      companyName: 'Nexus Commerce',
+      title: 'Head of Growth',
+      industry: 'E-Commerce Tech',
+      signal: 'migrating to modern headless commerce tooling',
+      painPoint: 'cross-channel attribution gaps',
+      personalization: 'Noticed Nexus recently introduced multi-currency checkouts across EMEA.',
+      proofCompany: 'ShopScale',
+      proofMetric: '31% recovery on abandoned checkouts',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'outbound_value_teardown',
+    name: 'The 2-Minute Teardown Offer',
+    category: 'outbound',
+    description: 'Offers a zero-obligation diagnostic tear-down of their current tech stack / process.',
+    subject: 'mini breakdown on {{companyName}}\'s {{painPoint}}',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+We put together a 3-point teardown showing where {{industry}} companies at your stage usually leak efficiency in {{painPoint}}.
+
+Mind if I send the 2-minute Loom/PDF over? No pitch, just actionable ideas you can hand to your team.
+
+Cheers,
+{{senderName}}`,
+    style: 'thought_provoking',
+    ctaType: 'resource_offer',
+    objective: 'offer_audit',
+    expectedReplyRate: '22% - 29%',
+    expectedOpenRate: '62% - 70%',
+    personalizationFields: ['tech_stack', 'pain_points'],
+    tags: ['High Value', 'No-Pressure', 'Audit Offer'],
+    sampleValues: {
+      firstName: 'David',
+      companyName: 'CloudPulse',
+      title: 'CTO',
+      industry: 'DevOps & Cloud',
+      signal: 'scaling microservices architecture',
+      painPoint: 'cloud infrastructure visibility',
+      personalization: 'Saw your GitHub engineering blog piece on migrating from monolith to Kubernetes.',
+      proofCompany: 'InfraFast',
+      proofMetric: '35% reduction in compute spend',
+      senderName: 'Jordan',
+    },
+  },
+
+  // --- 2. SIGNAL SCOUT ---
+  {
+    id: 'signal_momentum_observer',
+    name: 'The Momentum Capitalizer',
+    category: 'signal_scout',
+    description: 'Capitalizes on high-intent funding, product expansion, or market milestone signals.',
+    subject: 'Congrats on {{signal}} — question on {{companyName}}\'s next phase',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Big congrats on the milestone. As {{companyName}} accelerates into this next phase, maintaining velocity while managing {{painPoint}} is usually where things get bottlenecked.
+
+We helped {{proofCompany}} maintain a {{proofMetric}} during their post-round push.
+
+Open to seeing a 1-page playbook on how they structured it?
+
+Best,
+{{senderName}}`,
+    style: 'thought_provoking',
+    ctaType: 'resource_offer',
+    objective: 'start_conversation',
+    expectedReplyRate: '26% - 35%',
+    expectedOpenRate: '68% - 78%',
+    personalizationFields: ['recent_news', 'pain_points'],
+    tags: ['Funding & Growth', 'High Open Rate', 'Milestone'],
+    sampleValues: {
+      firstName: 'Elena',
+      companyName: 'FinMatrix',
+      title: 'CEO',
+      industry: 'Fintech',
+      signal: 'closing your $18M Series A funding round',
+      painPoint: 'scaling compliance operations alongside product growth',
+      personalization: 'Saw the TechCrunch announcement regarding your Series A round led by Accel.',
+      proofCompany: 'PayFlow',
+      proofMetric: '70% reduction in AML review times',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'signal_tech_modernizer',
+    name: 'The Tech Stack Transition',
+    category: 'signal_scout',
+    description: 'Triggered when prospect adopts or changes an integrated technology stack or tool.',
+    subject: '{{companyName}}\'s shift to new tooling',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+Noticed {{companyName}} recently transitioned your stack around {{signal}}. Typically, {{industry}} teams running into {{painPoint}} during this phase lose 3-4 weeks on configuration.
+
+Are you handling the data unification in-house, or looking at automated pipelines?
+
+— {{senderName}}`,
+    style: 'consultative',
+    ctaType: 'open_question',
+    objective: 'start_conversation',
+    expectedReplyRate: '23% - 30%',
+    expectedOpenRate: '63% - 72%',
+    personalizationFields: ['tech_stack', 'role_context'],
+    tags: ['Tech Shift', 'Consultative', 'Engineering/Ops'],
+    sampleValues: {
+      firstName: 'Marcus',
+      companyName: 'RevPlatform',
+      title: 'VP of Engineering',
+      industry: 'Enterprise Software',
+      signal: 'deploying Snowflake alongside dbt',
+      painPoint: 'data sync latency across production systems',
+      personalization: 'Noticed the job descriptions your engineering team published looking for dbt Core and Snowflake specialists.',
+      proofCompany: 'DataLoop',
+      proofMetric: 'sub-minute warehouse sync',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'signal_change_agent',
+    name: 'The Leadership Transition',
+    category: 'signal_scout',
+    description: 'Reaches out when a new executive joins, offering an early win for their 90-day plan.',
+    subject: '{{firstName}}, ideas for your first 90 days at {{companyName}}',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Congrats on the new role at {{companyName}}!
+
+Stepping in as {{title}} usually means evaluating existing systems to quickly eliminate {{painPoint}}. We partnered with {{proofCompany}} to give their new leadership {{proofMetric}} within the first 60 days.
+
+Worth a brief chat to see if this aligns with your early priorities?
+
+Best,
+{{senderName}}`,
+    style: 'casual',
+    ctaType: 'soft_interest',
+    objective: 'book_meeting',
+    expectedReplyRate: '27% - 36%',
+    expectedOpenRate: '70% - 80%',
+    personalizationFields: ['recent_news', 'role_context'],
+    tags: ['New Exec', 'High Authority', '90-Day Win'],
+    sampleValues: {
+      firstName: 'Rachel',
+      companyName: 'OmniLogistics',
+      title: 'COO',
+      industry: 'Logistics Tech',
+      signal: 'taking over operations leadership at OmniLogistics',
+      painPoint: 'warehouse dispatcher turnover',
+      personalization: 'Saw you recently stepped in as COO at OmniLogistics after an incredible run at Flexport.',
+      proofCompany: 'DeliverFast',
+      proofMetric: '28% boost in route throughput',
+      senderName: 'Jordan',
+    },
+  },
+
+  // --- 3. TALENT SPOTTER ---
+  {
+    id: 'talent_growth_pulse',
+    name: 'The Hiring Surge Insight',
+    category: 'talent_spotter',
+    description: 'Directly addresses the operational strain that open job reqs and rapid headcount growth create.',
+    subject: '{{companyName}}\'s hiring push for {{signal}}',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+Saw you're actively expanding the team with {{signal}}. Usually when {{industry}} leaders ramp up hiring this aggressively, {{painPoint}} becomes the primary bottleneck before new team members produce results.
+
+We helped {{proofCompany}} achieve {{proofMetric}} while onboarding 20+ people simultaneously.
+
+Would it be helpful to see how they prevented burnout during that ramp?
+
+Best,
+{{senderName}}`,
+    style: 'consultative',
+    ctaType: 'soft_interest',
+    objective: 'start_conversation',
+    expectedReplyRate: '25% - 34%',
+    expectedOpenRate: '66% - 76%',
+    personalizationFields: ['hiring', 'role_context'],
+    tags: ['Hiring Signals', 'Scaling Pain', 'Operational'],
+    sampleValues: {
+      firstName: 'Liam',
+      companyName: 'HealthBridge',
+      title: 'Head of People & Talent',
+      industry: 'Digital Health',
+      signal: 'multiple senior engineering and clinical ops roles',
+      painPoint: 'slow engineering time-to-first-commit',
+      personalization: 'Saw 6 new postings for Senior Full-Stack Engineers and Clinical Leads over the last 2 weeks.',
+      proofCompany: 'CarePulse',
+      proofMetric: '50% reduction in onboarding overhead',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'talent_headcount_audit',
+    name: 'The Scaling Playbook Teardown',
+    category: 'talent_spotter',
+    description: 'Provides departmental benchmarks to hiring managers expanding specialized functions.',
+    subject: 'playbook for scaling {{companyName}}\'s team',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Given the active openings at {{companyName}}, I put together a concise breakdown of how peer {{industry}} organizations structure {{signal}} to bypass {{painPoint}}.
+
+Happy to forward the PDF over if you're exploring ways to speed up execution.
+
+Worth a look?
+
+— {{senderName}}`,
+    style: 'direct',
+    ctaType: 'resource_offer',
+    objective: 'offer_audit',
+    expectedReplyRate: '21% - 29%',
+    expectedOpenRate: '61% - 70%',
+    personalizationFields: ['hiring', 'pain_points'],
+    tags: ['Benchmark', 'Resource Hook', 'Hiring Intel'],
+    sampleValues: {
+      firstName: 'Jessica',
+      companyName: 'SecureNet',
+      title: 'VP of Security Operations',
+      industry: 'Cybersecurity',
+      signal: 'your tier-2 SOC analyst department',
+      painPoint: 'alert fatigue and missed triage SLAs',
+      personalization: 'Noticed multiple open listings for SOC Tier 2 Analysts on your careers page.',
+      proofCompany: 'ShieldCyber',
+      proofMetric: '4x increase in ticket resolution rate',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'talent_leadership_reach',
+    name: 'The Department Mandate',
+    category: 'talent_spotter',
+    description: 'Validates the manager\'s strategic vision based on the caliber of talent they are sourcing.',
+    subject: '{{firstName}}, quick observation on {{companyName}}\'s team expansion',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+The profile of talent you're recruiting suggests you're solving {{painPoint}} at scale this year.
+
+How are you balancing candidate ramp speed with existing team delivery right now?
+
+Curious to hear your take,
+{{senderName}}`,
+    style: 'thought_provoking',
+    ctaType: 'open_question',
+    objective: 'start_conversation',
+    expectedReplyRate: '20% - 27%',
+    expectedOpenRate: '59% - 68%',
+    personalizationFields: ['hiring', 'role_context'],
+    tags: ['Peer Question', 'Strategic Mandate', 'Thought Provoking'],
+    sampleValues: {
+      firstName: 'Brian',
+      companyName: 'Starlight Media',
+      title: 'Director of Product',
+      industry: 'Streaming Media',
+      signal: 'strategic hiring for AI recommendations',
+      painPoint: 'content recommendation latency',
+      personalization: 'Came across your job spec for a Principal ML Engineer focused on real-time ranking.',
+      proofCompany: 'CastHub',
+      proofMetric: '18% bump in user watch sessions',
+      senderName: 'Jordan',
+    },
+  },
+
+  // --- 4. ACCOUNT STRATEGIST ---
+  {
+    id: 'account_research_first',
+    name: 'The Deep Research Debrief',
+    category: 'account_strategist',
+    description: 'Demonstrates meticulous homework on their account model, positioning, and strategic priorities.',
+    subject: 'Thought regarding {{companyName}}\'s positioning in {{industry}}',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Looking at {{companyName}}'s customer footprint and recent market moves around {{signal}}, it feels like the key strategic challenge is {{painPoint}}.
+
+We recently partnered with {{proofCompany}} on a very similar dynamic, helping them unlock {{proofMetric}}.
+
+Would you be open to exchanging notes on what's working across the sector?
+
+Best regards,
+{{senderName}}`,
+    style: 'consultative',
+    ctaType: 'soft_interest',
+    objective: 'start_conversation',
+    expectedReplyRate: '27% - 37%',
+    expectedOpenRate: '69% - 79%',
+    personalizationFields: ['recent_news', 'pain_points', 'role_context'],
+    tags: ['Enterprise Grade', 'High Research', 'Consultative'],
+    sampleValues: {
+      firstName: 'Victoria',
+      companyName: 'Apex Financial',
+      title: 'Chief Strategy Officer',
+      industry: 'Wealth Management',
+      signal: 'expanding digital wealth advisory for high-net-worth clients',
+      painPoint: 'manual portfolio rebalancing friction',
+      personalization: 'Listened to your interview on the WealthTech Leaders podcast regarding automated tax-loss harvesting.',
+      proofCompany: 'Beacon Wealth',
+      proofMetric: '$450M automated assets in 90 days',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'account_strategic_fit',
+    name: 'The Peer-to-Peer Alignment',
+    category: 'account_strategist',
+    description: 'Senior-level strategic inquiry exploring whether solving a high-impact inefficiency is mutually worthwhile.',
+    subject: '{{firstName}} — strategic perspective for {{companyName}}',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+When we analyze tier-1 accounts in {{industry}}, those dealing with {{signal}} typically face a trade-off with {{painPoint}}.
+
+We developed a framework that helped {{proofCompany}} eliminate that trade-off, generating {{proofMetric}}.
+
+Are you open to a 15-minute executive briefing sometime next week?
+
+Sincerely,
+{{senderName}}`,
+    style: 'thought_provoking',
+    ctaType: 'specific_time',
+    objective: 'book_meeting',
+    expectedReplyRate: '23% - 31%',
+    expectedOpenRate: '64% - 73%',
+    personalizationFields: ['role_context', 'pain_points'],
+    tags: ['Executive Briefing', 'Strategic Fit', 'C-Level'],
+    sampleValues: {
+      firstName: 'Jonathan',
+      companyName: 'Kinetics Group',
+      title: 'Managing Director',
+      industry: 'Supply Chain Consulting',
+      signal: 'cross-border supply chain digitization initiatives',
+      painPoint: 'freight audit inaccuracies',
+      personalization: 'Noticed Kinetics Group was recognized in Gartner\'s latest Market Guide for Digital Freight.',
+      proofCompany: 'LogisForward',
+      proofMetric: '2.3% net margin improvement',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'account_benchmark_offer',
+    name: 'The Peer Benchmark Report',
+    category: 'account_strategist',
+    description: 'Offers proprietary anonymized industry benchmark metrics comparing their business against top quartile performers.',
+    subject: '{{industry}} benchmark report for {{companyName}}',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+We just concluded an analysis of 80+ companies across {{industry}} tracking how leaders address {{painPoint}}.
+
+{{companyName}} matches the profile of the top quartile, but there are 2 specific blindspots around {{signal}} that most teams miss.
+
+Can I email you the 2-page benchmark matrix? Zero sales pitch — just high-signal data.
+
+Best,
+{{senderName}}`,
+    style: 'direct',
+    ctaType: 'resource_offer',
+    objective: 'offer_audit',
+    expectedReplyRate: '25% - 33%',
+    expectedOpenRate: '67% - 77%',
+    personalizationFields: ['recent_news', 'tech_stack'],
+    tags: ['Exclusive Data', 'Benchmark', 'High Authority'],
+    sampleValues: {
+      firstName: 'Daniel',
+      companyName: 'Acuity Systems',
+      title: 'SVP Operations',
+      industry: 'Industrial IoT',
+      signal: 'predictive maintenance deployments on edge devices',
+      painPoint: 'unplanned device downtime and false-positive alarms',
+      personalization: 'Read your patent filing on low-power sensor telemetry published last month.',
+      proofCompany: 'EdgeMetrics',
+      proofMetric: '64% fewer nuisance alerts',
+      senderName: 'Jordan',
+    },
+  },
+
+  // --- 5. PARTNER BUILDER ---
+  {
+    id: 'partner_audience_overlap',
+    name: 'The Shared Audience Synergy',
+    category: 'partner_builder',
+    description: 'Proposes co-marketing and reciprocal customer introductions based on non-competing customer overlap.',
+    subject: 'partnership idea for {{companyName}} + our audience',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+Both our products serve {{industry}} teams struggling with {{painPoint}}, but from completely complementary angles.
+
+We recently did a joint initiative with {{proofCompany}} that drove {{proofMetric}} without cold outbound.
+
+Would you be open to exploring a co-marketing or ecosystem partnership between {{companyName}} and our team?
+
+Cheers,
+{{senderName}}`,
+    style: 'casual',
+    ctaType: 'soft_interest',
+    objective: 'partnership',
+    expectedReplyRate: '29% - 39%',
+    expectedOpenRate: '72% - 82%',
+    personalizationFields: ['role_context', 'tech_stack'],
+    tags: ['Ecosystem Play', 'Win-Win', 'Highest Reply'],
+    sampleValues: {
+      firstName: 'Maya',
+      companyName: 'SyncHub',
+      title: 'Head of Partnerships',
+      industry: 'Integration Software',
+      signal: 'launching your app marketplace 2.0',
+      painPoint: 'ecosystem partner activation',
+      personalization: 'Saw you just announced 15 new native connectors in your marketplace.',
+      proofCompany: 'BridgeAPI',
+      proofMetric: '140+ qualified partner leads in 30 days',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'partner_ecosystem_fit',
+    name: 'The Technical Integration Hook',
+    category: 'partner_builder',
+    description: 'Suggests a bilateral software integration that creates joint stickiness and retention.',
+    subject: 'Native integration between {{companyName}} and our platform?',
+    body: `Hey {{firstName}},
+
+{{personalization}}
+
+A number of our mutual customers in {{industry}} have asked if we can connect {{companyName}}'s functionality around {{signal}} with our platform to eliminate {{painPoint}}.
+
+We built a draft integration blueprint that would give your users {{proofMetric}}.
+
+Who on your partnerships or product team is the right person to review a 5-minute sandbox demo?
+
+Best,
+{{senderName}}`,
+    style: 'consultative',
+    ctaType: 'open_question',
+    objective: 'partnership',
+    expectedReplyRate: '26% - 35%',
+    expectedOpenRate: '66% - 76%',
+    personalizationFields: ['tech_stack', 'role_context'],
+    tags: ['Integration', 'Mutual Users', 'Product Synergy'],
+    sampleValues: {
+      firstName: 'Kevin',
+      companyName: 'FormFlow',
+      title: 'VP Product Partnerships',
+      industry: 'Workflow Automation',
+      signal: 'releasing your public GraphQL webhook API',
+      painPoint: 'customer data synchronization between CRM and forms',
+      personalization: 'Checked out your newly launched developer portal and webhook documentation.',
+      proofCompany: 'RouteAutomate',
+      proofMetric: '40% faster time-to-integration',
+      senderName: 'Jordan',
+    },
+  },
+  {
+    id: 'partner_cocreate_proposal',
+    name: 'The Co-Branded Masterclass',
+    category: 'partner_builder',
+    description: 'Offers to co-create a high-value industry masterclass, benchmark study, or co-branded guide.',
+    subject: 'Co-branded {{industry}} research with {{companyName}}',
+    body: `Hi {{firstName}},
+
+{{personalization}}
+
+We're putting together a deep-dive research piece on {{signal}} and how forward-thinking leaders are tackling {{painPoint}}.
+
+{{companyName}} is doing standout work here, and we'd love to feature your insights alongside {{proofCompany}} (which generated {{proofMetric}} for their brand).
+
+Would you be open to a 10-minute chat to see if this makes sense for your Q3 brand goals?
+
+Warmly,
+{{senderName}}`,
+    style: 'direct',
+    ctaType: 'resource_offer',
+    objective: 'partnership',
+    expectedReplyRate: '24% - 33%',
+    expectedOpenRate: '65% - 75%',
+    personalizationFields: ['recent_news', 'role_context'],
+    tags: ['Thought Leadership', 'Co-Marketing', 'Zero Cost'],
+    sampleValues: {
+      firstName: 'Chloe',
+      companyName: 'TalentHive',
+      title: 'VP Brand & Growth',
+      industry: 'Recruiting Automation',
+      signal: 'advocating for transparent candidate salary insights',
+      painPoint: 'inbound organic brand awareness in enterprise',
+      personalization: 'Loved the LinkedIn thought piece you wrote on transparent candidate salary bands.',
+      proofCompany: 'WorkWave',
+      proofMetric: '1,200+ webinar registrations and 45 MQLs',
+      senderName: 'Jordan',
+    },
+  },
+];
+
+function defaultPersonalizationFallback(): PersonalizationFallbackConfig {
+  return {
+    sendWhenNoPersonalization: true,
+    staticFallbackLine: "I've been following {{companyName}}'s growth in {{industry}} and wanted to share a quick observation.",
+    fallbackStrategy: 'send_with_static_line',
+  };
+}
 
 function defaultTarget(priority = 1): PersonTarget {
   return {
@@ -487,6 +1117,8 @@ function defaultOutreachPolicy(): OutreachPolicy {
     objective: 'start_conversation',
     style: 'consultative',
     ctaType: 'soft_interest',
+    sequenceCount: 1,
+    sequenceDays: [0, 3, 7, 14, 21],
     forbiddenPhrases: [
       "hope you're doing well",
       'i came across your profile',
@@ -496,11 +1128,14 @@ function defaultOutreachPolicy(): OutreachPolicy {
     ],
     personalizationPriority: ['hiring', 'recent_news', 'pain_points', 'role_context'],
     whenNoEvidence: 'pain_point_only',
+    selectedTemplateId: 'outbound_direct_ask',
+    personalizationFallback: defaultPersonalizationFallback(),
   };
 }
 
 function defaultConfig(): AgentConfig {
   return {
+    mission: '',
     modules: {
       company: true,
       people: true,
@@ -617,10 +1252,33 @@ function normalizeConfig(raw: unknown): AgentConfig {
   };
 
   const rawOutreach = (obj.outreachPolicy ?? {}) as Record<string, unknown>;
+  const rawFallback = (rawOutreach.personalizationFallback ?? {}) as Record<string, unknown>;
+  const baseFallback = base.outreachPolicy.personalizationFallback ?? defaultPersonalizationFallback();
+  const personalizationFallback: PersonalizationFallbackConfig = {
+    sendWhenNoPersonalization:
+      typeof rawFallback.sendWhenNoPersonalization === 'boolean'
+        ? rawFallback.sendWhenNoPersonalization
+        : baseFallback.sendWhenNoPersonalization,
+    staticFallbackLine:
+      typeof rawFallback.staticFallbackLine === 'string'
+        ? rawFallback.staticFallbackLine
+        : baseFallback.staticFallbackLine,
+    fallbackStrategy: (['skip_email', 'send_generic', 'send_with_static_line'].includes(String(rawFallback.fallbackStrategy))
+      ? rawFallback.fallbackStrategy
+      : baseFallback.fallbackStrategy) as PersonalizationFallbackConfig['fallbackStrategy'],
+  };
+
   const outreachPolicy: OutreachPolicy = {
     objective: (rawOutreach.objective || base.outreachPolicy.objective) as OutreachObjective,
     style: (rawOutreach.style || base.outreachPolicy.style) as OutreachStyle,
     ctaType: (rawOutreach.ctaType || base.outreachPolicy.ctaType) as OutreachCtaType,
+    sequenceCount:
+      typeof rawOutreach.sequenceCount === 'number'
+        ? Math.max(1, Math.min(5, Number(rawOutreach.sequenceCount)))
+        : base.outreachPolicy.sequenceCount ?? 1,
+    sequenceDays: Array.isArray(rawOutreach.sequenceDays)
+      ? rawOutreach.sequenceDays.map(Number).filter((n) => !isNaN(n))
+      : base.outreachPolicy.sequenceDays ?? [0, 3, 7, 14, 21],
     forbiddenPhrases: Array.isArray(rawOutreach.forbiddenPhrases)
       ? rawOutreach.forbiddenPhrases.map(String)
       : base.outreachPolicy.forbiddenPhrases,
@@ -628,9 +1286,21 @@ function normalizeConfig(raw: unknown): AgentConfig {
       ? (rawOutreach.personalizationPriority as PersonalizationSource[])
       : base.outreachPolicy.personalizationPriority,
     whenNoEvidence: (rawOutreach.whenNoEvidence || base.outreachPolicy.whenNoEvidence) as OutreachPolicy['whenNoEvidence'],
+    selectedTemplateId:
+      typeof rawOutreach.selectedTemplateId === 'string'
+        ? rawOutreach.selectedTemplateId
+        : base.outreachPolicy.selectedTemplateId,
+    preferredTemplateId:
+      typeof rawOutreach.preferredTemplateId === 'string' && rawOutreach.preferredTemplateId
+        ? rawOutreach.preferredTemplateId
+        : undefined,
+    customSubject: typeof rawOutreach.customSubject === 'string' ? rawOutreach.customSubject : undefined,
+    customBody: typeof rawOutreach.customBody === 'string' ? rawOutreach.customBody : undefined,
+    personalizationFallback,
   };
 
   return {
+    mission: typeof obj.mission === 'string' ? obj.mission : base.mission ?? '',
     modules: { ...base.modules, ...((obj.modules as Modules) ?? {}) },
     people: {
       mode: targets.length > 1 ? 'multi' : ((peopleRaw.mode as AgentConfig['people']['mode']) ?? 'single'),
@@ -708,6 +1378,17 @@ function sanitizeConfigForSave(config: AgentConfig): AgentConfig | { error: stri
       ...config.icpPolicy,
       criteria: config.icpPolicy.criteria.filter((c) => c.label.trim()),
     },
+    outreachPolicy: {
+      ...config.outreachPolicy,
+      customSubject: config.outreachPolicy.customSubject?.trim() || undefined,
+      customBody: config.outreachPolicy.customBody?.trim() || undefined,
+      personalizationFallback: config.outreachPolicy.personalizationFallback
+        ? {
+            ...config.outreachPolicy.personalizationFallback,
+            staticFallbackLine: config.outreachPolicy.personalizationFallback.staticFallbackLine?.trim() || '',
+          }
+        : undefined,
+    },
   };
 }
 
@@ -731,6 +1412,15 @@ export default function EnrichmentAgentsPage() {
   const [newForbiddenInput, setNewForbiddenInput] = useState('');
   const [customDeptInput, setCustomDeptInput] = useState('');
 
+  // DB outreach templates for agent preference picker
+  type DbTemplate = { id: string; name: string; templateType: string; isSystem: boolean; latestVersion?: { config?: { bodyRecipe?: string } } | null };
+  const [dbTemplates, setDbTemplates] = useState<DbTemplate[]>([]);
+  useEffect(() => {
+    api.get('/api/outreach/templates')
+      .then((res) => setDbTemplates((res.data.data ?? []) as DbTemplate[]))
+      .catch(() => {});
+  }, []);
+
   const load = useCallback(async (preferId?: string | null) => {
     setLoading(true);
     try {
@@ -753,7 +1443,10 @@ export default function EnrichmentAgentsPage() {
         setName(pick.name);
         setDescription(pick.description ?? '');
         setIsDefault(pick.isDefault);
-        const normalized = normalizeConfig(pick.config);
+        const normalized = normalizeConfig({
+          ...(pick.config as Record<string, unknown>),
+          mission: pick.mission ?? (pick.config as AgentConfig)?.mission ?? '',
+        });
         setConfig(normalized);
         setPersonality(personalityFromConfig(normalized));
         setResearchPriority(priorityFromConfig(normalized));
@@ -782,7 +1475,10 @@ export default function EnrichmentAgentsPage() {
     setName(agent.name);
     setDescription(agent.description ?? '');
     setIsDefault(agent.isDefault);
-    const normalized = normalizeConfig(agent.config);
+    const normalized = normalizeConfig({
+      ...(agent.config as Record<string, unknown>),
+      mission: agent.mission ?? agent.config?.mission ?? '',
+    });
     setConfig(normalized);
     setPersonality(personalityFromConfig(normalized));
     setResearchPriority(priorityFromConfig(normalized));
@@ -869,7 +1565,11 @@ export default function EnrichmentAgentsPage() {
         outreachPolicy: {
           ...prev.outreachPolicy,
           ...profile.outreach,
-          personalizationPriority: profile.hiring ? ['hiring', 'role_context', 'pain_points'] : ['recent_news', 'pain_points', 'role_context'],
+          customSubject: undefined,
+          customBody: undefined,
+          personalizationPriority: profile.hiring
+            ? ['hiring', 'role_context', 'pain_points']
+            : ['recent_news', 'pain_points', 'role_context'],
         },
       };
     });
@@ -906,10 +1606,6 @@ export default function EnrichmentAgentsPage() {
         },
       };
     });
-  };
-
-  const applyOutreachStyle = (style: OutreachStyle) => {
-    setConfig((prev) => ({ ...prev, modules: { ...prev.modules, outreach: true }, outreachPolicy: { ...prev.outreachPolicy, style } }));
   };
 
   const toggleModule = (key: keyof Modules) => {
@@ -1145,6 +1841,7 @@ export default function EnrichmentAgentsPage() {
       const payload = {
         name: name.trim(),
         description: description.trim() || undefined,
+        mission: (sanitized.mission ?? '').trim() || null,
         isDefault,
         config: sanitized,
       };
@@ -1234,7 +1931,7 @@ export default function EnrichmentAgentsPage() {
     },
     {
       id: 'outreach',
-      label: 'Outreach Policy',
+      label: 'Outreach Strategy',
       icon: IconSend,
       enabled: config.modules.outreach,
     },
@@ -1289,10 +1986,12 @@ export default function EnrichmentAgentsPage() {
                           selectedId === agent.id ? 'text-slate-200' : 'text-slate-400'
                         }`}
                       >
-                        {(agent.config.people?.targets ?? [])
-                          .map((t) => objectiveLabel(t.objective))
-                          .slice(0, 2)
-                          .join(', ') || 'No people'}
+                        {(agent.mission || agent.config?.mission || agent.description || '').trim() ||
+                          (agent.config.people?.targets ?? [])
+                            .map((t) => objectiveLabel(t.objective))
+                            .slice(0, 2)
+                            .join(', ') ||
+                          'No people'}
                       </span>
                     </span>
                   </button>
@@ -1332,6 +2031,25 @@ export default function EnrichmentAgentsPage() {
                   className={settingsInputClass}
                   placeholder="When should your team use this agent?"
                 />
+              </label>
+
+              <label className="block space-y-1 sm:col-span-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Agent Mission
+                </span>
+                <textarea
+                  value={config.mission ?? ''}
+                  onChange={(e) => setConfig((prev) => ({ ...prev, mission: e.target.value }))}
+                  className={`${settingsInputClass} min-h-[88px] resize-y`}
+                  placeholder="Find companies actively hiring engineering talent and identify the person responsible for hiring so we can start a relevant conversation about reducing recruiting workload."
+                />
+                <span className="block text-[11px] leading-4 text-slate-500">
+                  North-star for research priorities and outreach objective — not the final email wording. Manage email recipes in{' '}
+                  <a href="/dashboard/settings/outreach-templates" className="font-semibold text-violet-700 underline">
+                    Outreach Templates
+                  </a>
+                  .
+                </span>
               </label>
 
               <label className="flex items-center gap-2 text-xs font-medium text-slate-700 sm:col-span-2">
@@ -1421,43 +2139,246 @@ export default function EnrichmentAgentsPage() {
                   </fieldset>
                 </div>
 
-                <fieldset className="border-t border-violet-100 pt-5">
-                  <legend className="text-sm font-bold text-slate-900">4. How should its outreach feel?</legend>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {([
-                      ['consultative', 'Helpful and consultative'],
-                      ['direct', 'Clear and direct'],
-                      ['casual', 'Warm and casual'],
-                      ['thought_provoking', 'Insight-led'],
-                    ] as Array<[OutreachStyle, string]>).map(([style, label]) => (
-                      <button
-                        key={style}
-                        type="button"
-                        onClick={() => applyOutreachStyle(style)}
-                        className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
-                          config.outreachPolicy.style === style
-                            ? 'border-violet-500 bg-violet-600 text-white'
-                            : 'border-slate-200 bg-white text-slate-600 hover:border-violet-200 hover:bg-violet-50'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
+                {/* 4. Outreach Engine strategy (by agent personality) */}
+                {(() => {
+                  const engineTypesByPersonality: Record<
+                    AgentPersonality,
+                    Array<{ type: string; label: string; when: string }>
+                  > = {
+                    outbound: [
+                      { type: 'operational_pain', label: 'Operational pain', when: 'Clear pain + proof angle' },
+                      { type: 'role_specific', label: 'Role-specific', when: 'Strong buyer role match' },
+                      { type: 'general_high_fit', label: 'High-fit account', when: 'ICP fit without a dated trigger' },
+                    ],
+                    signal_scout: [
+                      { type: 'funding', label: 'Funding', when: 'Recent raise / investment' },
+                      { type: 'product_launch', label: 'Product launch', when: 'Launch / release signal' },
+                      { type: 'rapid_growth', label: 'Rapid growth', when: 'Headcount / market momentum' },
+                      { type: 'leadership_change', label: 'Leadership change', when: 'New exec / VP hire' },
+                    ],
+                    talent_spotter: [
+                      { type: 'active_hiring', label: 'Active hiring', when: 'Open roles matching your ICP' },
+                      { type: 'hiring_pain', label: 'Hiring pain', when: 'Recruiting / ramp friction' },
+                      { type: 'role_specific', label: 'Role-specific', when: 'Hiring manager / TA lead' },
+                    ],
+                    account_strategist: [
+                      { type: 'technology_change', label: 'Tech change', when: 'Stack / tooling shift' },
+                      { type: 'market_expansion', label: 'Market expansion', when: 'New geo / segment' },
+                      { type: 'operational_pain', label: 'Operational pain', when: 'Process / efficiency gap' },
+                    ],
+                    partner_builder: [
+                      { type: 'partnership', label: 'Partnership', when: 'Integration / ecosystem fit' },
+                      { type: 'product_launch', label: 'Product launch', when: 'Partner-ready launch' },
+                      { type: 'general_high_fit', label: 'High-fit account', when: 'Strategic account fit' },
+                    ],
+                  };
+                  const preferredTypes = engineTypesByPersonality[personality] ?? engineTypesByPersonality.outbound;
+                  const currentFallback =
+                    config.outreachPolicy.personalizationFallback ?? defaultPersonalizationFallback();
+                  const fallbackSummary =
+                    !currentFallback.sendWhenNoPersonalization || currentFallback.fallbackStrategy === 'skip_email'
+                      ? 'Skip lead if no evidence'
+                      : currentFallback.fallbackStrategy === 'send_with_static_line'
+                        ? 'Static fallback line'
+                        : 'Generic role & company fit';
 
-                <div className="rounded-xl border border-slate-200 bg-white/75 p-3.5">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">What LeadHub will configure for you</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-slate-700">
-                    <span className="rounded-full bg-slate-100 px-2 py-1">Goal: {GOAL_META.find((item) => item.id === goal)?.label}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">Person: {objectiveLabel(config.people.targets[0]?.objective ?? 'founder')}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.hiring ? 'Hiring signals on' : 'Hiring signals off'}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.icpPolicy.enabled ? 'ICP scoring on' : 'ICP scoring off'}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.intentPolicy.enabled ? 'Intent triggers on' : 'Intent triggers off'}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.email && config.email.verify ? 'Email verification on' : 'No email verification'}</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1">Outreach: {config.outreachPolicy.style ?? 'consultative'}</span>
-                  </div>
-                </div>
+                  return (
+                    <div className="space-y-5 border-t border-violet-100 pt-5">
+                      <div>
+                        <legend className="text-sm font-bold text-slate-900">4. How Outreach Engine works for this agent</legend>
+                        <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                          Enrichment discovers facts and outreach intelligence. A separate Outreach Engine then
+                          picks a structured template from evidence (hiring, funding, pain, role fit, etc.) and
+                          writes a full subject + body — not a one-line opener from synthesis.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 lg:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Enrichment finds</p>
+                          <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
+                            <li>Company identity, people, and verified emails</li>
+                            <li>Signals, ICP/intent scores, and why-now triggers</li>
+                            <li>Outreach intelligence (angle, evidence ladder, template hints)</li>
+                          </ul>
+                        </div>
+                        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
+                          <p className="text-[10px] font-black uppercase tracking-wider text-violet-700">Outreach Engine writes</p>
+                          <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
+                            <li>Selects a system template type from evidence strength</li>
+                            <li>Generates full email subject + body with claim→evidence checks</li>
+                            <li>Abstains when required evidence is missing (protects deliverability)</li>
+                          </ul>
+                          <a
+                            href="/dashboard/settings/outreach-templates"
+                            className="mt-3 inline-flex text-[11px] font-bold text-violet-700 underline"
+                          >
+                            Manage Outreach Templates →
+                          </a>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-bold text-slate-900">
+                            Preferred email types for{' '}
+                            {AGENT_PERSONALITIES.find((p) => p.id === personality)?.name ?? personality}
+                          </p>
+                          <span className="rounded-full bg-violet-100/70 px-2.5 py-1 text-[10px] font-bold tracking-wide text-violet-700">
+                            Dynamic · evidence selects the final type
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          {preferredTypes.map((t) => (
+                            <div
+                              key={t.type}
+                              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"
+                            >
+                              <p className="text-xs font-bold text-slate-900">{t.label}</p>
+                              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{t.when}</p>
+                              <p className="mt-1 font-mono text-[9px] text-slate-400">{t.type}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Preferred template picker */}
+                      {dbTemplates.length > 0 && (
+                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
+                          <label className="block space-y-1.5">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                              Preferred outreach template (optional)
+                            </span>
+                            <p className="text-[11px] leading-4 text-slate-500">
+                              Override auto-selection — the Outreach Engine will use this template when writing emails for leads
+                              enriched by this agent. Leave on &ldquo;Auto&rdquo; to let the engine pick the best match from evidence.
+                            </p>
+                            <select
+                              value={config.outreachPolicy.preferredTemplateId ?? ''}
+                              onChange={(e) =>
+                                setConfig((prev) => ({
+                                  ...prev,
+                                  outreachPolicy: {
+                                    ...prev.outreachPolicy,
+                                    preferredTemplateId: e.target.value || undefined,
+                                  },
+                                }))
+                              }
+                              className={settingsInputClass}
+                            >
+                              <option value="">Auto — engine picks best fit from evidence</option>
+                              {dbTemplates.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name}{t.isSystem ? '' : ' (custom)'} — {t.templateType.replace(/_/g, ' ')}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          {config.outreachPolicy.preferredTemplateId && (() => {
+                            const chosen = dbTemplates.find((t) => t.id === config.outreachPolicy.preferredTemplateId);
+                            const recipe = chosen?.latestVersion?.config?.bodyRecipe;
+                            if (!recipe) return null;
+                            return (
+                              <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                                  Body preview
+                                </div>
+                                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-5 text-slate-600">
+                                  {recipe.length > 300 ? recipe.slice(0, 300) + '…' : recipe}
+                                </pre>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <label className="block space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Objective</span>
+                          <select
+                            value={config.outreachPolicy.objective ?? 'start_conversation'}
+                            onChange={(e) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                modules: { ...prev.modules, outreach: true },
+                                outreachPolicy: {
+                                  ...prev.outreachPolicy,
+                                  objective: e.target.value as OutreachObjective,
+                                },
+                              }))
+                            }
+                            className={settingsInputClass}
+                          >
+                            <option value="start_conversation">Start a conversation</option>
+                            <option value="book_meeting">Book a meeting</option>
+                            <option value="offer_audit">Offer audit / teardown</option>
+                            <option value="partnership">Partnership inquiry</option>
+                            <option value="custom">Custom angle</option>
+                          </select>
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Style</span>
+                          <select
+                            value={config.outreachPolicy.style ?? 'consultative'}
+                            onChange={(e) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                outreachPolicy: {
+                                  ...prev.outreachPolicy,
+                                  style: e.target.value as OutreachStyle,
+                                },
+                              }))
+                            }
+                            className={settingsInputClass}
+                          >
+                            <option value="consultative">Consultative</option>
+                            <option value="casual">Casual</option>
+                            <option value="direct">Direct</option>
+                            <option value="thought_provoking">Thought provoking</option>
+                          </select>
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">CTA</span>
+                          <select
+                            value={config.outreachPolicy.ctaType ?? 'soft_interest'}
+                            onChange={(e) =>
+                              setConfig((prev) => ({
+                                ...prev,
+                                outreachPolicy: {
+                                  ...prev.outreachPolicy,
+                                  ctaType: e.target.value as OutreachCtaType,
+                                },
+                              }))
+                            }
+                            className={settingsInputClass}
+                          >
+                            <option value="soft_interest">Soft interest</option>
+                            <option value="resource_offer">Resource offer</option>
+                            <option value="open_question">Open question</option>
+                            <option value="specific_time">Specific time</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 bg-white/75 p-3.5">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">What LeadHub will configure for you</p>
+                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-slate-700">
+                          <span className="rounded-full bg-slate-100 px-2 py-1">Goal: {GOAL_META.find((item) => item.id === goal)?.label}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">Person: {objectiveLabel(config.people.targets[0]?.objective ?? 'founder')}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.hiring ? 'Hiring signals on' : 'Hiring signals off'}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.icpPolicy.enabled ? 'ICP scoring on' : 'ICP scoring off'}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.intentPolicy.enabled ? 'Intent triggers on' : 'Intent triggers off'}</span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.email && config.email.verify ? 'Email verification on' : 'No email verification'}</span>
+                          <span className="rounded-full border border-violet-200 bg-violet-100 px-2 py-1 text-violet-800">
+                            Outreach Engine · {preferredTypes.map((t) => t.label).slice(0, 2).join(', ')}
+                            {preferredTypes.length > 2 ? '…' : ''}
+                          </span>
+                          <span className="rounded-full bg-slate-100 px-2 py-1">Fallback: {fallbackSummary}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div className="flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 pt-4">
                   <p className="text-xs text-slate-600">Want to change the individual rules? They are still available whenever you need them.</p>
@@ -2310,9 +3231,32 @@ export default function EnrichmentAgentsPage() {
               </div>
             )}
 
-            {/* TAB 6: OUTREACH POLICY */}
+            {/* TAB 6: OUTREACH STRATEGY */}
             {showAdvanced && activeTab === 'outreach' && (
               <div className="space-y-5 animate-in fade-in duration-200">
+                <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/80 via-white to-slate-50 p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
+                    Enrichment ≠ email copy
+                  </p>
+                  <h3 className="mt-1 text-sm font-bold text-slate-950">Outreach Engine strategy</h3>
+                  <p className="mt-1.5 text-xs leading-5 text-slate-600">
+                    This tab sets objective, tone, CTA, and fallback rules that guide the Outreach Engine.
+                    After enrichment finishes, the engine selects a structured template type from evidence
+                    (hiring, funding, pain, role fit, etc.) and generates a full subject + body with
+                    claim→evidence validation. Edit recipes in{' '}
+                    <a href="/dashboard/settings/outreach-templates" className="font-semibold text-violet-700 underline">
+                      Outreach Templates
+                    </a>
+                    .
+                  </p>
+                  {(config.mission || '').trim() ? (
+                    <p className="mt-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                      <span className="font-bold text-slate-900">Mission: </span>
+                      {config.mission}
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="grid gap-3 sm:grid-cols-3">
                   <label className="block space-y-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -2388,6 +3332,71 @@ export default function EnrichmentAgentsPage() {
                   </label>
                 </div>
 
+                {/* Multi-Step Email Sequence */}
+                <section className="space-y-3 border-t border-slate-100 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Multi-Step Email Sequence
+                      </span>
+                      <p className="text-xs text-slate-500">
+                        Generate follow-up emails automatically as part of enrichment.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() =>
+                            setConfig((prev) => ({
+                              ...prev,
+                              outreachPolicy: {
+                                ...prev.outreachPolicy,
+                                sequenceCount: n,
+                              },
+                            }))
+                          }
+                          className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold transition-all ${
+                            (config.outreachPolicy.sequenceCount ?? 1) === n
+                              ? 'bg-violet-600 text-white shadow-xs'
+                              : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Visual Step Cards */}
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {[
+                      { step: 1, day: 0, title: 'Email 1: Initial outreach', desc: 'Personalized research & value proposition' },
+                      { step: 2, day: 3, title: 'Email 2: Value-add follow-up', desc: 'Share insight or case study without repitching' },
+                      { step: 3, day: 7, title: 'Email 3: Breakup / last touch', desc: 'Graceful exit, zero pressure' },
+                      { step: 4, day: 14, title: 'Email 4: New angle', desc: 'Alternative perspective or trigger' },
+                      { step: 5, day: 21, title: 'Email 5: Final touch', desc: 'Brief sign-off' },
+                    ]
+                      .slice(0, config.outreachPolicy.sequenceCount ?? 1)
+                      .map((s) => (
+                        <div
+                          key={s.step}
+                          className="rounded-xl border border-violet-100 bg-violet-50/40 p-3"
+                        >
+                          <div className="flex items-center justify-between text-xs font-bold text-violet-900">
+                            <span>Step {s.step}</span>
+                            <span className="rounded-md bg-white px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 border border-violet-200">
+                              {s.day === 0 ? 'Day 0' : `Day ${s.day}`}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-xs font-semibold text-slate-800">{s.title}</p>
+                          <p className="mt-0.5 text-[11px] leading-4 text-slate-500">{s.desc}</p>
+                        </div>
+                      ))}
+                  </div>
+                </section>
+
                 {/* When No Evidence Behavior */}
                 <section className="space-y-2 border-t border-slate-100 pt-4">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -2397,7 +3406,7 @@ export default function EnrichmentAgentsPage() {
                     {[
                       { id: 'pain_point_only', label: 'Pain-Point Only', desc: 'Focus purely on operational pain point' },
                       { id: 'generic', label: 'Company Fit', desc: 'Lean on high-level company and role fit' },
-                      { id: 'skip', label: 'Skip Opener', desc: 'Leave emailOpener empty (abstain)' },
+                      { id: 'skip', label: 'Skip / abstain', desc: 'Abstain from email when evidence is weak' },
                     ].map((opt) => (
                       <label
                         key={opt.id}
@@ -2438,7 +3447,7 @@ export default function EnrichmentAgentsPage() {
                       Forbidden Phrases &amp; Clichés
                     </h3>
                     <p className="mt-1 text-xs text-slate-500">
-                      The AI synthesizer is strictly blocked from generating copy containing any of these phrases.
+                      Passed to the Outreach Engine so generated emails stay on-brand and spam-safe.
                     </p>
                   </div>
 
@@ -2486,7 +3495,7 @@ export default function EnrichmentAgentsPage() {
                       Personalization Priority Order
                     </h3>
                     <p className="mt-1 text-xs text-slate-500">
-                      When synthesizing the personalized opening line, the agent checks sources in this priority order.
+                      Guides which evidence ladder the Outreach Engine prefers when picking a template and angle.
                     </p>
                   </div>
 
