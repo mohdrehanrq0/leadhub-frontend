@@ -171,7 +171,7 @@ function defaultCustomConfig(): TemplateConfig {
 
 Best,
 {{senderName}}
-{{senderTitle}}, {{senderCompany}}`,
+{{senderCompany}}`,
   };
 }
 
