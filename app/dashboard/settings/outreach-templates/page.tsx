@@ -37,6 +37,7 @@ type TemplateConfig = {
   cta: string;
   forbiddenPhrases: string[];
   subjectStrategy: { patterns: string[]; personalize: boolean };
+  systemPrompt?: string;
   promptInstructions?: string;
   bodyRecipe?: string;
 };
@@ -137,6 +138,37 @@ const SAMPLE_VALUES: Record<string, string> = {
   '{{AI: resource offer CTA}}': 'Happy to send over a 1-page breakdown of how they structured it — no strings.',
 };
 
+const DEFAULT_SYSTEM_PROMPT = `You are an expert cold email writer creating personalized outreach for B2B leads.
+
+YOUR GOAL:
+Write professional, personalized emails that:
+- Feel like genuine 1-on-1 communication
+- Reference specific, verified information about the prospect
+- Clearly articulate value without being pushy
+- Make it easy for the recipient to respond
+
+CORE PRINCIPLES:
+1. Personalization First: Always reference specific details about the prospect or their company
+2. Evidence-Based: Only use verified information provided in the context
+3. Clear Value: Explain why this matters to them specifically
+4. Low Friction: Make responding easy with a simple, clear call-to-action
+5. Professional Tone: Write like a peer, not a salesperson
+
+WRITING GUIDELINES:
+- Keep subject lines short (3-7 words) and specific to the prospect
+- Body should be 50-110 words maximum
+- Start with something about them, not about you
+- One clear idea per email
+- Use simple, conversational language
+- Include only verified facts from the evidence
+
+WHAT TO AVOID:
+- Generic greetings like "Hope you're doing well"
+- Obvious sales language
+- Unverified claims or assumptions
+- Multiple value propositions in one email
+- Pressure tactics or urgency manipulation`;
+
 function defaultCustomConfig(): TemplateConfig {
   return {
     name: 'Custom Template',
@@ -158,6 +190,7 @@ function defaultCustomConfig(): TemplateConfig {
       'touch base',
     ],
     subjectStrategy: { patterns: ['{{companyName}}'], personalize: true },
+    systemPrompt: DEFAULT_SYSTEM_PROMPT,
     promptInstructions: 'Use verified evidence only. Mention only one primary trigger.',
     bodyRecipe: `Hi {{firstName}},
 
@@ -795,7 +828,7 @@ export default function OutreachTemplatesPage() {
                   </label>
                 </div>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 space-y-3">
                   <label className="block space-y-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                       Required evidence (comma-separated)
@@ -811,16 +844,40 @@ export default function OutreachTemplatesPage() {
                       }
                     />
                   </label>
+                  
                   <label className="block space-y-1">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                      Prompt instructions
+                      System Prompt
                     </span>
-                    <input
+                    <span className="block text-[10px] text-slate-400">
+                      Guide how the AI generates outreach messages. Customize for your specific use case.
+                    </span>
+                    <textarea
+                      className={`${settingsInputClass} font-mono text-xs`}
+                      style={{ minHeight: 160 }}
+                      value={draftConfig.systemPrompt ?? ''}
+                      onChange={(e) =>
+                        setDraftConfig((c) => ({ ...c, systemPrompt: e.target.value }))
+                      }
+                      placeholder="Enter system prompt..."
+                    />
+                  </label>
+
+                  <label className="block space-y-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                      Additional Instructions
+                    </span>
+                    <span className="block text-[10px] text-slate-400">
+                      Template-specific instructions (e.g., "Focus on hiring signals", "Emphasize ROI")
+                    </span>
+                    <textarea
                       className={settingsInputClass}
+                      rows={3}
                       value={draftConfig.promptInstructions ?? ''}
                       onChange={(e) =>
                         setDraftConfig((c) => ({ ...c, promptInstructions: e.target.value }))
                       }
+                      placeholder="Add specific instructions for this template..."
                     />
                   </label>
                 </div>

@@ -1406,7 +1406,6 @@ export default function EnrichmentAgentsPage() {
   const [isDefault, setIsDefault] = useState(false);
   const [config, setConfig] = useState<AgentConfig>(defaultConfig());
   const [activeTab, setActiveTab] = useState<TabKey>('goal');
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [personality, setPersonality] = useState<AgentPersonality>('outbound');
   const [researchPriority, setResearchPriority] = useState<ResearchPriority>('intent');
   const [newForbiddenInput, setNewForbiddenInput] = useState('');
@@ -1482,7 +1481,6 @@ export default function EnrichmentAgentsPage() {
     setConfig(normalized);
     setPersonality(personalityFromConfig(normalized));
     setResearchPriority(priorityFromConfig(normalized));
-    setShowAdvanced(false);
   };
 
   const startNew = () => {
@@ -1493,7 +1491,6 @@ export default function EnrichmentAgentsPage() {
     setConfig(defaultConfig());
     setPersonality('outbound');
     setResearchPriority('intent');
-    setShowAdvanced(false);
   };
 
   const goal = goalFromModules(config.modules);
@@ -1895,53 +1892,59 @@ export default function EnrichmentAgentsPage() {
     }
   };
 
-  const TABS: Array<{
+  // Only show tabs for enabled modules
+  type TabItem = {
     id: TabKey;
     label: string;
     icon: typeof IconCompass;
     badge?: string | number;
-    enabled?: boolean;
-  }> = [
-    { id: 'goal', label: 'Goal & Scope', icon: IconCompass },
+    visible: boolean;
+  };
+
+  const ALL_TABS: TabItem[] = [
+    { id: 'goal', label: 'Goal & Scope', icon: IconCompass, visible: true },
     {
       id: 'people',
       label: 'People',
       icon: IconUsers,
       badge: config.people.targets.length,
-      enabled: config.modules.people,
+      visible: config.modules.people,
     },
     {
       id: 'hiring',
       label: 'Hiring Signals',
       icon: IconBriefcase,
-      enabled: config.modules.hiring,
+      visible: config.modules.hiring,
     },
     {
       id: 'icp',
       label: 'ICP Policy',
       icon: IconTarget,
       badge: config.icpPolicy?.criteria?.length ?? 0,
-      enabled: config.modules.scoring && config.icpPolicy.enabled,
+      visible: config.modules.scoring && config.icpPolicy.enabled,
     },
     {
       id: 'intent',
       label: 'Intent Triggers',
       icon: IconFlame,
-      enabled: config.modules.signals && config.intentPolicy.enabled,
+      visible: config.modules.signals && config.intentPolicy.enabled,
     },
     {
       id: 'outreach',
       label: 'Outreach Strategy',
       icon: IconSend,
-      enabled: config.modules.outreach,
+      visible: config.modules.outreach,
     },
     {
       id: 'research',
       label: 'Research Asks',
       icon: IconHelp,
       badge: config.customQuestions.length || undefined,
+      visible: true,
     },
   ];
+
+  const TABS = ALL_TABS.filter((tab) => tab.visible);
 
   return (
     <SettingsPanel wide>
@@ -2062,89 +2065,44 @@ export default function EnrichmentAgentsPage() {
               </label>
             </div>
 
-            {/* A few familiar choices configure the full research policy beneath the surface. */}
-            {!showAdvanced && (
-              <section className="space-y-6 rounded-2xl border border-violet-100 bg-gradient-to-br from-violet-50/70 via-white to-blue-50/60 p-4 sm:p-5">
-                <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">Agent blueprint</p>
-                  <h2 className="mt-1 text-lg font-bold text-slate-950">Pick the personality that fits your motion</h2>
-                  <p className="mt-1 text-xs leading-5 text-slate-600">Answer a few natural questions. We will translate them into research depth, lead scoring, live signals, and outreach rules.</p>
-                </div>
-
-                <fieldset>
-                  <legend className="text-sm font-bold text-slate-900">1. How should this agent think about leads?</legend>
-                  <div className="mt-2 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {AGENT_PERSONALITIES.map((item) => (
+            {/* Simplified Configuration Tabs */}
+            <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+              {/* Tab Navigation - Large and Prominent */}
+              <div className="border-b border-slate-200 bg-slate-50">
+                <div className="flex overflow-x-auto">
+                  {TABS.map((tab) => {
+                    const Icon = tab.icon;
+                    const isActive = activeTab === tab.id;
+                    return (
                       <button
-                        key={item.id}
+                        key={tab.id}
                         type="button"
-                        onClick={() => applyPersonality(item.id)}
-                        className={`rounded-xl border p-3 text-left transition ${
-                          personality === item.id
-                            ? 'border-violet-400 bg-white shadow-sm ring-2 ring-violet-100'
-                            : 'border-slate-200 bg-white/70 hover:border-violet-200 hover:bg-white'
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex items-center gap-2 px-6 py-4 text-sm font-semibold whitespace-nowrap border-b-2 transition-all ${
+                          isActive
+                            ? 'border-violet-600 text-violet-700 bg-white'
+                            : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-100/50'
                         }`}
                       >
-                        <span className="block text-sm font-bold text-slate-900">{item.name}</span>
-                        <span className="mt-1 block text-[11px] font-semibold leading-4 text-violet-700">{item.tagline}</span>
-                        <span className="mt-1.5 block text-[11px] leading-4 text-slate-500">{item.description}</span>
+                        <Icon size={18} className={isActive ? 'text-violet-600' : 'text-slate-400'} />
+                        <span>{tab.label}</span>
+                        {tab.badge !== undefined && (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                              isActive ? 'bg-violet-100 text-violet-700' : 'bg-slate-200 text-slate-600'
+                            }`}
+                          >
+                            {tab.badge}
+                          </span>
+                        )}
                       </button>
-                    ))}
-                  </div>
-                </fieldset>
-
-                <div className="grid gap-5 border-t border-violet-100 pt-5 lg:grid-cols-2">
-                  <fieldset>
-                    <legend className="text-sm font-bold text-slate-900">2. Who should it try to reach?</legend>
-                    <p className="mt-1 text-[11px] leading-4 text-slate-500">The personality suggests a role; change it whenever your motion needs someone else.</p>
-                    <select
-                      value={config.people.targets[0]?.objective ?? 'founder'}
-                      onChange={(event) => setPrimaryTarget(event.target.value as PersonObjective)}
-                      className={`${settingsInputClass} mt-3`}
-                    >
-                      {OBJECTIVES.map((option) => (
-                        <option key={option.id} value={option.id}>{option.label}</option>
-                      ))}
-                    </select>
-                    {config.people.targets[0]?.objective === 'custom' && (
-                      <input
-                        value={config.people.targets[0]?.roleHint ?? ''}
-                        onChange={(event) => updateTarget(0, { roleHint: event.target.value })}
-                        className={`${settingsInputClass} mt-2`}
-                        placeholder="Describe the role, e.g. Head of Partnerships"
-                      />
-                    )}
-                  </fieldset>
-
-                  <fieldset>
-                    <legend className="text-sm font-bold text-slate-900">3. What should make a lead stand out?</legend>
-                    <p className="mt-1 text-[11px] leading-4 text-slate-500">This decides how the agent prioritizes ICP fit, hiring, intent, and contact verification.</p>
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {RESEARCH_PRIORITIES.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => applyResearchPriority(item.id)}
-                          className={`rounded-lg border px-3 py-2 text-left transition ${
-                            researchPriority === item.id
-                              ? 'border-violet-400 bg-white shadow-sm ring-2 ring-violet-100'
-                              : 'border-slate-200 bg-white/70 hover:border-violet-200 hover:bg-white'
-                          }`}
-                        >
-                          <span className="block text-xs font-bold text-slate-900">{item.label}</span>
-                          <span className="mt-0.5 block text-[10px] leading-4 text-slate-500">{item.help}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </fieldset>
+                    );
+                  })}
                 </div>
+              </div>
 
-                {/* 4. Outreach Engine strategy (by agent personality) */}
-                {(() => {
-                  const engineTypesByPersonality: Record<
-                    AgentPersonality,
-                    Array<{ type: string; label: string; when: string }>
-                  > = {
+              {/* Tab Content Area */}
+              <div className="p-6">
                     outbound: [
                       { type: 'operational_pain', label: 'Operational pain', when: 'Clear pain + proof angle' },
                       { type: 'role_specific', label: 'Role-specific', when: 'Strong buyer role match' },
@@ -2380,25 +2338,14 @@ export default function EnrichmentAgentsPage() {
                   );
                 })()}
 
-                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-violet-100 pt-4">
-                  <p className="text-xs text-slate-600">Want to change the individual rules? They are still available whenever you need them.</p>
-                  <button type="button" onClick={() => setShowAdvanced(true)} className={settingsBtnSecondary}>
-                    Customize research
-                  </button>
-                </div>
               </section>
-            )}
+            </section>
 
             {/* Tab Navigation Pill Bar */}
-            {showAdvanced && <div className="border-b border-slate-100 pb-2">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold text-slate-800">Advanced research settings</p>
-                  <p className="text-[11px] text-slate-500">Fine-tune modules, targeting, policies, and custom research questions.</p>
-                </div>
-                <button type="button" onClick={() => setShowAdvanced(false)} className={settingsBtnSecondary}>
-                  Simple view
-                </button>
+            <div className="border-b border-slate-100 pb-2">
+              <div className="mb-3">
+                <p className="text-xs font-bold text-slate-800">Detailed Configuration</p>
+                <p className="text-[11px] text-slate-500">Fine-tune modules, targeting, policies, and custom research questions. Only relevant tabs are shown based on enabled modules.</p>
               </div>
               <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
                 {TABS.map((tab) => {
@@ -2426,17 +2373,14 @@ export default function EnrichmentAgentsPage() {
                           {tab.badge}
                         </span>
                       ) : null}
-                      {tab.enabled === false ? (
-                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" title="Module inactive" />
-                      ) : null}
                     </button>
                   );
                 })}
               </div>
-            </div>}
+            </div>
 
             {/* TAB 1: GOAL & SCOPE */}
-            {showAdvanced && activeTab === 'goal' && (
+            {activeTab === 'goal' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <section className="space-y-3">
                   <div>
@@ -2542,7 +2486,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 2: PEOPLE TARGETS */}
-            {showAdvanced && activeTab === 'people' && (
+            {activeTab === 'people' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 {!config.modules.people && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -2717,7 +2661,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 3: HIRING SIGNALS */}
-            {showAdvanced && activeTab === 'hiring' && (
+            {activeTab === 'hiring' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 {!config.modules.hiring && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
@@ -2928,7 +2872,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 4: ICP POLICY */}
-            {showAdvanced && activeTab === 'icp' && (
+            {activeTab === 'icp' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                   <div>
@@ -3101,7 +3045,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 5: INTENT POLICY */}
-            {showAdvanced && activeTab === 'intent' && (
+            {activeTab === 'intent' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                   <div>
@@ -3232,7 +3176,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 6: OUTREACH STRATEGY */}
-            {showAdvanced && activeTab === 'outreach' && (
+            {activeTab === 'outreach' && (
               <div className="space-y-5 animate-in fade-in duration-200">
                 <div className="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50/80 via-white to-slate-50 p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-700">
@@ -3555,7 +3499,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* TAB 7: RESEARCH QUESTIONS */}
-            {showAdvanced && activeTab === 'research' && (
+            {activeTab === 'research' && (
               <div className="space-y-4 animate-in fade-in duration-200">
                 <div>
                   <h3 className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
@@ -3611,7 +3555,7 @@ export default function EnrichmentAgentsPage() {
             )}
 
             {/* Agent Live Preview Summary Strip */}
-            {showAdvanced && <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
+            <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                   Live Agent Summary
@@ -3656,7 +3600,7 @@ export default function EnrichmentAgentsPage() {
                     : 'Disabled'}
                 </div>
               </div>
-            </div>}
+            </div>
 
             {/* Bottom Form Actions */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
