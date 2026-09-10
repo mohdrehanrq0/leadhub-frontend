@@ -6,6 +6,7 @@ import {
   IconAlertCircle,
   IconAlertTriangle,
   IconBriefcase,
+  IconBuilding,
   IconCheck,
   IconChevronDown,
   IconChevronUp,
@@ -2103,384 +2104,333 @@ export default function EnrichmentAgentsPage() {
 
               {/* Tab Content Area */}
               <div className="p-6">
-                    outbound: [
-                      { type: 'operational_pain', label: 'Operational pain', when: 'Clear pain + proof angle' },
-                      { type: 'role_specific', label: 'Role-specific', when: 'Strong buyer role match' },
-                      { type: 'general_high_fit', label: 'High-fit account', when: 'ICP fit without a dated trigger' },
-                    ],
-                    signal_scout: [
-                      { type: 'funding', label: 'Funding', when: 'Recent raise / investment' },
-                      { type: 'product_launch', label: 'Product launch', when: 'Launch / release signal' },
-                      { type: 'rapid_growth', label: 'Rapid growth', when: 'Headcount / market momentum' },
-                      { type: 'leadership_change', label: 'Leadership change', when: 'New exec / VP hire' },
-                    ],
-                    talent_spotter: [
-                      { type: 'active_hiring', label: 'Active hiring', when: 'Open roles matching your ICP' },
-                      { type: 'hiring_pain', label: 'Hiring pain', when: 'Recruiting / ramp friction' },
-                      { type: 'role_specific', label: 'Role-specific', when: 'Hiring manager / TA lead' },
-                    ],
-                    account_strategist: [
-                      { type: 'technology_change', label: 'Tech change', when: 'Stack / tooling shift' },
-                      { type: 'market_expansion', label: 'Market expansion', when: 'New geo / segment' },
-                      { type: 'operational_pain', label: 'Operational pain', when: 'Process / efficiency gap' },
-                    ],
-                    partner_builder: [
-                      { type: 'partnership', label: 'Partnership', when: 'Integration / ecosystem fit' },
-                      { type: 'product_launch', label: 'Product launch', when: 'Partner-ready launch' },
-                      { type: 'general_high_fit', label: 'High-fit account', when: 'Strategic account fit' },
-                    ],
-                  };
-                  const preferredTypes = engineTypesByPersonality[personality] ?? engineTypesByPersonality.outbound;
-                  const currentFallback =
-                    config.outreachPolicy.personalizationFallback ?? defaultPersonalizationFallback();
-                  const fallbackSummary =
-                    !currentFallback.sendWhenNoPersonalization || currentFallback.fallbackStrategy === 'skip_email'
-                      ? 'Skip lead if no evidence'
-                      : currentFallback.fallbackStrategy === 'send_with_static_line'
-                        ? 'Static fallback line'
-                        : 'Generic role & company fit';
-
-                  return (
-                    <div className="space-y-5 border-t border-violet-100 pt-5">
-                      <div>
-                        <legend className="text-sm font-bold text-slate-900">4. How Outreach Engine works for this agent</legend>
-                        <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                          Enrichment discovers facts and outreach intelligence. A separate Outreach Engine then
-                          picks a structured template from evidence (hiring, funding, pain, role fit, etc.) and
-                          writes a full subject + body — not a one-line opener from synthesis.
-                        </p>
-                      </div>
-
-                      <div className="grid gap-3 lg:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Enrichment finds</p>
-                          <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
-                            <li>Company identity, people, and verified emails</li>
-                            <li>Signals, ICP/intent scores, and why-now triggers</li>
-                            <li>Outreach intelligence (angle, evidence ladder, template hints)</li>
-                          </ul>
-                        </div>
-                        <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-3.5">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-violet-700">Outreach Engine writes</p>
-                          <ul className="mt-2 space-y-1.5 text-xs text-slate-700">
-                            <li>Selects a system template type from evidence strength</li>
-                            <li>Generates full email subject + body with claim→evidence checks</li>
-                            <li>Abstains when required evidence is missing (protects deliverability)</li>
-                          </ul>
-                          <a
-                            href="/dashboard/settings/outreach-templates"
-                            className="mt-3 inline-flex text-[11px] font-bold text-violet-700 underline"
-                          >
-                            Manage Outreach Templates →
-                          </a>
-                        </div>
-                      </div>
-
-                      <div>
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-bold text-slate-900">
-                            Preferred email types for{' '}
-                            {AGENT_PERSONALITIES.find((p) => p.id === personality)?.name ?? personality}
-                          </p>
-                          <span className="rounded-full bg-violet-100/70 px-2.5 py-1 text-[10px] font-bold tracking-wide text-violet-700">
-                            Dynamic · evidence selects the final type
-                          </span>
-                        </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {preferredTypes.map((t) => (
-                            <div
-                              key={t.type}
-                              className="rounded-xl border border-slate-200 bg-white px-3 py-2.5"
-                            >
-                              <p className="text-xs font-bold text-slate-900">{t.label}</p>
-                              <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{t.when}</p>
-                              <p className="mt-1 font-mono text-[9px] text-slate-400">{t.type}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Preferred template picker */}
-                      {dbTemplates.length > 0 && (
-                        <div className="rounded-xl border border-slate-200 bg-white p-3.5">
-                          <label className="block space-y-1.5">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                              Preferred outreach template (optional)
-                            </span>
-                            <p className="text-[11px] leading-4 text-slate-500">
-                              Override auto-selection — the Outreach Engine will use this template when writing emails for leads
-                              enriched by this agent. Leave on &ldquo;Auto&rdquo; to let the engine pick the best match from evidence.
-                            </p>
-                            <select
-                              value={config.outreachPolicy.preferredTemplateId ?? ''}
-                              onChange={(e) =>
-                                setConfig((prev) => ({
-                                  ...prev,
-                                  outreachPolicy: {
-                                    ...prev.outreachPolicy,
-                                    preferredTemplateId: e.target.value || undefined,
-                                  },
-                                }))
-                              }
-                              className={settingsInputClass}
-                            >
-                              <option value="">Auto — engine picks best fit from evidence</option>
-                              {dbTemplates.map((t) => (
-                                <option key={t.id} value={t.id}>
-                                  {t.name}{t.isSystem ? '' : ' (custom)'} — {t.templateType.replace(/_/g, ' ')}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          {config.outreachPolicy.preferredTemplateId && (() => {
-                            const chosen = dbTemplates.find((t) => t.id === config.outreachPolicy.preferredTemplateId);
-                            const recipe = chosen?.latestVersion?.config?.bodyRecipe;
-                            if (!recipe) return null;
-                            return (
-                              <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                                <div className="text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-                                  Body preview
-                                </div>
-                                <pre className="whitespace-pre-wrap font-sans text-[11px] leading-5 text-slate-600">
-                                  {recipe.length > 300 ? recipe.slice(0, 300) + '…' : recipe}
-                                </pre>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      )}
-
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="block space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Objective</span>
-                          <select
-                            value={config.outreachPolicy.objective ?? 'start_conversation'}
-                            onChange={(e) =>
-                              setConfig((prev) => ({
-                                ...prev,
-                                modules: { ...prev.modules, outreach: true },
-                                outreachPolicy: {
-                                  ...prev.outreachPolicy,
-                                  objective: e.target.value as OutreachObjective,
-                                },
-                              }))
-                            }
-                            className={settingsInputClass}
-                          >
-                            <option value="start_conversation">Start a conversation</option>
-                            <option value="book_meeting">Book a meeting</option>
-                            <option value="offer_audit">Offer audit / teardown</option>
-                            <option value="partnership">Partnership inquiry</option>
-                            <option value="custom">Custom angle</option>
-                          </select>
-                        </label>
-                        <label className="block space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Style</span>
-                          <select
-                            value={config.outreachPolicy.style ?? 'consultative'}
-                            onChange={(e) =>
-                              setConfig((prev) => ({
-                                ...prev,
-                                outreachPolicy: {
-                                  ...prev.outreachPolicy,
-                                  style: e.target.value as OutreachStyle,
-                                },
-                              }))
-                            }
-                            className={settingsInputClass}
-                          >
-                            <option value="consultative">Consultative</option>
-                            <option value="casual">Casual</option>
-                            <option value="direct">Direct</option>
-                            <option value="thought_provoking">Thought provoking</option>
-                          </select>
-                        </label>
-                        <label className="block space-y-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">CTA</span>
-                          <select
-                            value={config.outreachPolicy.ctaType ?? 'soft_interest'}
-                            onChange={(e) =>
-                              setConfig((prev) => ({
-                                ...prev,
-                                outreachPolicy: {
-                                  ...prev.outreachPolicy,
-                                  ctaType: e.target.value as OutreachCtaType,
-                                },
-                              }))
-                            }
-                            className={settingsInputClass}
-                          >
-                            <option value="soft_interest">Soft interest</option>
-                            <option value="resource_offer">Resource offer</option>
-                            <option value="open_question">Open question</option>
-                            <option value="specific_time">Specific time</option>
-                          </select>
-                        </label>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 bg-white/75 p-3.5">
-                        <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">What LeadHub will configure for you</p>
-                        <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-slate-700">
-                          <span className="rounded-full bg-slate-100 px-2 py-1">Goal: {GOAL_META.find((item) => item.id === goal)?.label}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">Person: {objectiveLabel(config.people.targets[0]?.objective ?? 'founder')}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.hiring ? 'Hiring signals on' : 'Hiring signals off'}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.icpPolicy.enabled ? 'ICP scoring on' : 'ICP scoring off'}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.intentPolicy.enabled ? 'Intent triggers on' : 'Intent triggers off'}</span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">{config.modules.email && config.email.verify ? 'Email verification on' : 'No email verification'}</span>
-                          <span className="rounded-full border border-violet-200 bg-violet-100 px-2 py-1 text-violet-800">
-                            Outreach Engine · {preferredTypes.map((t) => t.label).slice(0, 2).join(', ')}
-                            {preferredTypes.length > 2 ? '…' : ''}
-                          </span>
-                          <span className="rounded-full bg-slate-100 px-2 py-1">Fallback: {fallbackSummary}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-              </section>
-            </section>
-
-            {/* Tab Navigation Pill Bar */}
-            <div className="border-b border-slate-100 pb-2">
-              <div className="mb-3">
-                <p className="text-xs font-bold text-slate-800">Detailed Configuration</p>
-                <p className="text-[11px] text-slate-500">Fine-tune modules, targeting, policies, and custom research questions. Only relevant tabs are shown based on enabled modules.</p>
-              </div>
-              <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
-                {TABS.map((tab) => {
-                  const Icon = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                        isActive
-                          ? 'bg-slate-900 text-white shadow-sm'
-                          : 'bg-slate-100/80 text-slate-600 hover:bg-slate-200/70 hover:text-slate-900'
-                      }`}
-                    >
-                      <Icon size={14} className={isActive ? 'text-white' : 'text-slate-400'} />
-                      <span>{tab.label}</span>
-                      {tab.badge !== undefined ? (
-                        <span
-                          className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
-                            isActive ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'
-                          }`}
-                        >
-                          {tab.badge}
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* TAB 1: GOAL & SCOPE */}
             {activeTab === 'goal' && (
-              <div className="space-y-5 animate-in fade-in duration-200">
-                <section className="space-y-3">
+              <div className="space-y-6 animate-in fade-in duration-200">
+                {/* Research Goal Selection */}
+                <section className="space-y-4">
                   <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                      Preset Research Goal
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Pick the primary outcome. Modules are automatically configured from this goal.
+                    <h3 className="text-base font-bold text-slate-900">What should this agent research?</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Choose what information the agent should find. This automatically enables the right modules.
                     </p>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {GOAL_META.map((g) => (
-                      <label
-                        key={g.id}
-                        className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
-                          goal === g.id
-                            ? 'border-settings-accent/40 bg-settings-soft/50 shadow-sm'
-                            : 'border-slate-200/80 bg-slate-50/50 hover:bg-slate-50'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="agent-goal"
-                          checked={goal === g.id}
-                          onChange={() => applyGoal(g.id)}
-                          className="mt-0.5 text-settings-accent"
-                        />
-                        <span>
-                          <span className="block text-sm font-bold text-slate-900">{g.label}</span>
-                          <span className="text-[11px] text-slate-500">{g.help}</span>
-                        </span>
-                      </label>
-                    ))}
+                  
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {GOAL_META.map((g) => {
+                      const isSelected = goal === g.id;
+                      return (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => applyGoal(g.id)}
+                          className={`group relative overflow-hidden rounded-2xl border-2 p-5 text-left transition-all ${
+                            isSelected
+                              ? 'border-violet-500 bg-gradient-to-br from-violet-50 to-white shadow-lg shadow-violet-100'
+                              : 'border-slate-200 bg-white hover:border-violet-300 hover:shadow-md'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 space-y-2">
+                              <div className="flex items-center gap-2">
+                                <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                                  isSelected 
+                                    ? 'border-violet-600 bg-violet-600' 
+                                    : 'border-slate-300 bg-white group-hover:border-violet-400'
+                                }`}>
+                                  {isSelected && (
+                                    <IconCheck size={14} className="text-white" stroke={3} />
+                                  )}
+                                </div>
+                                <h4 className="text-base font-bold text-slate-900">{g.label}</h4>
+                              </div>
+                              <p className="text-sm text-slate-600">{g.help}</p>
+                              
+                              {/* What will be included */}
+                              <div className="pt-2 space-y-1">
+                                <p className="text-xs font-semibold text-slate-500">Includes:</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {g.id === 'identity' && (
+                                    <>
+                                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">Company</span>
+                                    </>
+                                  )}
+                                  {g.id === 'person' && (
+                                    <>
+                                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">Company</span>
+                                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">People</span>
+                                    </>
+                                  )}
+                                  {g.id === 'contact' && (
+                                    <>
+                                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">Company</span>
+                                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">People</span>
+                                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-700">Email</span>
+                                    </>
+                                  )}
+                                  {g.id === 'full' && (
+                                    <>
+                                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-medium text-green-700">Company</span>
+                                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">People</span>
+                                      <span className="rounded-full bg-cyan-100 px-2 py-0.5 text-[11px] font-medium text-cyan-700">Email</span>
+                                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-medium text-purple-700">Hiring</span>
+                                      <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-medium text-orange-700">Signals</span>
+                                      <span className="rounded-full bg-pink-100 px-2 py-0.5 text-[11px] font-medium text-pink-700">ICP Score</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {isSelected && (
+                            <div className="absolute top-3 right-3">
+                              <div className="rounded-full bg-violet-600 p-1">
+                                <IconCheck size={16} className="text-white" stroke={3} />
+                              </div>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 </section>
 
-                {/* Modules breakdown */}
-                <section className="space-y-3 border-t border-slate-100 pt-4">
+                {/* Optional: Add Outreach Generation */}
+                <section className="rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-6 space-y-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <IconMail size={20} className="text-violet-600" />
+                        <h4 className="text-base font-bold text-slate-900">Generate Outreach Emails</h4>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Automatically create personalized cold emails based on enrichment data. The AI will write subject lines and email bodies tailored to each lead.
+                      </p>
+                      {config.modules.outreach && (
+                        <div className="mt-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
+                          <IconCheck size={14} />
+                          <span className="font-medium">Outreach generation is enabled</span>
+                        </div>
+                      )}
+                    </div>
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={config.modules.outreach}
+                        onChange={() => toggleModule('outreach')}
+                        className="toggle-switch h-6 w-11"
+                      />
+                    </label>
+                  </div>
+                </section>
+
+                {/* Custom Module Toggles */}
+                <section className="space-y-4">
                   <div>
-                    <h3 className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">
-                      Active Intelligence Modules
-                    </h3>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Toggle modules on or off to adjust research depth and speed.
+                    <h3 className="text-base font-bold text-slate-900">Fine-tune Research Modules</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Customize which data points the agent should collect. Turn off modules you don't need.
                     </p>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    {MODULE_META.map((m) => (
-                      <label
-                        key={m.key}
-                        className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition ${
-                          config.modules[m.key]
-                            ? 'border-settings-accent/30 bg-settings-soft'
-                            : 'border-slate-200/60 bg-slate-50/30 opacity-70 hover:opacity-100'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={config.modules[m.key]}
-                          onChange={() => toggleModule(m.key)}
-                          className="mt-0.5 text-settings-accent"
-                        />
-                        <span>
-                          <span className="block text-sm font-bold text-slate-900">{m.label}</span>
-                          <span className="text-[11px] text-slate-500">{m.help}</span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
 
-                  {config.modules.email && (
-                    <div className="flex flex-wrap gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={config.email.discover}
-                          onChange={(e) =>
-                            setConfig((prev) => ({
-                              ...prev,
-                              email: { ...prev.email, discover: e.target.checked },
-                            }))
-                          }
-                        />
-                        Discover Emails
-                      </label>
-                      <label className="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={config.email.verify}
-                          onChange={(e) =>
-                            setConfig((prev) => ({
-                              ...prev,
-                              email: { ...prev.email, verify: e.target.checked },
-                            }))
-                          }
-                        />
-                        Verify Deliverability
-                      </label>
+                  <div className="space-y-3">
+                    {/* Company Module */}
+                    <div className={`rounded-xl border-2 p-4 transition-all ${
+                      config.modules.company 
+                        ? 'border-green-200 bg-green-50/50' 
+                        : 'border-slate-200 bg-slate-50/30'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <IconBuilding size={18} className={config.modules.company ? 'text-green-600' : 'text-slate-400'} />
+                            <h5 className="font-semibold text-slate-900">Company Research</h5>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Domain, LinkedIn, industry, size, locations, tech stack, and firmographics
+                          </p>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.modules.company}
+                            onChange={() => toggleModule('company')}
+                            className="toggle-switch h-6 w-11"
+                          />
+                        </label>
+                      </div>
                     </div>
-                  )}
+
+                    {/* People Module */}
+                    <div className={`rounded-xl border-2 p-4 transition-all ${
+                      config.modules.people 
+                        ? 'border-blue-200 bg-blue-50/50' 
+                        : 'border-slate-200 bg-slate-50/30'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <IconUsers size={18} className={config.modules.people ? 'text-blue-600' : 'text-slate-400'} />
+                            <h5 className="font-semibold text-slate-900">People Finding</h5>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Identify decision makers, founders, and key employees with their roles and responsibilities
+                          </p>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.modules.people}
+                            onChange={() => toggleModule('people')}
+                            className="toggle-switch h-6 w-11"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Email Module */}
+                    {config.modules.people && (
+                      <div className={`rounded-xl border-2 p-4 transition-all ${
+                        config.modules.email 
+                          ? 'border-cyan-200 bg-cyan-50/50' 
+                          : 'border-slate-200 bg-slate-50/30'
+                      }`}>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <IconMail size={18} className={config.modules.email ? 'text-cyan-600' : 'text-slate-400'} />
+                              <h5 className="font-semibold text-slate-900">Email Discovery & Verification</h5>
+                            </div>
+                            <p className="mt-1 text-sm text-slate-600">
+                              Find work emails and verify deliverability to ensure your outreach reaches the inbox
+                            </p>
+                            {config.modules.email && (
+                              <div className="mt-3 flex gap-3">
+                                <label className="flex items-center gap-2 text-sm text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={config.email.discover}
+                                    onChange={(e) =>
+                                      setConfig((prev) => ({
+                                        ...prev,
+                                        email: { ...prev.email, discover: e.target.checked },
+                                      }))
+                                    }
+                                    className="rounded border-slate-300"
+                                  />
+                                  <span className="font-medium">Discover emails</span>
+                                </label>
+                                <label className="flex items-center gap-2 text-sm text-slate-700">
+                                  <input
+                                    type="checkbox"
+                                    checked={config.email.verify}
+                                    onChange={(e) =>
+                                      setConfig((prev) => ({
+                                        ...prev,
+                                        email: { ...prev.email, verify: e.target.checked },
+                                      }))
+                                    }
+                                    className="rounded border-slate-300"
+                                  />
+                                  <span className="font-medium">Verify deliverability</span>
+                                </label>
+                              </div>
+                            )}
+                          </div>
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={config.modules.email}
+                              onChange={() => toggleModule('email')}
+                              className="toggle-switch h-6 w-11"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Hiring Module */}
+                    <div className={`rounded-xl border-2 p-4 transition-all ${
+                      config.modules.hiring 
+                        ? 'border-purple-200 bg-purple-50/50' 
+                        : 'border-slate-200 bg-slate-50/30'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <IconBriefcase size={18} className={config.modules.hiring ? 'text-purple-600' : 'text-slate-400'} />
+                            <h5 className="font-semibold text-slate-900">Hiring Signals</h5>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Track open job postings, hiring departments, and team growth indicators
+                          </p>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.modules.hiring}
+                            onChange={() => toggleModule('hiring')}
+                            className="toggle-switch h-6 w-11"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Signals Module */}
+                    <div className={`rounded-xl border-2 p-4 transition-all ${
+                      config.modules.signals 
+                        ? 'border-orange-200 bg-orange-50/50' 
+                        : 'border-slate-200 bg-slate-50/30'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <IconFlame size={18} className={config.modules.signals ? 'text-orange-600' : 'text-slate-400'} />
+                            <h5 className="font-semibold text-slate-900">Intent & Timing Signals</h5>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Detect buying triggers: funding, expansion, product launches, tech changes
+                          </p>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.modules.signals}
+                            onChange={() => toggleModule('signals')}
+                            className="toggle-switch h-6 w-11"
+                          />
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Scoring Module */}
+                    <div className={`rounded-xl border-2 p-4 transition-all ${
+                      config.modules.scoring 
+                        ? 'border-pink-200 bg-pink-50/50' 
+                        : 'border-slate-200 bg-slate-50/30'
+                    }`}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <IconTarget size={18} className={config.modules.scoring ? 'text-pink-600' : 'text-slate-400'} />
+                            <h5 className="font-semibold text-slate-900">ICP & Intent Scoring</h5>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Rank leads by fit against your ideal customer profile and intent strength
+                          </p>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={config.modules.scoring}
+                            onChange={() => toggleModule('scoring')}
+                            className="toggle-switch h-6 w-11"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
                 </section>
               </div>
             )}
@@ -3553,6 +3503,8 @@ export default function EnrichmentAgentsPage() {
                 </button>
               </div>
             )}
+              </div>
+            </div>
 
             {/* Agent Live Preview Summary Strip */}
             <div className="rounded-xl border border-slate-200/90 bg-slate-50/70 p-3.5 space-y-2">
