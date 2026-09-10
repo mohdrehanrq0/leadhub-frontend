@@ -153,7 +153,7 @@ export function EnrichmentAgentPicker({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={loading || agents.length === 0}
-            className={`h-10 min-w-[210px] max-w-[320px] rounded-xl border border-slate-200 bg-white/90 pl-8 pr-7 text-xs font-semibold text-slate-700 shadow-xs outline-none transition hover:border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
+            className={`h-9 min-w-0 rounded-xl border border-slate-200 bg-white/95 pl-8 pr-7 text-xs font-semibold text-slate-800 shadow-xs outline-none transition hover:border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
               compact ? 'max-w-[280px]' : 'w-full'
             }`}
             title={blurb}

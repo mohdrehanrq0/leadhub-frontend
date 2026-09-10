@@ -537,7 +537,7 @@ function EnrichmentJson({ data, emptyLabel }: { data: unknown; emptyLabel: strin
   }
   return (
     <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
-      <pre className="max-h-[50vh] overflow-auto p-4 text-[11px] leading-relaxed text-emerald-300 font-mono whitespace-pre-wrap wrap-break-word">
+      <pre className="max-h-[25vh] overflow-auto p-4 text-[11px] leading-relaxed text-emerald-300 font-mono whitespace-pre-wrap wrap-break-word">
         {JSON.stringify(data, null, 2)}
       </pre>
     </div>
