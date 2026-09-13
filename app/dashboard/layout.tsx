@@ -18,13 +18,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push('/login');
+      router.replace(`/login?from=${encodeURIComponent(pathname)}`);
+    } else if (!loading && user && !user.emailVerifiedAt) {
+      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`);
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, pathname]);
 
   useEffect(() => {
-    if (!loading && !onboardingLoading && user && onboardingStep && onboardingStep !== 'completed') {
-      router.push('/onboarding');
+    if (!loading && !onboardingLoading && user && user.emailVerifiedAt && onboardingStep && onboardingStep !== 'completed') {
+      router.replace('/onboarding');
     }
   }, [user, loading, onboardingLoading, onboardingStep, router]);
 
@@ -37,7 +39,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  if (loading || onboardingLoading || !user || !onboardingStep || onboardingStep !== 'completed') {
+  if (
+    loading ||
+    !user ||
+    !user.emailVerifiedAt ||
+    (onboardingLoading && !onboardingStep) ||
+    (onboardingStep && onboardingStep !== 'completed')
+  ) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bg-100">
         <div className={spinnerClass} />

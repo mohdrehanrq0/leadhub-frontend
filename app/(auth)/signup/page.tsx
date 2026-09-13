@@ -1,32 +1,55 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'sonner';
 import { AuthSplitLayout } from '../../../components/layout/AuthSplitLayout';
-import { authFieldClass, btnPrimary } from '../../../components/ui/styles';
+import { authFieldClass, btnPrimary, spinnerClass } from '../../../components/ui/styles';
 
 export default function SignupPage() {
-  const { signup } = useAuth();
+  const { user, loading, signup, onboardingStep, onboardingLoading } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Automatically redirect if already authenticated
+  useEffect(() => {
+    if (!loading && user) {
+      if (!user.emailVerifiedAt) {
+        router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`);
+      } else if (!onboardingLoading && onboardingStep && onboardingStep !== 'completed') {
+        router.replace('/onboarding');
+      } else if (!onboardingLoading) {
+        router.replace('/dashboard');
+      }
+    }
+  }, [user, loading, onboardingLoading, onboardingStep, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
     try {
       await signup(email, password, firstName, lastName);
-      toast.success('Registration successful! Please check your email to verify your account.');
+      toast.success('Account created! Please enter the verification code sent to your email.');
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Signup failed.');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
+
+  if (loading || user) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-bg-100">
+        <div className={spinnerClass} />
+      </div>
+    );
+  }
 
   return (
     <AuthSplitLayout
@@ -82,20 +105,21 @@ export default function SignupPage() {
         </div>
         <div>
           <label htmlFor="password" className="mb-1 block text-xs font-semibold text-gray-600">
-            Password
+            Password (min. 8 characters)
           </label>
           <input
             id="password"
             type="password"
             required
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className={authFieldClass}
             placeholder="••••••••"
           />
         </div>
-        <button type="submit" disabled={loading} className={`${btnPrimary} w-full py-2 shadow-md`}>
-          {loading ? 'Creating account...' : 'Get started'}
+        <button type="submit" disabled={submitting} className={`${btnPrimary} w-full py-2 shadow-md`}>
+          {submitting ? 'Creating account...' : 'Get started'}
         </button>
       </form>
       <p className="mt-4 text-center text-[11px] text-gray-500">

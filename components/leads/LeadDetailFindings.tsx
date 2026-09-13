@@ -715,10 +715,11 @@ export function LeadDetailFindings({
       (typeof lead.rawData?.generatedEmailSubject === 'string' &&
         lead.rawData.generatedEmailSubject.trim()),
   );
-  // Always show Outreach after enrichment when the agent has outreach on — panel can generate/poll.
+  // Always show Outreach after enrichment so users can manually generate even
+  // when the agent's auto-outreach module is off. Auto-queue still respects modules.outreach.
   const showOutreach =
     hasOutreachContent ||
-    (enrichmentDone && modules.outreach !== false) ||
+    enrichmentDone ||
     lead.enrichmentStatus === 'in_progress' ||
     lead.enrichmentStatus === 'completed' ||
     lead.enrichmentStatus === 'partial';

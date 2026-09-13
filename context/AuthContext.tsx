@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import api from '../lib/api';
 import { fetchAndResolveWorkspaceId, readStoredWorkspaceId } from '../lib/workspace';
 
-interface User {
+export interface User {
   id: string;
   email: string;
   firstName?: string;
   lastName?: string;
-  emailVerifiedAt?: string;
+  emailVerifiedAt?: string | null;
   /** LeadHub product/platform admin — not workspace admin. */
   isPlatformAdmin?: boolean;
 }
@@ -20,8 +20,10 @@ interface AuthContextType {
   loading: boolean;
   activeWorkspaceId: string | null;
   setActiveWorkspaceId: (id: string | null) => void;
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string) => Promise<{ emailVerified: boolean; user: User }>;
   signup: (email: string, pass: string, firstName?: string, lastName?: string) => Promise<void>;
+  verifyEmailOtp: (email: string, otp: string) => Promise<void>;
+  resendVerificationOtp: (email: string) => Promise<string>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   onboardingStep: string | null;
@@ -86,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       const res = await api.get('/api/auth/me');
-      const currentUser = res.data.data;
+      const currentUser: User = res.data.data;
       setUser(currentUser);
 
       const workspaceId = await fetchAndResolveWorkspaceId(readStoredWorkspaceId());
@@ -122,8 +124,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const res = await api.post('/api/auth/login', { email, password: pass });
-      const loggedInUser = res.data.data.user;
+      const loggedInUser: User = res.data.data.user;
+      const isEmailVerified = Boolean(loggedInUser.emailVerifiedAt);
       setUser(loggedInUser);
+
+      // CRITICAL: If email is unverified, navigate immediately to verify-email
+      if (!isEmailVerified) {
+        router.replace(`/verify-email?email=${encodeURIComponent(loggedInUser.email)}`);
+        return { emailVerified: false, user: loggedInUser };
+      }
 
       const workspaceId = await fetchAndResolveWorkspaceId(readStoredWorkspaceId());
       if (workspaceId) {
@@ -134,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOnboardingLoading(true);
         try {
           const obRes = await api.get('/api/onboarding', {
-            headers: { 'X-Workspace-ID': workspaceId }
+            headers: { 'X-Workspace-ID': workspaceId },
           });
           const profile = obRes.data.data;
           const step = profile?.onboardingStep ?? 'company';
@@ -156,8 +165,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOnboardingLoading(false);
         router.push('/onboarding');
       }
-    } catch (err: any) {
-      throw new Error(err.response?.data?.message ?? 'Login failed.');
+
+      return { emailVerified: true, user: loggedInUser };
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      throw new Error(message ?? (err instanceof Error ? err.message : 'Login failed.'));
     } finally {
       setLoading(false);
     }
@@ -167,11 +182,73 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       await api.post('/api/auth/signup', { email, password: pass, firstName, lastName });
-      router.push('/login?registered=1');
-    } catch (err: any) {
-      throw new Error(err.response?.data?.message ?? 'Signup failed.');
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      throw new Error(message ?? (err instanceof Error ? err.message : 'Signup failed.'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const verifyEmailOtp = async (email: string, otp: string) => {
+    setLoading(true);
+    try {
+      const res = await api.post('/api/auth/verify-email-otp', { email, otp });
+      const verifiedUser: User = res.data.data.user;
+      setUser(verifiedUser);
+
+      const workspaceId = await fetchAndResolveWorkspaceId(readStoredWorkspaceId());
+      if (workspaceId) {
+        setActiveWorkspaceId(workspaceId);
+      }
+
+      if (workspaceId) {
+        setOnboardingLoading(true);
+        try {
+          const obRes = await api.get('/api/onboarding', {
+            headers: { 'X-Workspace-ID': workspaceId },
+          });
+          const step = obRes.data.data?.onboardingStep ?? 'company';
+          setOnboardingStep(step);
+          if (step === 'completed') {
+            router.replace(POST_ONBOARDING_ROUTE);
+          } else {
+            router.replace('/onboarding');
+          }
+        } catch {
+          setOnboardingStep(null);
+          router.replace('/onboarding');
+        } finally {
+          setOnboardingLoading(false);
+        }
+      } else {
+        router.replace('/onboarding');
+      }
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      throw new Error(message ?? (err instanceof Error ? err.message : 'Verification failed.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resendVerificationOtp = async (email: string): Promise<string> => {
+    try {
+      const res = await api.post('/api/auth/resend-verification', { email });
+      return res.data.message || 'Verification code resent.';
+    } catch (err: unknown) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      throw new Error(message ?? (err instanceof Error ? err.message : 'Failed to resend code.'));
     }
   };
 
@@ -195,6 +272,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setActiveWorkspaceId,
         login,
         signup,
+        verifyEmailOtp,
+        resendVerificationOtp,
         logout,
         refreshUser,
         onboardingStep,

@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '../context/AuthContext';
-import { spinnerClass } from '../components/ui/styles';
+import { useAuth } from '../../context/AuthContext';
+import { spinnerClass } from '../../components/ui/styles';
 
-export default function RootIndex() {
+export default function DashboardPage() {
   const { user, loading, onboardingStep, onboardingLoading } = useAuth();
   const router = useRouter();
 
@@ -26,7 +26,7 @@ export default function RootIndex() {
   }, [user, loading, onboardingLoading, onboardingStep, router]);
 
   return (
-    <div className="flex h-screen w-screen items-center justify-center bg-bg-100">
+    <div className="flex h-64 w-full items-center justify-center">
       <div className={spinnerClass} />
     </div>
   );

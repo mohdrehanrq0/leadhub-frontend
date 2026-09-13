@@ -32,7 +32,8 @@ api.interceptors.response.use(
                           originalRequest?.url?.includes('/api/auth/refresh') ||
                           originalRequest?.url?.includes('/api/auth/signup');
 
-    if (status === 401 && !isAuthRequest && typeof window !== 'undefined') {
+    if (status === 401 && !isAuthRequest && !originalRequest?._retry && typeof window !== 'undefined') {
+      originalRequest._retry = true;
       // Try to refresh the token first
       try {
         await axios.post(
@@ -42,12 +43,13 @@ api.interceptors.response.use(
         );
         // Retry original request
         return api(originalRequest);
-      } catch {
+      } catch (refreshErr) {
         // Prevent infinite redirect loop if we are already on login, signup, or verify-email pages
         const path = window.location.pathname;
         if (path !== '/login' && path !== '/signup' && path !== '/verify-email') {
-          window.location.href = '/login';
+          window.location.href = `/login?from=${encodeURIComponent(path)}`;
         }
+        return Promise.reject(refreshErr);
       }
     }
     return Promise.reject(error);

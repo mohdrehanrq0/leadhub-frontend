@@ -22,12 +22,22 @@ import {
 
 export default function OnboardingWizard() {
   const {
+    user,
+    loading: authLoading,
     activeWorkspaceId,
     refreshOnboardingStatus,
     onboardingStep,
     onboardingLoading,
   } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/login?from=/onboarding');
+    } else if (!authLoading && user && !user.emailVerifiedAt) {
+      router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`);
+    }
+  }, [authLoading, user, router]);
 
   // ICP Editor State
   const [icpCompanySizes, setIcpCompanySizes] = useState<string[]>([]);
