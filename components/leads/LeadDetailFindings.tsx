@@ -407,9 +407,87 @@ type LeadLike = {
     personDecision?: ResearchDecision | null;
     personSearchBlocked?: ResearchDecision | null;
     rejectedCandidates?: Array<{ name?: string; role?: string; reason: string }>;
+    peopleResearchSummary?: {
+      researched?: number;
+      qualified?: number;
+      possible?: number;
+      rejected?: number;
+      stopReason?: string;
+      whatWeKnow?: string[];
+      searchesPerformed?: string[];
+    } | null;
+    emailDomainConflicts?: Array<{ email: string; reason: string }>;
     organizationModel?: OrganizationModel | null;
     fallbackDecisions?: FallbackDecisionView[];
     hiringSignal?: HiringSignalView | null;
+    companyConflict?: boolean;
+    companyIdentity?: {
+      inputCompany?: { name?: string };
+      resolvedCompany?: { name?: string; domain?: string; confidence?: number };
+      contactCompany?: { name?: string; domain?: string; email?: string } | null;
+      companyConflict?: boolean;
+    } | null;
+    companyEnvironment?: {
+      identity?: {
+        name?: string;
+        domain?: string;
+        confidence?: number;
+        companyConflict?: boolean;
+        contactCompanyDomain?: string;
+      };
+      objective?: string;
+      sustainability?: Array<{ label: string; sourceUrl?: string }>;
+      hiring?: Array<{ title: string; matchedKeyword?: string; sourceUrl?: string }>;
+      research?: {
+        overallCoverage?: number;
+        gaps?: string[];
+        queriesPlanned?: number;
+        stopReason?: string;
+        adaptiveCoverage?: number;
+        evidenceCount?: number;
+        urlsDiscovered?: number;
+        pagesRejected?: number;
+        objectiveScores?: Array<{
+          id: string;
+          label: string;
+          score: number;
+          satisfied: boolean;
+          required: boolean;
+        }>;
+        searchTrace?: Array<{
+          n: number;
+          query: string;
+          intent: string;
+          objectiveId: string;
+          strategy: string;
+        }>;
+      };
+    } | null;
+    researchTrail?: {
+      stopReason?: string;
+      queryCount?: number;
+      pageCount?: number;
+      urlsDiscovered?: number;
+      pagesRejected?: number;
+      evidenceCount?: number;
+      objectiveCoverage?: number;
+      identityConfidence?: number;
+      objectives?: Array<{
+        id: string;
+        label: string;
+        score: number;
+        satisfied: boolean;
+        required: boolean;
+      }>;
+      searchTrace?: Array<{
+        n: number;
+        query: string;
+        intent: string;
+        objectiveId: string;
+        strategy: string;
+      }>;
+    } | null;
+    adaptiveStopReason?: string;
     enrichmentModules?: Record<string, boolean>;
     fetchStats?: {
       urlsAttempted: number;
@@ -879,6 +957,188 @@ export function LeadDetailFindings({
 
       {identityNote && <IdentityNoteBanner note={identityNote} />}
 
+      {lead.researchSuggestions?.companyConflict && (
+        <div className="rounded-2xl border border-sky-300 bg-sky-50 px-4 py-3 text-sm text-sky-950">
+          <p className="font-semibold">Contact email is a different company — researching intake company</p>
+          <p className="mt-1 text-sky-900/90">
+            Contact host{' '}
+            <span className="font-bold">
+              {lead.researchSuggestions.companyIdentity?.contactCompany?.domain ??
+                lead.researchSuggestions.companyEnvironment?.identity?.contactCompanyDomain ??
+                'unknown'}
+            </span>{' '}
+            does not match{' '}
+            <span className="font-bold">
+              {lead.researchSuggestions.companyIdentity?.inputCompany?.name ??
+                lead.company?.name ??
+                'the intake company'}
+            </span>
+            . Enrichment continues against the intake company; the email is kept as contact data only.
+          </p>
+        </div>
+      )}
+
+      {lead.researchSuggestions?.companyEnvironment && (
+        <SectionCard
+          id="company-environment"
+          title="Company environment"
+          subtitle="Mission-driven company research (identity, hiring, sustainability)"
+          icon={<IconBuilding size={16} />}
+        >
+          {(() => {
+            const env = lead.researchSuggestions!.companyEnvironment!;
+            const trail = lead.researchSuggestions!.researchTrail;
+            const coveragePct = Math.round(
+              ((trail?.objectiveCoverage ?? env.research?.adaptiveCoverage ?? env.research?.overallCoverage) ??
+                0) * 100,
+            );
+            const objectives =
+              trail?.objectives ?? env.research?.objectiveScores ?? [];
+            const searchTrace = trail?.searchTrace ?? env.research?.searchTrace ?? [];
+            const stopReason =
+              lead.researchSuggestions!.adaptiveStopReason ??
+              trail?.stopReason ??
+              env.research?.stopReason;
+            return (
+              <div className="space-y-4 text-sm text-slate-700">
+                <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+                  {env.identity?.domain ? (
+                    <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-800">
+                      {env.identity.domain}
+                    </span>
+                  ) : (
+                    <span className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800">
+                      Domain unresolved
+                    </span>
+                  )}
+                  <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
+                    Coverage {coveragePct}%
+                  </span>
+                  {stopReason ? (
+                    <span className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-slate-700">
+                      {stopReason.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Research
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600">
+                    <span>{trail?.queryCount ?? env.research?.queriesPlanned ?? 0} searches</span>
+                    <span>{trail?.urlsDiscovered ?? env.research?.urlsDiscovered ?? 0} URLs discovered</span>
+                    <span>
+                      {lead.researchSuggestions?.fetchStats?.urlsRead ?? 0} pages read
+                    </span>
+                    <span>{trail?.pagesRejected ?? env.research?.pagesRejected ?? 0} rejected</span>
+                    <span>
+                      {trail?.evidenceCount ?? env.research?.evidenceCount ?? 0} evidence items
+                    </span>
+                  </div>
+                </div>
+
+                {objectives.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Objectives
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {objectives.map((o) => {
+                        const mark = o.satisfied ? '✓' : o.score >= 0.4 ? '◐' : '○';
+                        return (
+                          <li
+                            key={o.id}
+                            className="flex items-center justify-between gap-2 text-[12px]"
+                          >
+                            <span>
+                              <span className="mr-2 font-mono text-slate-400">{mark}</span>
+                              {o.label}
+                              {o.required ? '' : ' (optional)'}
+                            </span>
+                            <span className="tabular-nums text-slate-400">
+                              {Math.round(o.score * 100)}%
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {searchTrace.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Search trace
+                    </p>
+                    <ol className="mt-1 space-y-1.5">
+                      {searchTrace.slice(0, 20).map((s) => (
+                        <li key={`${s.n}-${s.query}`} className="text-[12px] leading-snug">
+                          <span className="font-mono text-slate-400">
+                            #{String(s.n).padStart(2, '0')}
+                          </span>{' '}
+                          <span className="font-medium text-slate-800">{s.query}</span>
+                          <div className="pl-7 text-[11px] text-slate-400">
+                            {s.intent.replace(/_/g, ' ').toLowerCase()}
+                            {s.strategy ? ` · ${s.strategy}` : ''}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+
+                {env.objective ? (
+                  <p className="text-xs text-slate-500 line-clamp-3">{env.objective}</p>
+                ) : null}
+                {(env.hiring?.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Hiring matches
+                    </p>
+                    <ul className="mt-1 space-y-1">
+                      {env.hiring!.slice(0, 6).map((h) => (
+                        <li key={h.title} className="text-sm">
+                          {h.sourceUrl ? (
+                            <a
+                              href={h.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-medium text-blue-700 hover:underline"
+                            >
+                              {h.title}
+                            </a>
+                          ) : (
+                            <span className="font-medium">{h.title}</span>
+                          )}
+                          {h.matchedKeyword ? (
+                            <span className="ml-2 text-[11px] text-slate-400">
+                              matched “{h.matchedKeyword}”
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(env.sustainability?.length ?? 0) > 0 && (
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Sustainability context
+                    </p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-5 text-sm">
+                      {env.sustainability!.slice(0, 5).map((s) => (
+                        <li key={s.label}>{s.label}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+        </SectionCard>
+      )}
+
       {(showCompany || showPeople) && (
         <SectionCard
           id="verified"
@@ -967,8 +1227,24 @@ export function LeadDetailFindings({
             <div className="space-y-4">
               {showPeople && (
                 <div className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                  <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    <IconUser size={13} /> People
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span className="inline-flex items-center gap-2">
+                      <IconUser size={13} /> People
+                    </span>
+                    {lead.researchSuggestions?.peopleResearchSummary ? (
+                      <span className="normal-case tracking-normal text-slate-600">
+                        {(lead.researchSuggestions.peopleResearchSummary as { qualified?: number })
+                          .qualified ?? people.length}{' '}
+                        qualified /{' '}
+                        {(lead.researchSuggestions.peopleResearchSummary as { researched?: number })
+                          .researched ?? people.length}{' '}
+                        researched
+                        {(lead.researchSuggestions.peopleResearchSummary as { rejected?: number })
+                          .rejected
+                          ? ` · ${(lead.researchSuggestions.peopleResearchSummary as { rejected: number }).rejected} rejected`
+                          : ''}
+                      </span>
+                    ) : null}
                   </div>
                   {organizationModel ? (
                     <OrganizationCard
@@ -1008,6 +1284,14 @@ export function LeadDetailFindings({
                               suitability?: number;
                               matchedTier?: string | null;
                               whySelected?: string[];
+                              whyMatched?: string[];
+                              functionScore?: number;
+                              authorityScore?: number;
+                              hiringRelevance?: number;
+                              geographyScore?: number;
+                              evidenceStrength?: string[];
+                              candidateStatus?: string;
+                              emailOwnershipStatus?: string;
                             };
                             const name =
                               snap.name ||
@@ -1034,9 +1318,8 @@ export function LeadDetailFindings({
                             );
                             const roleType = snap.roleType;
                             const fitScore = snap.fitScore;
-                            // The ranker's own justification is the most specific,
-                            // so it leads; affiliation signals only fill the gaps.
                             const whySelected = [
+                              ...(snap.whyMatched ?? []),
                               ...(snap.whySelected ?? []),
                               ...(matchedContact?.affiliationStrength === 'confirmed'
                                 ? ['Confirmed current employee']
@@ -1047,7 +1330,7 @@ export function LeadDetailFindings({
                               ...(snap.rankReasons ?? []).map((r) => r.replace(/_/g, ' ')),
                             ]
                               .filter((v, i, arr) => arr.indexOf(v) === i)
-                              .slice(0, 5);
+                              .slice(0, 6);
                             return (
                               <li
                                 key={`${name}-${idx}`}
@@ -1063,11 +1346,38 @@ export function LeadDetailFindings({
                                     signals={matchedContact?.affiliationSignals}
                                   />
                                 </div>
+                                {(snap.functionScore != null ||
+                                  snap.authorityScore != null ||
+                                  snap.hiringRelevance != null) && (
+                                  <p className="mt-0.5 text-[11px] text-slate-500">
+                                    Function{' '}
+                                    {Math.round((snap.functionScore ?? 0) * 100)}% · Authority{' '}
+                                    {Math.round((snap.authorityScore ?? 0) * 100)}% · Hiring{' '}
+                                    {Math.round((snap.hiringRelevance ?? 0) * 100)}%
+                                    {snap.geographyScore != null
+                                      ? ` · Geo ${Math.round(snap.geographyScore * 100)}%`
+                                      : ''}
+                                  </p>
+                                )}
+                                {snap.evidenceStrength && snap.evidenceStrength.length > 0 ? (
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {snap.evidenceStrength.slice(0, 4).map((s) => (
+                                      <span
+                                        key={s}
+                                        className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-bold text-slate-600"
+                                      >
+                                        {s === 'DIRECT' || s.includes('INFERENCE')
+                                          ? s.replace(/_/g, ' ')
+                                          : s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
                                 {roleType ? (
                                   <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
                                     {String(roleType).replace(/_/g, ' ')}
                                     {snap.suitability != null
-                                      ? ` · ${snap.suitability}% fit`
+                                      ? ` · ${typeof snap.suitability === 'number' && snap.suitability <= 1 ? Math.round(snap.suitability * 100) : snap.suitability}% fit`
                                       : fitScore != null
                                         ? ` · ${fitScore}% fit`
                                         : ''}
@@ -1088,7 +1398,13 @@ export function LeadDetailFindings({
                                   >
                                     <IconMail size={12} /> {emailEntry.email}
                                   </a>
-                                ) : null}
+                                ) : snap.emailOwnershipStatus === 'DOMAIN_CONFLICT' ? (
+                                  <p className="mt-1 text-[11px] text-amber-700">
+                                    Email domain conflict — not attributed
+                                  </p>
+                                ) : (
+                                  <p className="mt-1 text-[11px] text-slate-400">Email: not found</p>
+                                )}
                                 {personLinkedIn ? (
                                   <div className="mt-1.5">
                                     <LinkedInLink url={personLinkedIn} kind="person" compact />
@@ -1097,7 +1413,7 @@ export function LeadDetailFindings({
                                 {whySelected.length ? (
                                   <div className="mt-2">
                                     <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                      Why selected
+                                      Why matched
                                     </p>
                                     <ul className="mt-0.5 space-y-0.5">
                                       {whySelected.map((reason) => (

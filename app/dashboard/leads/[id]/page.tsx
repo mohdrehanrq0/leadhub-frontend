@@ -100,6 +100,30 @@ type LeadDetail = LeadRow & {
     }>;
     enrichmentModules?: Record<string, boolean>;
     fetchStats?: FetchStats;
+    companyConflict?: boolean;
+    companyIdentity?: {
+      inputCompany?: { name?: string };
+      resolvedCompany?: { name?: string; domain?: string; confidence?: number };
+      contactCompany?: { name?: string; domain?: string; email?: string } | null;
+      companyConflict?: boolean;
+    } | null;
+    companyEnvironment?: {
+      identity?: {
+        name?: string;
+        domain?: string;
+        confidence?: number;
+        companyConflict?: boolean;
+        contactCompanyDomain?: string;
+      };
+      objective?: string;
+      sustainability?: Array<{ label: string; sourceUrl?: string }>;
+      hiring?: Array<{ title: string; matchedKeyword?: string; sourceUrl?: string }>;
+      research?: {
+        overallCoverage?: number;
+        gaps?: string[];
+        queriesPlanned?: number;
+      };
+    } | null;
   };
   lists?: LeadList[];
   activities?: Array<{
@@ -1549,7 +1573,14 @@ export default function LeadDetailPage() {
                   {stageMeta(lead.pipelineStage).label}
                 </span>
 
-                <span className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}>
+                <span
+                  title={
+                    lead.enrichmentStatus === 'partial'
+                      ? (lead.enrichmentError ?? 'Enrichment done — agent mission not fulfilled')
+                      : lead.enrichmentError ?? undefined
+                  }
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-0.5 text-xs font-semibold ${enrichMeta.tone} ${lead.enrichmentStatus === 'in_progress' ? 'animate-pulse' : ''}`}
+                >
                   {enrichMeta.icon} {enrichMeta.label}
                 </span>
 
@@ -1754,8 +1785,19 @@ export default function LeadDetailPage() {
                     </div>
                   ) : lead.enrichmentStatus === 'failed' ? (
                     <div className="text-rose-400 font-bold truncate">{lead.enrichmentError || 'Research failed'}</div>
+                  ) : lead.enrichmentStatus === 'partial' ? (
+                    <div
+                      className="text-amber-400 font-bold text-[11px] leading-snug line-clamp-3"
+                      title={lead.enrichmentError ?? undefined}
+                    >
+                      {lead.enrichmentError?.startsWith('Enrichment done')
+                        ? lead.enrichmentError
+                        : lead.enrichmentError
+                          ? `Enrichment done — agent mission not fulfilled. ${lead.enrichmentError}`
+                          : 'Enrichment done — agent mission not fulfilled.'}
+                    </div>
                   ) : (
-                    <div className="text-amber-400 font-bold">Partial — some phases failed</div>
+                    <div className="text-amber-400 font-bold">Enrichment incomplete</div>
                   )}
                 </div>
               </div>

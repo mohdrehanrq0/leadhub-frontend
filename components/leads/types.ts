@@ -695,7 +695,11 @@ export function enrichmentStatusMeta(status?: EnrichmentStatus | null) {
     case 'completed':
       return { label: 'Enriched', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: '✓' };
     case 'partial':
-      return { label: 'Partial', tone: 'border-amber-200 bg-amber-50 text-amber-700', icon: '~' };
+      return {
+        label: 'Mission incomplete',
+        tone: 'border-amber-200 bg-amber-50 text-amber-700',
+        icon: '~',
+      };
     case 'in_progress':
       return { label: 'Enriching…', tone: 'border-blue-200 bg-blue-50 text-blue-700', icon: '⟳' };
     case 'needs_identity_confirmation':

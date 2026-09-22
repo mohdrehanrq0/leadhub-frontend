@@ -147,7 +147,7 @@ export function LeadFilterChips({ chips, onChange }: Props) {
                 className="mb-2 h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-700 outline-none"
               >
                 <option value="completed">Fully enriched</option>
-                <option value="partial">Partial</option>
+                <option value="partial">Mission incomplete</option>
                 <option value="in_progress">Enriching...</option>
                 <option value="failed">Failed</option>
                 <option value="not_started">Not Enriched</option>

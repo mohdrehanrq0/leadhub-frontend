@@ -30,7 +30,7 @@ export const COLUMN_FILTER_CONFIG: Record<
     allLabel: 'All enrichment',
     options: [
       { value: 'completed', label: 'Fully enriched' },
-      { value: 'partial', label: 'Partial' },
+      { value: 'partial', label: 'Mission incomplete' },
       { value: 'in_progress', label: 'Enriching…' },
       { value: 'failed', label: 'Failed' },
       { value: 'not_started', label: 'Not enriched' },
