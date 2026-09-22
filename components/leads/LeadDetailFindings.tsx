@@ -279,11 +279,17 @@ function ConfidencePair({
 function DecisionCard({
   decision,
   rejected,
+  enrichmentError,
 }: {
   decision: ResearchDecision;
   rejected?: Array<{ name?: string; role?: string; reason: string }>;
+  enrichmentError?: string | null;
 }) {
   const providerError = decision.outcome === 'provider_error';
+  const targetNotFound =
+    typeof enrichmentError === 'string' &&
+    (enrichmentError.startsWith('Research complete') ||
+      enrichmentError.includes('no contacts matched the agent target'));
   const tone = providerError
     ? 'border-amber-200 bg-amber-50 text-amber-900'
     : decision.outcome === 'unconfirmed'
@@ -293,7 +299,11 @@ function DecisionCard({
   return (
     <div className={`space-y-3 rounded-xl border px-3 py-3 text-sm ${tone}`}>
       <p className="font-semibold">
-        {providerError ? 'Search could not run' : 'No confirmed match'}
+        {providerError
+          ? 'Search could not run'
+          : targetNotFound
+            ? 'Target not found'
+            : 'No confirmed match'}
       </p>
       <p>{decision.humanReason}</p>
 
@@ -1253,16 +1263,45 @@ export function LeadDetailFindings({
                     />
                   ) : null}
                   {hiringSignal ? <HiringSignalCard signal={hiringSignal} /> : null}
-                  {people.length === 0 && !lead.contact?.email ? (
-                    personDecision ? (
-                      <DecisionCard
-                        decision={personDecision}
-                        rejected={lead.researchSuggestions?.rejectedCandidates}
-                      />
-                    ) : (
-                      <p className="text-sm text-slate-500">No people retained yet.</p>
-                    )
-                  ) : (
+                  {(() => {
+                    const qualifiedCount = (
+                      lead.researchSuggestions?.peopleResearchSummary as
+                        | { qualified?: number; researched?: number }
+                        | undefined
+                    )?.qualified;
+                    const researchedCount = (
+                      lead.researchSuggestions?.peopleResearchSummary as
+                        | { researched?: number }
+                        | undefined
+                    )?.researched;
+                    // Mission agents with 0 qualified must not fall back to CRM Founder contact
+                    if (people.length === 0 && qualifiedCount === 0) {
+                      return personDecision ? (
+                        <DecisionCard
+                          decision={personDecision}
+                          rejected={lead.researchSuggestions?.rejectedCandidates}
+                          enrichmentError={lead.enrichmentError}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          No qualified people for this agent target
+                          {researchedCount != null ? ` (${researchedCount} researched)` : ''}.
+                          Founder/CEO/HR fallback is disabled.
+                        </p>
+                      );
+                    }
+                    if (people.length === 0 && !lead.contact?.email) {
+                      return personDecision ? (
+                        <DecisionCard
+                          decision={personDecision}
+                          rejected={lead.researchSuggestions?.rejectedCandidates}
+                          enrichmentError={lead.enrichmentError}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-500">No people retained yet.</p>
+                      );
+                    }
+                    return (
                     <ul className="space-y-3">
                       {people.length > 0
                         ? people.map((p, idx) => {
@@ -1444,7 +1483,8 @@ export function LeadDetailFindings({
                           </li>
                         )}
                     </ul>
-                  )}
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1611,40 +1651,84 @@ export function LeadDetailFindings({
                 ))}
               </ul>
             )}
-            {hiring && (hiring.isHiring || (hiring.roles?.length ?? 0) > 0) && (
+            {hiring &&
+              (hiring.isHiring ||
+                (hiring.roles?.length ?? 0) > 0 ||
+                (hiring.generalRoles?.length ?? 0) > 0) && (
               <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
                 <p className="text-xs font-bold text-slate-700">
                   {hiring.isHiring ? 'Actively hiring' : 'Hiring signals'}
-                  {hiring.roles?.length ? ` · ${hiring.roles.length} role(s)` : ''}
+                  {typeof hiring.openRoleCount === 'number'
+                    ? ` · ${hiring.openRoleCount} open role(s)`
+                    : hiring.generalRoles?.length
+                      ? ` · ${hiring.generalRoles.length} open role(s)`
+                      : ''}
                 </p>
-                <ul className="mt-2 space-y-2">
-                  {(hiring.roles ?? []).slice(0, 5).map((r) => (
-                    <li key={`${r.title}-${r.posted ?? ''}-${r.sourceUrl ?? ''}`} className="text-sm text-slate-800">
-                      <span className="font-semibold">{r.title}</span>
-                      {r.department ? ` · ${r.department}` : ''}
-                      {r.posted ? (
-                        <span className="text-xs text-slate-500"> · posted {r.posted}</span>
-                      ) : null}
-                      {(r.source || r.sourceUrl) ? (
-                        <p className="mt-0.5 text-xs text-slate-500">
-                          Source:{' '}
-                          {r.sourceUrl ? (
-                            <a
-                              href={r.sourceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="font-medium text-blue-600 hover:underline"
-                            >
-                              {r.source ?? r.sourceUrl}
-                            </a>
-                          ) : (
-                            r.source
-                          )}
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
+                {(hiring.roles?.length ?? 0) > 0 ? (
+                  <>
+                    <p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+                      Matched agent keywords ({hiring.roles!.length})
+                    </p>
+                    <ul className="mt-1 space-y-2">
+                      {hiring.roles!.slice(0, 5).map((r) => (
+                        <li
+                          key={`t-${r.title}-${r.posted ?? ''}-${r.sourceUrl ?? ''}`}
+                          className="text-sm text-slate-800"
+                        >
+                          <span className="font-semibold">{r.title}</span>
+                          {r.department ? ` · ${r.department}` : ''}
+                          {r.posted ? (
+                            <span className="text-xs text-slate-500"> · posted {r.posted}</span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (hiring.generalRoles?.length ?? 0) > 0 ||
+                  hiring.generalHiring?.active ? (
+                  <p className="mt-2 text-[11px] text-amber-800">
+                    General hiring found
+                    {hiring.openRoleCount != null ? ` (${hiring.openRoleCount} roles)` : ''}
+                    {' — '}none matched the agent hiring keywords
+                    {hiring.targetedHiring?.keywords?.length
+                      ? ` (${hiring.targetedHiring.keywords.slice(0, 6).join(', ')})`
+                      : ''}
+                    .
+                  </p>
+                ) : null}
+                {(hiring.generalRoles?.length ?? 0) > 0 && (hiring.roles?.length ?? 0) === 0 ? (
+                  <ul className="mt-2 space-y-2">
+                    {hiring.generalRoles!.slice(0, 5).map((r) => (
+                      <li
+                        key={`g-${r.title}-${r.posted ?? ''}-${r.sourceUrl ?? ''}`}
+                        className="text-sm text-slate-800"
+                      >
+                        <span className="font-semibold">{r.title}</span>
+                        {r.department ? ` · ${r.department}` : ''}
+                        {r.posted ? (
+                          <span className="text-xs text-slate-500"> · posted {r.posted}</span>
+                        ) : null}
+                        {(r.source || r.sourceUrl) ? (
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Source:{' '}
+                            {r.sourceUrl ? (
+                              <a
+                                href={r.sourceUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium text-blue-600 hover:underline"
+                              >
+                                {r.source ?? r.sourceUrl}
+                              </a>
+                            ) : (
+                              r.source
+                            )}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             )}
           </div>

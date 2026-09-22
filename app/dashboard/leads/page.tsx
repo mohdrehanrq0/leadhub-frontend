@@ -979,7 +979,7 @@ export default function LeadsPage() {
                               </span>
                             )}
                             {(() => {
-                              const em = enrichmentStatusMeta(lead.enrichmentStatus);
+                              const em = enrichmentStatusMeta(lead.enrichmentStatus, lead.enrichmentError);
                               return (
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${em.tone}`}>
                                   {em.icon} {em.label}

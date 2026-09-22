@@ -118,7 +118,7 @@ function renderLeadCell(
         </span>
       );
     case 'enrichment': {
-      const em = enrichmentStatusMeta(lead.enrichmentStatus);
+      const em = enrichmentStatusMeta(lead.enrichmentStatus, lead.enrichmentError);
       const block = enrichmentBlockReason(lead);
       return (
         <div className="flex flex-col gap-1">

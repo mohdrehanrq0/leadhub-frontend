@@ -1341,7 +1341,7 @@ export default function LeadDetailPage() {
     );
   }
 
-  const enrichMeta = enrichmentStatusMeta(lead.enrichmentStatus);
+  const enrichMeta = enrichmentStatusMeta(lead.enrichmentStatus, lead.enrichmentError);
   const inputTier = leadInputTier(lead);
   const enrichBlock = enrichmentBlockReason(lead);
   const enrichDisabledMsg = enrichmentDisabledReason(lead);
@@ -1790,7 +1790,8 @@ export default function LeadDetailPage() {
                       className="text-amber-400 font-bold text-[11px] leading-snug line-clamp-3"
                       title={lead.enrichmentError ?? undefined}
                     >
-                      {lead.enrichmentError?.startsWith('Enrichment done')
+                      {lead.enrichmentError?.startsWith('Research complete') ||
+                      lead.enrichmentError?.startsWith('Enrichment done')
                         ? lead.enrichmentError
                         : lead.enrichmentError
                           ? `Enrichment done — agent mission not fulfilled. ${lead.enrichmentError}`
