@@ -35,7 +35,7 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     key: 'company.domain',
     label: 'Company Website / Domain',
     group: 'company',
-    // The website is what turns enrichment from a guess into a lookup.
+    requiredForImport: true,
     requiredForEnrichment: true,
     isAnchor: true,
     aliases: ['domain', 'website', 'company website', 'company domain', 'url', 'website url', 'primary_domain', 'website_url'],
@@ -45,6 +45,7 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     label: 'Company Name',
     group: 'company',
     requiredForImport: true,
+    requiredForEnrichment: true,
     isAnchor: true,
     aliases: ['company', 'company name', 'organization', 'account', 'org', 'company_name', 'organization_name', 'employer'],
   },
@@ -109,7 +110,6 @@ export const SYSTEM_FIELDS: SystemFieldDefinition[] = [
     group: 'company',
     // Unlocks person discovery without first hunting for the company page.
     recommendedForEnrichment: true,
-    isAnchor: true,
     aliases: ['company linkedin', 'linkedin company', 'company_linkedin', 'organization linkedin'],
   },
   {
@@ -368,7 +368,7 @@ export interface EnrichmentReadiness {
 }
 
 export function assessEnrichmentReadiness(row: MappedLeadInput): EnrichmentReadiness {
-  const domain = row.company.domain?.trim() || companyDomainFromEmail(row.contact.email?.trim());
+  const domain = row.company.domain?.trim();
   const companyLinkedin = row.company.linkedin?.trim();
   const companyName = row.company.name?.trim();
   const personName = [row.contact.firstName, row.contact.lastName].filter(Boolean).join(' ').trim();
@@ -377,22 +377,18 @@ export function assessEnrichmentReadiness(row: MappedLeadInput): EnrichmentReadi
   if (!row.contact.email?.trim()) missingRecommended.push('Email');
   if (!row.contact.role?.trim()) missingRecommended.push('Job Title');
 
-  if (!domain && !companyLinkedin && !companyName) {
+  if (!companyName || !domain) {
+    const missing = [
+      !companyName ? 'company name' : null,
+      !domain ? 'company website' : null,
+    ]
+      .filter(Boolean)
+      .join(' and ');
     return {
       tier: 'rejected',
       enrichable: false,
-      reason: 'No company website, LinkedIn URL, or name — nothing to identify the company.',
-      nextBestField: 'Company Website / Domain',
-      missingRecommended,
-    };
-  }
-
-  if (!domain && !companyLinkedin) {
-    return {
-      tier: 'discovery',
-      enrichable: false,
-      reason: 'Company name only — the website has to be found first, which costs more and can fail.',
-      nextBestField: 'Company Website / Domain',
+      reason: `Missing ${missing}. Both are required.`,
+      nextBestField: !domain ? 'Company Website / Domain' : 'Company Name',
       missingRecommended,
     };
   }
@@ -430,12 +426,12 @@ export function assessEnrichmentReadiness(row: MappedLeadInput): EnrichmentReadi
  * rejected here rather than importing as leads that can never be enriched.
  */
 export function isUsableMappedLead(row: MappedLeadInput) {
-  return assessEnrichmentReadiness(row).tier !== 'rejected';
+  return Boolean(row.company.name?.trim() && row.company.domain?.trim());
 }
 
-/** True once the mapping includes at least one column that names a company. */
+/** True once company name and company website are both mapped. */
 export function mappingHasAnchor(mapping: FieldMapping) {
-  return ANCHOR_FIELDS.some((key) => Boolean(mapping[key]));
+  return Boolean(mapping['company.name'] && mapping['company.domain']);
 }
 
 export const APOLLO_DEFAULT_MAPPING: FieldMapping = {

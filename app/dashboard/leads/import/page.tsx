@@ -330,11 +330,11 @@ export default function LeadImportPage() {
 
   const uploadRows = async (confirmReupload = false) => {
     if (!hasAnchor) {
-      toast.error('Map a company website, name, or LinkedIn column before importing.');
+      toast.error('Map company name and company website before importing.');
       return;
     }
     if (mappedRows.length === 0) {
-      toast.error('No rows have a company to identify. Check your column mapping.');
+      toast.error('No rows have both a company name and a company website.');
       return;
     }
     try {
@@ -626,7 +626,7 @@ export default function LeadImportPage() {
             confidence={confidence}
             onMappingChange={setMapping}
             previewRows={rawRows}
-            mappedPreviewRows={mappedRows}
+            mappedPreviewRows={allMappedRows}
             sampleSize={5}
           />
 
@@ -662,7 +662,7 @@ export default function LeadImportPage() {
               )}
               {readiness.rejected > 0 && (
                 <span className="ml-2 text-rose-500">
-                  · {readiness.rejected.toLocaleString()} skipped, no company
+                  · {readiness.rejected.toLocaleString()} skipped, missing name or website
                 </span>
               )}
             </div>

@@ -638,7 +638,7 @@ function ApolloModal({
               <button
                 onClick={onImport}
                 disabled={selectedCount === 0 || loading === 'apollo-import' || !mappingHasAnchor(mapping)}
-                title={mappingHasAnchor(mapping) ? undefined : 'Map a company website, name, or LinkedIn column first'}
+                title={mappingHasAnchor(mapping) ? undefined : 'Map company name and company website first'}
                 className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-black text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {loading === 'apollo-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}
@@ -764,7 +764,7 @@ function ApifyModal({
                 <button
                   onClick={onImport}
                   disabled={loading === 'apify-import' || !mappingHasAnchor(mapping)}
-                  title={mappingHasAnchor(mapping) ? undefined : 'Map a company website, name, or LinkedIn column first'}
+                  title={mappingHasAnchor(mapping) ? undefined : 'Map company name and company website first'}
                   className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-sm font-black text-white hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   {loading === 'apify-import' ? <IconLoader2 size={16} className="animate-spin" /> : <IconCheck size={16} />}

@@ -7,7 +7,6 @@ import api from '../../lib/api';
 import { btnNavy, btnOutline, inputClass } from '../ui/styles';
 import { BodyPortal } from '../ui/BodyPortal';
 import CreatableSelect from '../common/CreatableSelect';
-import { companyDomainFromEmail } from '../../lib/lead-field-mapping';
 import { PIPELINE_STAGES, PRIORITIES, type LeadCategory, type LeadList, type PipelineStage, type Priority } from './types';
 
 type SelectOption = { id: string; name: string; color?: string };
@@ -169,17 +168,12 @@ export function AddLeadModal({
     const firstName = trimOrUndefined(form.firstName);
     const lastName = trimOrUndefined(form.lastName);
     const domain = trimOrUndefined(form.domain);
+    const companyLinkedin = trimOrUndefined(form.companyLinkedin);
     const location =
       trimOrUndefined(form.contactLocation) || trimOrUndefined(form.companyLocation);
 
-    const companyLinkedin = trimOrUndefined(form.companyLinkedin);
-
-    // A lead has to name a company somehow, or enrichment has nothing to
-    // research. A contact name or a location on its own is not enough.
-    if (!companyName && !domain && !companyLinkedin && !companyDomainFromEmail(email)) {
-      toast.error(
-        'Add a company website, company name, or company LinkedIn URL — a contact name alone cannot be enriched.',
-      );
+    if (!companyName || !domain) {
+      toast.error('Company name and company website are required.');
       return;
     }
 
@@ -227,9 +221,12 @@ export function AddLeadModal({
     }
   };
 
-  const field = (label: string, children: React.ReactNode) => (
+  const field = (label: string, children: React.ReactNode, required = false) => (
     <label className="block space-y-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {label}
+        {required ? <span className="text-rose-500"> *</span> : null}
+      </span>
       {children}
     </label>
   );
@@ -247,7 +244,7 @@ export function AddLeadModal({
                 <IconPlus className="text-brand-main" size={18} /> Add lead
               </h3>
               <p className="mt-1 text-xs text-slate-500">
-                Create a single manual lead. Company name or contact details are enough to start.
+                Company name and company website are required. Everything else is optional.
               </p>
             </div>
             <button
@@ -336,8 +333,7 @@ export function AddLeadModal({
             <section className="space-y-3 border-t border-slate-100 pt-4">
               <h4 className="text-xs font-black uppercase tracking-[0.12em] text-slate-400">Company</h4>
               <p className="text-xs leading-5 text-slate-500">
-                The website is the single most useful field — with it, enrichment looks the
-                company up directly instead of guessing from the name.
+                Company name and website are required. Location, LinkedIn, and contact details are optional.
               </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 {field(
@@ -347,7 +343,9 @@ export function AddLeadModal({
                     onChange={(e) => update('domain', e.target.value)}
                     className={inputClass}
                     placeholder="acme.com"
+                    required
                   />,
+                  true,
                 )}
                 {field(
                   'Company name',
@@ -356,7 +354,9 @@ export function AddLeadModal({
                     onChange={(e) => update('companyName', e.target.value)}
                     className={inputClass}
                     placeholder="Acme Inc"
+                    required
                   />,
+                  true,
                 )}
                 {field(
                   'Company LinkedIn',

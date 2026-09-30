@@ -85,12 +85,10 @@ export function FieldMappingPanel({
           <IconAlertTriangle size={16} className="mt-0.5 shrink-0 text-rose-600" />
           <div>
             <p className="text-sm font-black text-rose-900">
-              Map a company column before importing
+              Map company name and company website
             </p>
             <p className="mt-1 text-xs leading-5 text-rose-700">
-              Pick a column for the company website, company name, or company LinkedIn URL.
-              Without one there is no way to tell which company a row belongs to, and none of
-              these rows could ever be enriched.
+              Both columns are required. A row without a company name and a company website cannot be imported.
             </p>
           </div>
         </div>
@@ -102,7 +100,7 @@ export function FieldMappingPanel({
             <h2 className="text-sm font-black text-slate-950">Match your columns</h2>
             <p className="mt-1 text-xs leading-5 text-slate-500">
               We mapped {sourceLabel} columns automatically. Fix anything that looks off.
-              The company website is what makes enrichment reliable — map it if you have it.
+              Company name and company website are required. Everything else is optional.
             </p>
           </div>
           {readiness && (
@@ -142,7 +140,7 @@ export function FieldMappingPanel({
               >
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-bold text-slate-900">{field.label}</p>
-                  {field.requiredForEnrichment && (
+                  {(field.requiredForImport || field.requiredForEnrichment) && (
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                       Required
                     </span>
@@ -214,19 +212,17 @@ export function FieldMappingPanel({
                           >
                             <IconCheck size={12} /> {TIER_LABEL[status.tier]}
                           </span>
-                        ) : status.tier === 'discovery' ? (
-                          <span
-                            title={status.reason}
-                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700"
-                          >
-                            <IconAlertTriangle size={12} /> Needs website
-                          </span>
                         ) : (
                           <span
                             title={status.reason}
                             className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-1 text-[10px] font-bold text-rose-700"
                           >
-                            <IconAlertTriangle size={12} /> No company
+                            <IconAlertTriangle size={12} />
+                            {!row.company.name?.trim() && !row.company.domain?.trim()
+                              ? 'Needs name & website'
+                              : !row.company.name?.trim()
+                                ? 'Needs company name'
+                                : 'Needs website'}
                           </span>
                         )}
                       </td>

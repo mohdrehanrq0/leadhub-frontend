@@ -192,8 +192,8 @@ export default function DeveloperApiPage() {
         description:
           'Create and push a lead into LeadCRM with contact details, company information, tags, notes, and optional instant AI enrichment.',
         bodyParams: [
-          { name: 'companyName', type: 'string', required: true, description: 'Company name (or domain)', example: '"Microsoft"' },
-          { name: 'companyDomain', type: 'string', required: false, description: 'Corporate website domain', example: '"microsoft.com"' },
+          { name: 'companyName', type: 'string', required: true, description: 'Company name', example: '"Microsoft"' },
+          { name: 'companyDomain', type: 'string', required: true, description: 'Company website or domain', example: '"microsoft.com"' },
           { name: 'firstName', type: 'string', required: false, description: 'First name of contact', example: '"Satya"' },
           { name: 'lastName', type: 'string', required: false, description: 'Last name of contact', example: '"Nadella"' },
           { name: 'email', type: 'string', required: false, description: 'Work email address', example: '"satya@microsoft.com"' },
