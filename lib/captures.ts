@@ -1,3 +1,10 @@
+/** Captures stays off the sidebar until this account opens it. */
+export const CAPTURES_ALLOWED_EMAIL = 'mohdrehanrq0@gmail.com';
+
+export function canSeeCaptures(email?: string | null): boolean {
+  return email?.trim().toLowerCase() === CAPTURES_ALLOWED_EMAIL;
+}
+
 export type CaptureType = 'profile' | 'post' | 'company' | 'other';
 export type CaptureStatus = 'saved' | 'linked' | 'enriching' | 'enriched' | 'failed';
 

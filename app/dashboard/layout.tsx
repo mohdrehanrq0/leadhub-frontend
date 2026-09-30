@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { MainSidebar } from '../../components/layout/MainSidebar';
 import { spinnerClass } from '../../components/ui/styles';
 import { cn } from '../../lib/utils';
+import { canSeeCaptures } from '../../lib/captures';
 import { isSettingsPath } from '../../lib/settings-nav';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -29,6 +30,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace('/onboarding');
     }
   }, [user, loading, onboardingLoading, onboardingStep, router]);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    if (pathname.startsWith('/dashboard/captures') && !canSeeCaptures(user.email)) {
+      router.replace('/dashboard/leads');
+    }
+  }, [user, loading, pathname, router]);
 
   useEffect(() => {
     const handleResize = () => {

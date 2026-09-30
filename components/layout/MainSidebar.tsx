@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { canSeeCaptures } from '@/lib/captures';
 import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
@@ -39,11 +40,14 @@ const HOVER_COLLAPSE_MS = 220;
 
 const NAV_MAIN = [
   { name: 'Leads CRM', href: '/dashboard/leads', icon: IconUsers },
-  { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark },
+  // Captures is hidden for every account except CAPTURES_ALLOWED_EMAIL.
+  // { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark },
   { name: 'Sign-ups', href: '/dashboard/signups', icon: IconMailOpened },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
   { name: 'Settings', href: '/dashboard/settings', icon: IconSettings },
 ];
+
+const CAPTURES_NAV = { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark };
 
 export function MainSidebar({
   isOpen,
@@ -86,6 +90,9 @@ export function MainSidebar({
   useEffect(() => () => clearHoverCollapseTimer(), []);
 
   const showExpandedChrome = !isCollapsed || isHoverExpanded;
+  const navItems = canSeeCaptures(user.email)
+    ? [NAV_MAIN[0], CAPTURES_NAV, ...NAV_MAIN.slice(1)]
+    : NAV_MAIN;
 
   const isActive = (href: string) => {
     if (href === '/dashboard/leads') {
@@ -103,7 +110,7 @@ export function MainSidebar({
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
-  const renderNav = (items: typeof NAV_MAIN) =>
+  const renderNav = (items: Array<{ name: string; href: string; icon: typeof IconUsers }>) =>
     items.map((item) => {
       const active = isActive(item.href);
       const Icon = item.icon;
@@ -230,7 +237,7 @@ export function MainSidebar({
                 showExpandedChrome ? 'px-3' : 'px-2',
               )}
             >
-              <div className="mb-6 space-y-1">{renderNav(NAV_MAIN)}</div>
+              <div className="mb-6 space-y-1">{renderNav(navItems)}</div>
             </nav>
 
             <div className="shrink-0 border-t border-sidebar-border bg-sidebar-bg/90 p-3">
