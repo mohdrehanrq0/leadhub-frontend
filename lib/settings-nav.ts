@@ -41,7 +41,7 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     name: 'API Keys',
     href: '/dashboard/settings/api-keys',
     icon: IconKey,
-    description: 'Store AI and data provider credentials (OpenAI, Gemini, Apify, Reoon) and choose LLM routing.',
+    description: 'Connect Apify, one LLM (OpenAI, Gemini, or OpenRouter), and email verification keys.',
   },
   {
     name: 'Enrichment',

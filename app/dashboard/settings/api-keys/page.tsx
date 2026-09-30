@@ -38,15 +38,24 @@ interface ApiKeyRecord {
 
 type LlmMode = 'openai' | 'gemini' | 'mix' | 'openrouter';
 type EmailVerificationProviderPreference = 'reoon' | 'apify';
-type Provider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'openrouter' | 'reoon';
+type CredentialKind = 'apollo' | 'apify' | 'llm' | 'reoon';
 type LlmProvider = 'openai' | 'gemini' | 'openrouter';
+type StoredProvider = 'apollo' | 'apify' | 'openai' | 'gemini' | 'openrouter' | 'reoon';
 
 interface ProviderModelOption {
   id: string;
   label: string;
 }
 
-const PROVIDER_LABEL: Record<Provider | 'leadsnipper', string> = {
+interface LlmPreferences {
+  llmMode: LlmMode;
+  openaiModel: string;
+  geminiModel: string;
+  openrouterModel: string;
+  emailVerificationProvider: EmailVerificationProviderPreference;
+}
+
+const PROVIDER_LABEL: Record<StoredProvider | 'leadsnipper', string> = {
   apollo: 'Apollo',
   apify: 'Apify',
   openai: 'OpenAI',
@@ -56,45 +65,56 @@ const PROVIDER_LABEL: Record<Provider | 'leadsnipper', string> = {
   leadsnipper: 'LeadSniper',
 };
 
-const VALID_PROVIDERS: Provider[] = APOLLO_UI_ENABLED
-  ? ['apollo', 'apify', 'openai', 'gemini', 'openrouter', 'reoon']
-  : ['apify', 'openai', 'gemini', 'openrouter', 'reoon'];
+function isLlmProvider(provider: string): provider is LlmProvider {
+  return provider === 'openai' || provider === 'gemini' || provider === 'openrouter';
+}
 
-function isLlmProvider(p: Provider): p is LlmProvider {
-  return p === 'openai' || p === 'gemini' || p === 'openrouter';
+function parseCredentialQuery(providerFromQuery: string | null): {
+  kind: CredentialKind;
+  llmType: LlmProvider;
+} {
+  if (providerFromQuery && isLlmProvider(providerFromQuery)) {
+    return { kind: 'llm', llmType: providerFromQuery };
+  }
+  if (providerFromQuery === 'apollo' && APOLLO_UI_ENABLED) {
+    return { kind: 'apollo', llmType: 'openai' };
+  }
+  if (providerFromQuery === 'reoon') {
+    return { kind: 'reoon', llmType: 'openai' };
+  }
+  return { kind: 'apify', llmType: 'openai' };
+}
+
+function modelForProvider(prefs: LlmPreferences, provider: LlmProvider): string {
+  if (provider === 'openai') return prefs.openaiModel;
+  if (provider === 'gemini') return prefs.geminiModel;
+  return prefs.openrouterModel;
 }
 
 function ApiKeysPageInner() {
   const searchParams = useSearchParams();
   const providerFromQuery = searchParams.get('provider');
+  const initialCredential = parseCredentialQuery(providerFromQuery);
 
   const [keys, setKeys] = useState<ApiKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [provider, setProvider] = useState<Provider>(() => {
-    if (providerFromQuery && VALID_PROVIDERS.includes(providerFromQuery as Provider)) {
-      return providerFromQuery as Provider;
-    }
-    return 'apify';
-  });
+  const [credentialKind, setCredentialKind] = useState<CredentialKind>(initialCredential.kind);
+  const [llmType, setLlmType] = useState<LlmProvider>(initialCredential.llmType);
   const [keyValue, setKeyValue] = useState('');
   const [newKeyModels, setNewKeyModels] = useState<ProviderModelOption[]>([]);
   const [selectedNewKeyModel, setSelectedNewKeyModel] = useState('');
   const [fetchingNewKeyModels, setFetchingNewKeyModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [activatingProvider, setActivatingProvider] = useState<LlmProvider | null>(null);
   const [llmMode, setLlmMode] = useState<LlmMode>('mix');
   const [openaiModel, setOpenaiModel] = useState('gpt-4o-mini');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
   const [openrouterModel, setOpenrouterModel] = useState('openai/gpt-4o-mini');
   const [emailVerificationProvider, setEmailVerificationProvider] =
     useState<EmailVerificationProviderPreference>('reoon');
-  const [openaiModels, setOpenaiModels] = useState<ProviderModelOption[]>([]);
-  const [geminiModels, setGeminiModels] = useState<ProviderModelOption[]>([]);
-  const [openrouterModels, setOpenrouterModels] = useState<ProviderModelOption[]>([]);
-  const [loadingModeModels, setLoadingModeModels] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
-  // LeadSniper M2M service API keys
   const [serviceKeys, setServiceKeys] = useState<
     Array<{
       id: string;
@@ -107,9 +127,31 @@ function ApiKeysPageInner() {
   const [creatingServiceKey, setCreatingServiceKey] = useState(false);
   const [plainServiceKey, setPlainServiceKey] = useState<string | null>(null);
 
+  const resolvedProvider: StoredProvider = credentialKind === 'llm' ? llmType : credentialKind;
+  const preferences: LlmPreferences = {
+    llmMode,
+    openaiModel,
+    geminiModel,
+    openrouterModel,
+    emailVerificationProvider,
+  };
+
   useEffect(() => {
     void Promise.all([fetchKeys(), fetchPreferences(), fetchServiceKeys()]);
   }, []);
+
+  useEffect(() => {
+    const next = parseCredentialQuery(providerFromQuery);
+    setCredentialKind(next.kind);
+    if (providerFromQuery && isLlmProvider(providerFromQuery)) {
+      setLlmType(next.llmType);
+    }
+  }, [providerFromQuery]);
+
+  useEffect(() => {
+    setNewKeyModels([]);
+    setSelectedNewKeyModel('');
+  }, [credentialKind, llmType]);
 
   async function fetchServiceKeys() {
     try {
@@ -144,17 +186,6 @@ function ApiKeysPageInner() {
     }
   }
 
-  useEffect(() => {
-    if (providerFromQuery && VALID_PROVIDERS.includes(providerFromQuery as Provider)) {
-      setProvider(providerFromQuery as Provider);
-    }
-  }, [providerFromQuery]);
-
-  useEffect(() => {
-    setNewKeyModels([]);
-    setSelectedNewKeyModel('');
-  }, [provider]);
-
   async function fetchKeys() {
     try {
       setLoading(true);
@@ -175,57 +206,31 @@ function ApiKeysPageInner() {
       setOpenaiModel(data.openaiModel ?? 'gpt-4o-mini');
       setGeminiModel(data.geminiModel ?? 'gemini-1.5-flash');
       setOpenrouterModel(data.openrouterModel ?? 'openai/gpt-4o-mini');
-      setEmailVerificationProvider(
-        data.emailVerificationProvider === 'apify' ? 'apify' : 'reoon',
-      );
+      setEmailVerificationProvider(data.emailVerificationProvider === 'apify' ? 'apify' : 'reoon');
     } catch {
       toast.error('Failed to load workspace preferences.');
     }
   }
 
-  async function fetchSavedProviderModels(targetProvider: LlmProvider) {
-    try {
-      const res = await api.post('/api/api-keys/models', { provider: targetProvider });
-      return (res.data.data ?? []) as ProviderModelOption[];
-    } catch {
-      return [];
-    }
-  }
-
-  async function refreshRoutingModelLists(currentMode?: LlmMode) {
-    const mode = currentMode ?? llmMode;
-    setLoadingModeModels(true);
-    const [openai, gemini, openrouter] = await Promise.all([
-      mode === 'openai' || mode === 'mix' ? fetchSavedProviderModels('openai') : Promise.resolve([]),
-      mode === 'gemini' || mode === 'mix' ? fetchSavedProviderModels('gemini') : Promise.resolve([]),
-      mode === 'openrouter' ? fetchSavedProviderModels('openrouter') : Promise.resolve([]),
-    ]);
-    setOpenaiModels(openai);
-    setGeminiModels(gemini);
-    setOpenrouterModels(openrouter);
-    if (openai.length && !openai.some((m) => m.id === openaiModel)) setOpenaiModel(openai[0].id);
-    if (gemini.length && !gemini.some((m) => m.id === geminiModel)) setGeminiModel(gemini[0].id);
-    if (openrouter.length && !openrouter.some((m) => m.id === openrouterModel)) {
-      setOpenrouterModel(openrouter[0].id);
-    }
-    setLoadingModeModels(false);
+  async function saveLlmPreferences(next: LlmPreferences) {
+    await api.put('/api/api-keys/preferences', next);
   }
 
   async function fetchModelsForNewKey() {
-    if (!isLlmProvider(provider) || keyValue.trim().length < 10) return;
+    if (credentialKind !== 'llm' || keyValue.trim().length < 10) return;
     setFetchingNewKeyModels(true);
     try {
       const res = await api.post('/api/api-keys/models', {
-        provider,
+        provider: llmType,
         key: keyValue.trim(),
       });
       const models = (res.data.data ?? []) as ProviderModelOption[];
       setNewKeyModels(models);
       setSelectedNewKeyModel(models[0]?.id ?? '');
-      if (!models.length) toast.error(`No supported ${PROVIDER_LABEL[provider]} models found for this key.`);
+      if (!models.length) toast.error(`No supported ${PROVIDER_LABEL[llmType]} models found for this key.`);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
-      toast.error(message ?? `Failed to fetch ${PROVIDER_LABEL[provider]} models.`);
+      toast.error(message ?? `Failed to fetch ${PROVIDER_LABEL[llmType]} models.`);
       setNewKeyModels([]);
       setSelectedNewKeyModel('');
     } finally {
@@ -237,15 +242,9 @@ function ApiKeysPageInner() {
     e.preventDefault();
     setSavingPrefs(true);
     try {
-      await api.put('/api/api-keys/preferences', {
-        llmMode,
-        openaiModel,
-        geminiModel,
-        openrouterModel,
-        emailVerificationProvider,
-      });
-      toast.success('Workspace preferences updated.');
-      await refreshRoutingModelLists(llmMode);
+      const next = { ...preferences, emailVerificationProvider };
+      await saveLlmPreferences(next);
+      toast.success('Email verification updated.');
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message ?? 'Failed to save preferences.');
@@ -283,31 +282,48 @@ function ApiKeysPageInner() {
     }
   };
 
-  const handleModeChange = async (nextMode: LlmMode) => {
-    setLlmMode(nextMode);
-    await refreshRoutingModelLists(nextMode);
+  const handleUseLlm = async (provider: LlmProvider) => {
+    if (llmMode === provider || activatingProvider) return;
+    setActivatingProvider(provider);
+    try {
+      const next: LlmPreferences = { ...preferences, llmMode: provider };
+      await saveLlmPreferences(next);
+      setLlmMode(provider);
+      toast.success(`${PROVIDER_LABEL[provider]} is now the LLM in use.`);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? 'Failed to switch LLM.');
+    } finally {
+      setActivatingProvider(null);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!keyValue.trim()) return;
-    if (isLlmProvider(provider) && !selectedNewKeyModel) {
-      toast.error(`Fetch and select a ${PROVIDER_LABEL[provider]} model first.`);
+    if (credentialKind === 'llm' && !selectedNewKeyModel) {
+      toast.error(`Fetch and select a ${PROVIDER_LABEL[llmType]} model first.`);
       return;
     }
 
     setSubmitting(true);
     try {
       await api.post('/api/api-keys', {
-        provider,
+        provider: resolvedProvider,
         key: keyValue.trim(),
-        ...(isLlmProvider(provider) ? { selectedModel: selectedNewKeyModel } : {}),
+        ...(credentialKind === 'llm' ? { selectedModel: selectedNewKeyModel } : {}),
       });
-      toast.success(`${PROVIDER_LABEL[provider]} key saved successfully.`);
+      toast.success(`${PROVIDER_LABEL[resolvedProvider]} key saved.`);
       setKeyValue('');
       setNewKeyModels([]);
       setSelectedNewKeyModel('');
-      await Promise.all([fetchKeys(), fetchPreferences(), refreshRoutingModelLists()]);
+      if (credentialKind === 'llm') {
+        setLlmMode(llmType);
+        if (llmType === 'openai') setOpenaiModel(selectedNewKeyModel);
+        if (llmType === 'gemini') setGeminiModel(selectedNewKeyModel);
+        if (llmType === 'openrouter') setOpenrouterModel(selectedNewKeyModel);
+      }
+      await Promise.all([fetchKeys(), fetchPreferences()]);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message ?? 'Failed to save API key.');
@@ -316,14 +332,10 @@ function ApiKeysPageInner() {
     }
   };
 
-  useEffect(() => {
-    void refreshRoutingModelLists();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const visibleKeys = keys.filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo');
 
   return (
     <SettingsPanel wide>
-      {/* ─── Developer API Callout ─── */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-200/80 bg-gradient-to-r from-indigo-50/90 via-white to-indigo-50/50 p-4 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white shadow">
@@ -349,24 +361,37 @@ function ApiKeysPageInner() {
         <SettingsCard
           icon={IconKey}
           title="Add credentials"
-          description="Keys are encrypted at rest with AES-256-GCM."
+          description="Connect Apify, one LLM, or Reoon. Keys are encrypted at rest."
         >
           <form onSubmit={handleSave} className="space-y-4">
             <SettingsField label="Provider" htmlFor="provider">
               <select
                 id="provider"
-                value={provider}
-                onChange={(e) => setProvider(e.target.value as Provider)}
+                value={credentialKind}
+                onChange={(e) => setCredentialKind(e.target.value as CredentialKind)}
                 className={settingsInputClass}
               >
-                {APOLLO_UI_ENABLED && <option value="apollo">Apollo API</option>}
-                <option value="apify">Apify Platform</option>
-                <option value="openai">OpenAI Platform</option>
-                <option value="gemini">Gemini Platform</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="reoon">Reoon Email Verification</option>
+                {APOLLO_UI_ENABLED && <option value="apollo">Apollo</option>}
+                <option value="apify">Apify</option>
+                <option value="llm">LLM</option>
+                <option value="reoon">Email verification (Reoon)</option>
               </select>
             </SettingsField>
+
+            {credentialKind === 'llm' ? (
+              <SettingsField label="LLM type" htmlFor="llmType">
+                <select
+                  id="llmType"
+                  value={llmType}
+                  onChange={(e) => setLlmType(e.target.value as LlmProvider)}
+                  className={settingsInputClass}
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="gemini">Gemini</option>
+                  <option value="openrouter">OpenRouter</option>
+                </select>
+              </SettingsField>
+            ) : null}
 
             <SettingsField label="API key" htmlFor="key">
               <input
@@ -376,28 +401,28 @@ function ApiKeysPageInner() {
                 value={keyValue}
                 onChange={(e) => {
                   setKeyValue(e.target.value);
-                  if (isLlmProvider(provider)) {
+                  if (credentialKind === 'llm') {
                     setNewKeyModels([]);
                     setSelectedNewKeyModel('');
                   }
                 }}
                 className={settingsInputClass}
                 placeholder={
-                  provider === 'openai'
+                  resolvedProvider === 'openai'
                     ? 'sk-...'
-                    : provider === 'openrouter'
+                    : resolvedProvider === 'openrouter'
                       ? 'sk-or-...'
-                      : provider === 'reoon'
+                      : resolvedProvider === 'reoon'
                         ? 'Your Reoon API key'
                         : 'Paste API key'
                 }
               />
             </SettingsField>
 
-            {isLlmProvider(provider) ? (
+            {credentialKind === 'llm' ? (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold text-slate-600">{PROVIDER_LABEL[provider]} models</p>
+                  <p className="text-xs font-semibold text-slate-600">Model</p>
                   <button
                     type="button"
                     onClick={() => void fetchModelsForNewKey()}
@@ -413,6 +438,7 @@ function ApiKeysPageInner() {
                     value={selectedNewKeyModel}
                     onChange={(e) => setSelectedNewKeyModel(e.target.value)}
                     className={settingsInputClass}
+                    aria-label="Model"
                   >
                     {newKeyModels.map((model) => (
                       <option key={model.id} value={model.id}>
@@ -427,19 +453,19 @@ function ApiKeysPageInner() {
             ) : null}
 
             <button type="submit" disabled={submitting} className={`${settingsBtnPrimary} w-full`}>
-              {submitting ? 'Saving…' : `Add ${PROVIDER_LABEL[provider]} key`}
+              {submitting ? 'Saving…' : `Add ${PROVIDER_LABEL[resolvedProvider]} key`}
             </button>
           </form>
         </SettingsCard>
 
         <SettingsCard
           icon={IconSparkles}
-          title="Enrichment preferences"
+          title="Email verification"
           description="Only the selected verifier runs — no fallback. Verified emails are cached for 30 days."
         >
           <form onSubmit={(e) => void savePreferences(e)} className="space-y-4">
             <SettingsField
-              label="Email verification"
+              label="Verifier"
               htmlFor="emailVerificationProvider"
               hint={
                 emailVerificationProvider === 'reoon'
@@ -466,90 +492,8 @@ function ApiKeysPageInner() {
               <p className="text-xs text-amber-600">Add an Apify key before enriching.</p>
             ) : null}
 
-            <div className="space-y-4 border-t border-slate-100 pt-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">LLM routing</p>
-              <SettingsField label="Mode" htmlFor="llmMode">
-                <select
-                  id="llmMode"
-                  value={llmMode}
-                  onChange={(e) => void handleModeChange(e.target.value as LlmMode)}
-                  className={settingsInputClass}
-                >
-                  <option value="openai">OpenAI only</option>
-                  <option value="gemini">Gemini only</option>
-                  <option value="openrouter">OpenRouter only</option>
-                  <option value="mix">Mix mode (dynamic)</option>
-                </select>
-              </SettingsField>
-
-              {llmMode === 'openai' || llmMode === 'mix' ? (
-                <SettingsField label="OpenAI model" htmlFor="openaiModel">
-                  <select
-                    id="openaiModel"
-                    value={openaiModel}
-                    onChange={(e) => setOpenaiModel(e.target.value)}
-                    className={settingsInputClass}
-                  >
-                    {openaiModels.length ? (
-                      openaiModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.label}
-                        </option>
-                      ))
-                    ) : (
-                      <option value={openaiModel}>No OpenAI key/models found</option>
-                    )}
-                  </select>
-                </SettingsField>
-              ) : null}
-
-              {llmMode === 'gemini' || llmMode === 'mix' ? (
-                <SettingsField label="Gemini model" htmlFor="geminiModel">
-                  <select
-                    id="geminiModel"
-                    value={geminiModel}
-                    onChange={(e) => setGeminiModel(e.target.value)}
-                    className={settingsInputClass}
-                  >
-                    {geminiModels.length ? (
-                      geminiModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.label}
-                        </option>
-                      ))
-                    ) : (
-                      <option value={geminiModel}>No Gemini key/models found</option>
-                    )}
-                  </select>
-                </SettingsField>
-              ) : null}
-
-              {llmMode === 'openrouter' ? (
-                <SettingsField label="OpenRouter model" htmlFor="openrouterModel">
-                  <select
-                    id="openrouterModel"
-                    value={openrouterModel}
-                    onChange={(e) => setOpenrouterModel(e.target.value)}
-                    className={settingsInputClass}
-                  >
-                    {openrouterModels.length ? (
-                      openrouterModels.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.label}
-                        </option>
-                      ))
-                    ) : (
-                      <option value={openrouterModel}>No OpenRouter key/models found</option>
-                    )}
-                  </select>
-                </SettingsField>
-              ) : null}
-
-              {loadingModeModels ? <p className="text-xs text-slate-400">Refreshing available models…</p> : null}
-            </div>
-
             <button type="submit" disabled={savingPrefs} className={`${settingsBtnPrimary} w-full`}>
-              {savingPrefs ? 'Saving…' : 'Save preferences'}
+              {savingPrefs ? 'Saving…' : 'Save email verification'}
             </button>
           </form>
         </SettingsCard>
@@ -561,19 +505,27 @@ function ApiKeysPageInner() {
             <div className="h-16 skeleton" />
             <div className="h-16 skeleton" />
           </div>
-        ) : keys.filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo').length === 0 ? (
+        ) : visibleKeys.length === 0 ? (
           <div className="p-5">
             <SettingsEmpty>No API keys configured yet.</SettingsEmpty>
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {keys
-              .filter((key) => APOLLO_UI_ENABLED || key.provider !== 'apollo')
-              .map((key) => (
+            {visibleKeys.map((key) => {
+              const llmProvider = isLlmProvider(key.provider) ? key.provider : null;
+              const inUse = llmProvider !== null && llmMode === llmProvider;
+              return (
                 <li key={key.id} className="flex min-w-0 items-center justify-between gap-3 px-5 py-3.5">
                   <div className="min-w-0 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-900">{PROVIDER_LABEL[key.provider]}</span>
+                      <span className="text-sm font-semibold text-slate-900">
+                        {llmProvider ? `LLM · ${PROVIDER_LABEL[llmProvider]}` : PROVIDER_LABEL[key.provider]}
+                      </span>
+                      {inUse ? (
+                        <span className="inline-flex items-center rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          In use
+                        </span>
+                      ) : null}
                       <span
                         className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                           key.isValid
@@ -586,12 +538,28 @@ function ApiKeysPageInner() {
                       </span>
                     </div>
                     <p className="truncate font-mono text-xs text-slate-400">{key.maskedKey}</p>
+                    {llmProvider ? (
+                      <p className="text-[11px] text-slate-500">Model {modelForProvider(preferences, llmProvider)}</p>
+                    ) : null}
                     {key.lastTestedAt ? (
                       <p className="text-[11px] text-slate-400">Tested {new Date(key.lastTestedAt).toLocaleString()}</p>
                     ) : null}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
+                    {llmProvider ? (
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-slate-600">
+                        <input
+                          type="radio"
+                          name="active-llm"
+                          checked={inUse}
+                          disabled={activatingProvider !== null}
+                          onChange={() => void handleUseLlm(llmProvider)}
+                          className="accent-indigo-600"
+                        />
+                        Use this
+                      </label>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => void handleTest(key.provider, key.id)}
@@ -611,7 +579,8 @@ function ApiKeysPageInner() {
                     </button>
                   </div>
                 </li>
-              ))}
+              );
+            })}
           </ul>
         )}
       </SettingsCard>
