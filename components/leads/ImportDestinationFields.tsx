@@ -6,6 +6,7 @@ import api from '../../lib/api';
 import CreatableSelect from '../common/CreatableSelect';
 import type { LeadCategory, LeadList } from './types';
 import { EnrichmentAgentPicker } from './EnrichmentAgentPicker';
+import { ListEnrichmentHint } from './ListEnrichmentHint';
 
 type SelectOption = { id: string; name: string; color?: string };
 
@@ -107,7 +108,9 @@ export function ImportDestinationFields({
         prev.some((item) => item.id === created.id) ? prev : [...prev, option],
       );
       onListCreated?.(created);
-      toast.success(`List "${created.name}" created`);
+      toast.success(
+        `List "${created.name}" created. Configure motive, agent, and auto-enrich on Lists.`,
+      );
       return option;
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to create list'));
@@ -145,6 +148,8 @@ export function ImportDestinationFields({
     return option;
   };
 
+  const selectedListRecord = listId ? lists.find((l) => l.id === listId) ?? null : null;
+
   return (
     <div
       className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${
@@ -154,7 +159,8 @@ export function ImportDestinationFields({
       <div className="mb-3">
         <h3 className="text-sm font-black text-slate-950">Organize</h3>
         <p className="mt-1 text-xs text-slate-500">
-          Optional — search or create a list, category, and tags.
+          Optional — search or create a list, category, and tags. New lists are name-only; set
+          motive, agent, and auto-enrich on Lists.
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -200,6 +206,7 @@ export function ImportDestinationFields({
           />
         </div>
       </div>
+      <ListEnrichmentHint list={selectedListRecord} className="mt-3" />
       {onEnrichmentAgentIdChange ? (
         <div className="mt-4 border-t border-slate-100 pt-4">
           <EnrichmentAgentPicker

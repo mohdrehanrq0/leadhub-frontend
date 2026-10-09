@@ -22,16 +22,19 @@ export function LinkedInLink({
   kind = 'person',
   className = '',
   compact = false,
+  label,
 }: {
   url: string;
   kind?: 'company' | 'person';
   className?: string;
   compact?: boolean;
+  /** Visible text. Header chips pass "Person" and "Company". */
+  label?: string;
 }) {
   const href = normalizeLinkedInUrl(url);
   if (!href) return null;
 
-  const label = kind === 'company' ? 'Company LinkedIn' : 'LinkedIn profile';
+  const text = label ?? (kind === 'company' ? 'Company LinkedIn' : 'LinkedIn profile');
 
   return (
     <a
@@ -42,7 +45,7 @@ export function LinkedInLink({
       title={href}
     >
       <IconBrandLinkedin size={compact ? 13 : 14} className="shrink-0" stroke={1.75} />
-      <span>{compact ? 'LinkedIn' : label}</span>
+      <span>{compact && !label ? 'LinkedIn' : text}</span>
       <IconExternalLink size={10} className="shrink-0 opacity-60" />
     </a>
   );

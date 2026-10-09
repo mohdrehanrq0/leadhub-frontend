@@ -8,15 +8,16 @@ import api from '@/lib/api';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LinkedInLink } from '@/components/leads/LinkedInLink';
 import { CompanyResolutionCard } from '@/components/captures/CompanyResolutionCard';
-import { DataGapsPanel } from '@/components/captures/DataGaps';
+import { TargetProfileInsights } from '@/components/captures/TargetProfileInsights';
 import { CompanyLinkedInPanel } from '@/components/enrichment/CompanyPanels';
 import { PersonLinkedInPanel } from '@/components/enrichment/PersonLinkedInPanel';
 import { useLinkedInSnapshot } from '@/components/enrichment/useEnrichmentData';
 import {
   CAPTURE_STATUS_STYLE,
+  commentSnippet,
   formatCapturedAt,
-  hasBlockingGap,
   isEnrichmentPending,
+  isFromPostComment,
   type CaptureDetail,
 } from '@/lib/captures';
 import {
@@ -43,10 +44,18 @@ export default function CaptureDetailPage() {
   const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [addingCrm, setAddingCrm] = useState(false);
   const [positionTitle, setPositionTitle] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [companyProfileUrl, setCompanyProfileUrl] = useState('');
   const [personProfileUrl, setPersonProfileUrl] = useState('');
+  const [leadInsights, setLeadInsights] = useState<{
+    productFit?: { value?: string | null; score?: number | null } | null;
+    personSummary?: { value?: string | null } | null;
+    outreachAngle?: string | null;
+    suggestedCta?: string | null;
+    enrichmentStatus?: string | null;
+  } | null>(null);
 
   const { snapshot } = useLinkedInSnapshot(captureId ? `/api/captures/${captureId}` : null);
 
@@ -73,6 +82,34 @@ export default function CaptureDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    const leadId = capture?.leadId;
+    if (!leadId) {
+      setLeadInsights(null);
+      return;
+    }
+    void (async () => {
+      try {
+        const res = await api.get(`/api/leads/${leadId}`);
+        const lead = res.data?.data ?? res.data;
+        const ai = lead?.aiIntelligence ?? lead?.intelligence ?? {};
+        setLeadInsights({
+          productFit: ai.productFit ?? null,
+          personSummary: ai.personSummary ?? null,
+          outreachAngle:
+            ai.recommendedOutreachAngle?.value ||
+            ai.bestOutreachAngle?.value ||
+            ai.outreachIntelligence?.recommendedAngle ||
+            null,
+          suggestedCta: ai.suggestedCta?.value ?? null,
+          enrichmentStatus: lead?.enrichmentStatus ?? null,
+        });
+      } catch {
+        setLeadInsights(null);
+      }
+    })();
+  }, [capture?.leadId, capture?.status]);
 
   // The company chain runs in the background while the capture still reads
   // `saved`, so status alone is not enough to know whether to keep refreshing.
@@ -122,8 +159,12 @@ export default function CaptureDetailPage() {
   async function enrich() {
     setEnriching(true);
     try {
-      await api.post(`/api/captures/${captureId}/enrich`);
-      toast.success('Lead created and enrichment started.');
+      const res = await api.post(`/api/captures/${captureId}/enrich`);
+      toast.success(
+        res.data?.data?.skippedEnrichment
+          ? 'Already in CRM and enriched — skipped re-enrichment.'
+          : 'Target person linked and enrichment started.',
+      );
       await load({ silent: true });
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data
@@ -131,6 +172,22 @@ export default function CaptureDetailPage() {
       toast.error(message ?? 'Could not start enrichment.');
     } finally {
       setEnriching(false);
+    }
+  }
+
+  async function addToCrm() {
+    setAddingCrm(true);
+    try {
+      // Link only — enrichment stays a separate explicit action.
+      const res = await api.post(`/api/captures/${captureId}/add-to-crm`, { enrich: false });
+      toast.success(res.data?.message ?? 'Added to CRM.');
+      await load({ silent: true });
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data
+        ?.message;
+      toast.error(message ?? 'Could not add to CRM.');
+    } finally {
+      setAddingCrm(false);
     }
   }
 
@@ -159,7 +216,6 @@ export default function CaptureDetailPage() {
   }
 
   const badge = CAPTURE_STATUS_STYLE[capture.status];
-  const blocked = hasBlockingGap(capture.dataGaps);
   const authorMissing = capture.error === 'author_unresolved';
 
   return (
@@ -181,7 +237,11 @@ export default function CaptureDetailPage() {
             </div>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-main">
-                {capture.type === 'post' ? 'LinkedIn post' : 'LinkedIn profile'}
+                {capture.type === 'post'
+                  ? 'LinkedIn post'
+                  : isFromPostComment(capture)
+                    ? 'From post comment'
+                    : 'LinkedIn profile'}
               </p>
               <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950">
                 {capture.personName ?? 'Unknown person'}
@@ -191,12 +251,41 @@ export default function CaptureDetailPage() {
                   {capture.headline}
                 </p>
               ) : null}
+              {isFromPostComment(capture) && commentSnippet(capture) ? (
+                <p className="mt-2 max-w-2xl rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-2 text-sm leading-6 text-slate-700">
+                  <span className="font-semibold text-sky-800">Their comment: </span>
+                  {commentSnippet(capture)}
+                </p>
+              ) : null}
+              {isFromPostComment(capture) &&
+              typeof capture.sourceContext?.sourcePostUrl === 'string' ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Scraped from{' '}
+                  {typeof capture.sourceContext.sourcePostAuthor === 'string'
+                    ? `${capture.sourceContext.sourcePostAuthor}'s `
+                    : ''}
+                  post ·{' '}
+                  <a
+                    href={capture.sourceContext.sourcePostUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-brand-main hover:underline"
+                  >
+                    Open source post
+                  </a>
+                </p>
+              ) : null}
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <span
                   className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${badge.className}`}
                 >
                   {authorMissing ? 'Needs profile' : badge.label}
                 </span>
+                {isFromPostComment(capture) ? (
+                  <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">
+                    From comments
+                  </span>
+                ) : null}
                 {capture.location ? (
                   <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
                     <IconMapPin size={11} />
@@ -225,21 +314,26 @@ export default function CaptureDetailPage() {
             ) : null}
             <button
               type="button"
+              onClick={() => void addToCrm()}
+              disabled={addingCrm || authorMissing}
+              title="Create or update the CRM lead without starting enrichment"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              {addingCrm ? 'Adding…' : capture.leadId ? 'Update in CRM' : 'Add to CRM'}
+            </button>
+            <button
+              type="button"
               onClick={() => void enrich()}
               disabled={enriching || capture.status === 'enriching' || authorMissing}
-              title={
-                blocked
-                  ? 'Resolve the missing company fields first'
-                  : 'Create the lead and enrich it'
-              }
+              title="Scrape company details and start enrichment"
               className="inline-flex items-center gap-2 rounded-xl bg-brand-main px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-main/80 disabled:opacity-50"
             >
               <IconSparkles size={15} />
               {capture.status === 'enriching'
                 ? 'Enriching…'
-                : capture.leadId
-                  ? 'Re-enrich'
-                  : 'Create lead & enrich'}
+                : capture.status === 'enriched'
+                  ? 'Enriched'
+                  : 'Enrich'}
             </button>
           </div>
         </div>
@@ -255,27 +349,41 @@ export default function CaptureDetailPage() {
         </div>
       ) : null}
 
+      <TargetProfileInsights
+        data={{
+          leadId: capture.leadId,
+          personName: capture.personName,
+          role: capture.positionTitle ?? capture.headline,
+          companyName: capture.companyResolution?.name ?? capture.companyName,
+          personLinkedinUrl: capture.personProfileUrl,
+          captureReason: capture.type === 'post' ? 'linkedin_post' : 'linkedin_profile',
+          enrichmentStatus: leadInsights?.enrichmentStatus ?? capture.leadEnrichmentStatus,
+          productFit: leadInsights?.productFit,
+          personSummary: leadInsights?.personSummary,
+          outreachAngle: leadInsights?.outreachAngle,
+          suggestedCta: leadInsights?.suggestedCta,
+          connectionDegree: (capture.personSnapshot as { connectionDegree?: string } | null)
+            ?.connectionDegree,
+        }}
+      />
+
       {!capture.leadId ? (
         <p className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs leading-5 text-text-300">
-          This capture is not in your Lead CRM. LeadHub resolves the person&apos;s employer from
-          their current LinkedIn role first, so the lead arrives with a real company attached.
+          This target is not in LeadHub CRM yet. Add to CRM creates the lead only. Use Enrich when
+          you want LinkedIn/company scraping and the research agent to run.
         </p>
       ) : null}
 
       {/* ── Company resolution ─────────────────────────────────── */}
       <CompanyResolutionCard
         resolution={capture.companyResolution}
-        gaps={capture.dataGaps}
+        gaps={null}
         resolving={resolving}
         onResolve={() => void resolve()}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          {capture.companyResolution ? (
-            <DataGapsPanel gaps={capture.dataGaps} />
-          ) : null}
-
           {/* ── Corrections ──────────────────────────────────── */}
           <section className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div>
@@ -410,10 +518,8 @@ export default function CaptureDetailPage() {
                 'Enrichment is running. This page refreshes on its own.'
               ) : capture.status === 'failed' ? (
                 <span className="text-red-700">{capture.error ?? 'Enrichment failed.'}</span>
-              ) : blocked ? (
-                'Resolve the missing company fields above before this capture can become a lead.'
               ) : (
-                'Not enriched yet. Create the lead to have LeadHub research this person and their company.'
+                'Not enriched yet. Enrich this target once to research the person and their company.'
               )}
             </p>
 

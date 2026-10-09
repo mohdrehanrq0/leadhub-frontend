@@ -11,28 +11,19 @@ import {
  * Rendered inline so the user sees *why* a value is blank at the point they
  * look for it, instead of inferring it from an em dash.
  */
+/** @deprecated Gaps no longer surface as required actions. */
 export function GapBadge({ gap }: { gap: CaptureDataGap | undefined }) {
   if (!gap) return null;
-  const style = GAP_SEVERITY_STYLE[gap.severity];
-
-  return (
-    <span
-      title={gap.reason}
-      className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${style.className}`}
-    >
-      <span className={`h-1 w-1 rounded-full ${style.dot}`} />
-      {gap.severity === 'blocking' ? 'Required' : 'Not on LinkedIn'}
-    </span>
-  );
+  return null;
 }
 
 /**
- * A field value with its gap warning, or an em dash when the value is present
- * but empty for an unrelated reason.
+ * Field value or an em dash when empty. Gap badges are intentionally ignored —
+ * users are not asked to fill company data gaps before CRM promote.
  */
 export function GapValue({
   value,
-  gap,
+  gap: _gap,
   mono = false,
 }: {
   value?: string | number | null;
@@ -42,7 +33,7 @@ export function GapValue({
   if (value !== null && value !== undefined && value !== '') {
     return <span className={mono ? 'font-mono text-[13px]' : undefined}>{value}</span>;
   }
-  return gap ? <GapBadge gap={gap} /> : <span className="text-text-300">—</span>;
+  return <span className="text-text-300">—</span>;
 }
 
 /**

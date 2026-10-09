@@ -8,6 +8,7 @@ import { btnNavy, btnOutline, inputClass } from '../ui/styles';
 import { BodyPortal } from '../ui/BodyPortal';
 import CreatableSelect from '../common/CreatableSelect';
 import { PIPELINE_STAGES, PRIORITIES, type LeadCategory, type LeadList, type PipelineStage, type Priority } from './types';
+import { ListEnrichmentHint } from './ListEnrichmentHint';
 
 type SelectOption = { id: string; name: string; color?: string };
 
@@ -125,7 +126,9 @@ export function AddLeadModal({
       const option = { id: created.id, name: created.name };
       setExtraLists((prev) => (prev.some((item) => item.id === created.id) ? prev : [...prev, option]));
       onListCreated?.(created);
-      toast.success(`List "${created.name}" created`);
+      toast.success(
+        `List "${created.name}" created. Configure motive, agent, and auto-enrich on Lists.`,
+      );
       return option;
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to create list'));
@@ -443,6 +446,11 @@ export function AddLeadModal({
                     placeholder="Select or create list"
                   />,
                 )}
+                <div className="sm:col-span-2">
+                  <ListEnrichmentHint
+                    list={form.listId ? lists.find((l) => l.id === form.listId) ?? null : null}
+                  />
+                </div>
                 <div className="sm:col-span-2">
                   {field(
                     'Notes',

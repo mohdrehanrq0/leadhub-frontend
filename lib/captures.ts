@@ -150,6 +150,12 @@ export interface CaptureListRow {
   companyProfileUrl: string | null;
   location: string | null;
   postText: string | null;
+  /** Comment text / provenance when saved from a post comment scrape. */
+  note: string | null;
+  sourceContext: Record<string, unknown> | null;
+  /** List chosen at save time; null when saved without a list. */
+  listId: string | null;
+  listName: string | null;
   companyResolution: CaptureCompanyResolution | null;
   dataGaps: CaptureDataGap[] | null;
   leadId: string | null;
@@ -163,9 +169,64 @@ export interface CaptureDetail extends CaptureListRow {
   postPublishedAt: string | null;
   postMedia: Array<{ type: string; url?: string; alt?: string }> | null;
   postMetrics: { reactions?: number; comments?: number; reposts?: number } | null;
-  sourceContext: Record<string, unknown> | null;
-  note: string | null;
   enrichmentJobId: string | null;
+}
+
+/** True when this capture was scraped from a LinkedIn post comment. */
+export function isFromPostComment(row: {
+  sourceContext?: Record<string, unknown> | null;
+}): boolean {
+  return row.sourceContext?.identitySource === 'post_comment';
+}
+
+/** Display kind for the table Type column (comment is not a DB type). */
+export type CaptureKind = 'profile' | 'comment' | 'post' | 'company' | 'other';
+
+export function captureKind(row: {
+  type: CaptureType;
+  sourceContext?: Record<string, unknown> | null;
+}): CaptureKind {
+  if (row.type === 'post') return 'post';
+  if (isFromPostComment(row)) return 'comment';
+  if (row.type === 'company') return 'company';
+  if (row.type === 'other') return 'other';
+  return 'profile';
+}
+
+export const CAPTURE_KIND_LABEL: Record<CaptureKind, string> = {
+  profile: 'Profile',
+  comment: 'Comment',
+  post: 'Post',
+  company: 'Company',
+  other: 'Other',
+};
+
+export function commentSnippet(row: {
+  note?: string | null;
+  sourceContext?: Record<string, unknown> | null;
+}): string | null {
+  const fromCtx = row.sourceContext?.commentText;
+  if (typeof fromCtx === 'string' && fromCtx.trim()) return fromCtx.trim();
+  if (row.note?.trim()) {
+    return row.note.replace(/^Comment on post:\s*/i, '').trim() || null;
+  }
+  return null;
+}
+
+/** Post this commenter was scraped from (author + URLs from extension sourceContext). */
+export function sourcePostInfo(row: {
+  sourceContext?: Record<string, unknown> | null;
+}): {
+  url: string | null;
+  author: string | null;
+  authorUrl: string | null;
+} {
+  const ctx = row.sourceContext;
+  const url = typeof ctx?.sourcePostUrl === 'string' ? ctx.sourcePostUrl : null;
+  const author = typeof ctx?.sourcePostAuthor === 'string' ? ctx.sourcePostAuthor : null;
+  const authorUrl =
+    typeof ctx?.sourcePostAuthorUrl === 'string' ? ctx.sourcePostAuthorUrl : null;
+  return { url, author, authorUrl };
 }
 
 export const CAPTURE_STATUS_STYLE: Record<CaptureStatus, { label: string; className: string }> = {
@@ -210,10 +271,15 @@ export function gapsByField(gaps: CaptureDataGap[] | null | undefined) {
   return map;
 }
 
-/** True when the capture cannot become a lead yet. */
-export function hasBlockingGap(gaps: CaptureDataGap[] | null | undefined): boolean {
-  return (gaps ?? []).some((gap) => gap.severity === 'blocking');
+/**
+ * @deprecated Data gaps no longer block promote — kept for call-site compatibility.
+ * Always returns false; the saved person is always the CRM target.
+ */
+export function hasBlockingGap(_gaps: CaptureDataGap[] | null | undefined): boolean {
+  return false;
 }
+
+export type CaptureEnrichMode = 'auto' | 'manual';
 
 export function formatCapturedAt(value: string): string {
   const date = new Date(value);

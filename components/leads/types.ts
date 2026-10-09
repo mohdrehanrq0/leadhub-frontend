@@ -383,6 +383,14 @@ export type LeadList = {
   name: string;
   description?: string | null;
   leadCount?: number;
+  /** Why people in this list are targeted — used in outreach personalization. */
+  outreachMotive?: string | null;
+  /** Optional per-list enrichment agent; null → workspace default. */
+  defaultEnrichmentAgentId?: string | null;
+  /**
+   * true = always enrich on capture, false = never, null = inherit workspace mode.
+   */
+  autoEnrichOnCapture?: boolean | null;
 };
 
 export type LeadRow = {

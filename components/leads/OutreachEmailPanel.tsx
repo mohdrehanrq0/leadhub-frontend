@@ -80,6 +80,8 @@ type Props = {
   fallbackSubject?: string | null;
   fallbackBody?: string | null;
   onGenerated?: () => void;
+  /** Hide the intelligence strip when the parent already shows why / how cards. */
+  hideIntelligence?: boolean;
 };
 
 /** Step label descriptions for sequence steps. */
@@ -250,6 +252,7 @@ export function OutreachEmailPanel({
   fallbackSubject,
   fallbackBody,
   onGenerated,
+  hideIntelligence = false,
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -352,7 +355,8 @@ export function OutreachEmailPanel({
   return (
     <div className="space-y-4">
       {/* Intelligence strip */}
-      {(outreachIntelligence?.recommendedAngle ||
+      {!hideIntelligence &&
+      (outreachIntelligence?.recommendedAngle ||
         outreachIntelligence?.primaryTrigger ||
         (outreachIntelligence?.relevantPainPoints?.length ?? 0) > 0) && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">

@@ -42,6 +42,8 @@ type Props = {
   compact?: boolean;
   hideLabel?: boolean;
   showDescription?: boolean;
+  /** Stretch the trigger to the card width and truncate the selected name. */
+  fluid?: boolean;
 };
 
 const MODULE_LABELS: Array<{ key: string; label: string }> = [
@@ -98,6 +100,7 @@ export function EnrichmentAgentPicker({
   compact = false,
   hideLabel = false,
   showDescription = false,
+  fluid = false,
 }: Props) {
   const [agents, setAgents] = useState<EnrichmentAgentSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,8 +156,8 @@ export function EnrichmentAgentPicker({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             disabled={loading || agents.length === 0}
-            className={`h-9 min-w-0 rounded-xl border border-slate-200 bg-white/95 pl-8 pr-7 text-xs font-semibold text-slate-800 shadow-xs outline-none transition hover:border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
-              compact ? 'max-w-[280px]' : 'w-full'
+            className={`h-9 min-w-0 truncate rounded-xl border border-slate-200 bg-white/95 pl-8 pr-7 text-sm font-semibold text-slate-800 outline-none transition hover:border-slate-300 focus:border-violet-500 focus:ring-2 focus:ring-violet-100 ${
+              fluid ? 'w-full max-w-full' : compact ? 'max-w-[280px]' : 'w-full'
             }`}
             title={blurb}
           >
