@@ -77,13 +77,13 @@ function errorMessage(err: unknown, fallback: string) {
   if (typeof err === 'object' && err && 'response' in err) {
     const response = (err as { response?: { data?: { message?: string }; status?: number } }).response;
     if (response?.status === 408 || response?.status === 504) {
-      return 'Import timed out. Try a smaller CSV (max 2,000 rows).';
+      return 'Import timed out. Try a smaller file (max 2,000 rows).';
     }
     return response?.data?.message ?? fallback;
   }
   if (typeof err === 'object' && err && 'code' in err) {
     const code = (err as { code?: string }).code;
-    if (code === 'ECONNABORTED') return 'Import timed out. Try a smaller CSV.';
+    if (code === 'ECONNABORTED') return 'Import timed out. Try a smaller file.';
   }
   return fallback;
 }
@@ -138,6 +138,7 @@ export default function LeadImportPage() {
   const [dragging, setDragging] = useState(false);
   const [step, setStep] = useState<ImportStep>('upload');
   const [fileName, setFileName] = useState('');
+  const [fileKind, setFileKind] = useState<'csv' | 'excel'>('csv');
   const [rawRows, setRawRows] = useState<Array<Record<string, string>>>([]);
   const [sourceFields, setSourceFields] = useState<string[]>([]);
   const [mapping, setMapping] = useState<FieldMapping>({});
@@ -226,6 +227,7 @@ export default function LeadImportPage() {
 
     setParsing(true);
     setFileName(file.name);
+    setFileKind(isExcel ? 'excel' : 'csv');
     setImportResult(null);
 
     if (parseSafetyRef.current) clearTimeout(parseSafetyRef.current);
@@ -281,7 +283,10 @@ export default function LeadImportPage() {
         const buffer = await file.arrayBuffer();
         const bytes = new Uint8Array(buffer);
         let binary = '';
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
         const base64 = btoa(binary);
         const res = await api.post('/api/leads/parse-spreadsheet', {
           fileName: file.name,
@@ -449,6 +454,7 @@ export default function LeadImportPage() {
     setMapping({});
     setConfidence({});
     setFileName('');
+    setFileKind('csv');
     setReuploadPrompt(null);
     setImportResult(null);
     setImportProgress(0);
@@ -467,8 +473,8 @@ export default function LeadImportPage() {
 
       <PageHeader
         eyebrow="Import"
-        title="Import CSV"
-        description="Upload your file, confirm the columns, then import. Duplicates are skipped automatically."
+        title="Import CSV or Excel"
+        description="Upload a CSV or Excel file, confirm the columns, then import. Duplicates are skipped automatically."
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -544,7 +550,7 @@ export default function LeadImportPage() {
             </label>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4">
-              <p className="text-xs text-slate-500">Accepts standard CSV. Max 2,000 rows per upload.</p>
+              <p className="text-xs text-slate-500">Accepts .csv, .xlsx, and .xls. Max 2,000 rows per upload.</p>
               <button
                 type="button"
                 onClick={() => {
@@ -604,7 +610,7 @@ export default function LeadImportPage() {
                 <IconFileSpreadsheet size={20} />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-sm font-black text-slate-950">{fileName || 'CSV file'}</p>
+                <p className="truncate text-sm font-black text-slate-950">{fileName || 'Spreadsheet'}</p>
                 <p className="text-xs text-slate-500">
                   {rawRows.length.toLocaleString()} rows · {sourceFields.length} columns
                 </p>
@@ -620,7 +626,7 @@ export default function LeadImportPage() {
           </div>
 
           <FieldMappingPanel
-            sourceLabel="CSV"
+            sourceLabel={fileKind === 'excel' ? 'Excel' : 'CSV'}
             sourceFields={sourceFields}
             mapping={mapping}
             confidence={confidence}
@@ -699,7 +705,7 @@ export default function LeadImportPage() {
               {importPhaseLabel}
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              {fileName || 'CSV'} · {mappedRows.length.toLocaleString()} rows
+              {fileName || (fileKind === 'excel' ? 'Excel' : 'CSV')} · {mappedRows.length.toLocaleString()} rows
             </p>
 
             <div className="mt-6 w-full">
@@ -754,7 +760,7 @@ export default function LeadImportPage() {
             </div>
             <h2 className="mt-4 text-xl font-black text-slate-950">Upload complete</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{importResult.summary}</p>
-            <p className="mt-1 text-xs text-slate-400">{fileName || 'CSV file'}</p>
+            <p className="mt-1 text-xs text-slate-400">{fileName || 'Spreadsheet'}</p>
 
             <div className="mt-6 grid w-full grid-cols-3 gap-3">
               <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-3">

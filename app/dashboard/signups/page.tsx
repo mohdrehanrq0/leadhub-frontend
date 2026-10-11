@@ -112,9 +112,9 @@ export default function SignupsPage() {
       <ResourceLinksModal isOpen={showResourceLinksModal} onClose={() => setShowResourceLinksModal(false)} />
       <div className="mx-auto max-w-7xl animate-fade-in space-y-4 text-text">
       <PageHeader
-        eyebrow="Inbound"
-        title="Sign-up leads"
-        description="External platform sign-ups with AI-generated onboarding emails."
+        eyebrow="Inbound Leads"
+        title="Website Visitors"
+        description="People who signed up on your website or app. We automatically send them personalized welcome emails."
         actions={
           <>
             <button type="button" onClick={fetchSignupLeads} className={btnOutline}>
@@ -136,7 +136,7 @@ export default function SignupsPage() {
         }
       />
 
-      {/* Founder Profile Gating / Warning Banner */}
+      {/* Complete Setup Banner */}
       {founderProfileStatus && !founderProfileStatus.isComplete && (
         <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -144,11 +144,10 @@ export default function SignupsPage() {
               <IconAlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
               <div>
                 <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200">
-                  Founder Profile Incomplete — Sign-up Email Automation Paused
+                  Complete Your Profile to Enable Auto-Emails
                 </h3>
                 <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                  Automated onboarding emails require your complete composite founder persona (missing: {founderProfileStatus.missingFields?.join(', ')}). 
-                  General lead storage and enrichment remain unaffected.
+                  We need a few more details about you to send personalized welcome emails. Missing: {founderProfileStatus.missingFields?.join(', ')}.
                 </p>
               </div>
             </div>
@@ -156,7 +155,7 @@ export default function SignupsPage() {
               href="/dashboard/settings/founder-profile"
               className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm transition"
             >
-              <span>Complete Founder Profile</span>
+              <span>Complete Profile</span>
               <IconArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -166,9 +165,8 @@ export default function SignupsPage() {
       {/* Info Banner */}
       <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4">
         <p className="text-xs text-text-300">
-          💡 All signup leads are automatically organized in a dedicated system list. 
-          This list is managed automatically and only contains leads pushed via the API. 
-          Filter them here by category to import into Lead Sniper.
+          💡 <strong>How it works:</strong> When someone signs up on your website, they appear here automatically.
+          We categorize them (Hot, Warm, Cold) and send personalized welcome emails on your behalf.
         </p>
       </div>
 
@@ -184,11 +182,11 @@ export default function SignupsPage() {
             onChange={(e) => setFilter({ ...filter, status: e.target.value || undefined })}
             className="px-3 py-1.5 bg-bg-200 border border-border rounded-lg text-sm text-text-100 focus:outline-none focus:border-primary"
           >
-            <option value="">All Statuses</option>
+            <option value="">All statuses</option>
             <option value="pending">Pending</option>
-            <option value="enriching">Enriching</option>
+            <option value="enriching">Analyzing</option>
             <option value="ready">Ready</option>
-            <option value="sent">Sent</option>
+            <option value="sent">Email sent</option>
             <option value="failed">Failed</option>
           </select>
           <select
@@ -196,10 +194,10 @@ export default function SignupsPage() {
             onChange={(e) => setFilter({ ...filter, category: e.target.value || undefined })}
             className="px-3 py-1.5 bg-bg-200 border border-border rounded-lg text-sm text-text-100 focus:outline-none focus:border-primary"
           >
-            <option value="">All Categories</option>
-            <option value="hot">Hot</option>
-            <option value="warm">Warm</option>
-            <option value="cold">Cold</option>
+            <option value="">All priorities</option>
+            <option value="hot">🔥 Hot</option>
+            <option value="warm">☀️ Warm</option>
+            <option value="cold">❄️ Cold</option>
           </select>
         </div>
       </div>
@@ -210,12 +208,12 @@ export default function SignupsPage() {
           <table className="w-full">
             <thead className="border-b border-slate-200 bg-slate-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Sign-up user</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Contact</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Company</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Category</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Priority</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Status</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Email</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Created</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Welcome Email</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Signed Up</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-600 uppercase">Actions</th>
               </tr>
             </thead>
@@ -223,7 +221,7 @@ export default function SignupsPage() {
               {signupLeads.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-text-300">
-                    No signup leads found
+                    No visitors yet. Connect your website to start capturing leads automatically.
                   </td>
                 </tr>
               ) : (

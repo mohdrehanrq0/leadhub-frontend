@@ -5,32 +5,12 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { PageHeader } from '@/components/layout/PageHeader';
-import { LinkedInLink } from '@/components/leads/LinkedInLink';
-import { CompanyResolutionCard } from '@/components/captures/CompanyResolutionCard';
-import { TargetProfileInsights } from '@/components/captures/TargetProfileInsights';
-import { CompanyLinkedInPanel } from '@/components/enrichment/CompanyPanels';
-import { PersonLinkedInPanel } from '@/components/enrichment/PersonLinkedInPanel';
-import { useLinkedInSnapshot } from '@/components/enrichment/useEnrichmentData';
-import {
-  CAPTURE_STATUS_STYLE,
-  commentSnippet,
-  formatCapturedAt,
-  isEnrichmentPending,
-  isFromPostComment,
-  type CaptureDetail,
-} from '@/lib/captures';
-import {
-  IconAlertTriangle,
-  IconArrowLeft,
-  IconArrowRight,
-  IconDeviceFloppy,
-  IconHeart,
-  IconMapPin,
-  IconMessageCircle,
-  IconRepeat,
-  IconSparkles,
-} from '@tabler/icons-react';
+import { CaptureSourceCard } from '@/components/captures/CaptureSourceCard';
+import { LeadDetailSkeleton } from '@/components/leads/detail/LeadDetailSkeleton';
+import { LeadDetailView } from '@/components/leads/detail/LeadDetailView';
+import { useLeadDetail } from '@/components/leads/detail/useLeadDetail';
+import { isEnrichmentPending, type CaptureDetail } from '@/lib/captures';
+import { IconArrowLeft, IconSparkles } from '@tabler/icons-react';
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -41,35 +21,16 @@ export default function CaptureDetailPage() {
 
   const [capture, setCapture] = useState<CaptureDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
-  const [resolving, setResolving] = useState(false);
   const [addingCrm, setAddingCrm] = useState(false);
-  const [positionTitle, setPositionTitle] = useState('');
-  const [companyName, setCompanyName] = useState('');
-  const [companyProfileUrl, setCompanyProfileUrl] = useState('');
-  const [personProfileUrl, setPersonProfileUrl] = useState('');
-  const [leadInsights, setLeadInsights] = useState<{
-    productFit?: { value?: string | null; score?: number | null } | null;
-    personSummary?: { value?: string | null } | null;
-    outreachAngle?: string | null;
-    suggestedCta?: string | null;
-    enrichmentStatus?: string | null;
-  } | null>(null);
-
-  const { snapshot } = useLinkedInSnapshot(captureId ? `/api/captures/${captureId}` : null);
+  const leadPage = useLeadDetail(capture?.leadId ?? null);
 
   const load = useCallback(
     async (opts: { silent?: boolean } = {}) => {
       if (!opts.silent) setLoading(true);
       try {
         const res = await api.get(`/api/captures/${captureId}`);
-        const data = res.data?.data as CaptureDetail;
-        setCapture(data);
-        setPositionTitle(data.positionTitle ?? '');
-        setCompanyName(data.companyName ?? '');
-        setCompanyProfileUrl(data.companyProfileUrl ?? '');
-        setPersonProfileUrl(data.personProfileUrl ?? '');
+        setCapture(res.data?.data as CaptureDetail);
       } catch {
         if (!opts.silent) toast.error('Capture not found.');
       } finally {
@@ -83,78 +44,12 @@ export default function CaptureDetailPage() {
     void load();
   }, [load]);
 
-  useEffect(() => {
-    const leadId = capture?.leadId;
-    if (!leadId) {
-      setLeadInsights(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const res = await api.get(`/api/leads/${leadId}`);
-        const lead = res.data?.data ?? res.data;
-        const ai = lead?.aiIntelligence ?? lead?.intelligence ?? {};
-        setLeadInsights({
-          productFit: ai.productFit ?? null,
-          personSummary: ai.personSummary ?? null,
-          outreachAngle:
-            ai.recommendedOutreachAngle?.value ||
-            ai.bestOutreachAngle?.value ||
-            ai.outreachIntelligence?.recommendedAngle ||
-            null,
-          suggestedCta: ai.suggestedCta?.value ?? null,
-          enrichmentStatus: lead?.enrichmentStatus ?? null,
-        });
-      } catch {
-        setLeadInsights(null);
-      }
-    })();
-  }, [capture?.leadId, capture?.status]);
-
-  // The company chain runs in the background while the capture still reads
-  // `saved`, so status alone is not enough to know whether to keep refreshing.
   const pending = capture ? isEnrichmentPending(capture) : false;
-
   useEffect(() => {
     if (!pending) return;
     const timer = setInterval(() => void load({ silent: true }), POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [pending, load]);
-
-  async function saveCorrections() {
-    setSaving(true);
-    try {
-      await api.patch(`/api/captures/${captureId}`, {
-        positionTitle: positionTitle.trim() || null,
-        companyName: companyName.trim() || null,
-        companyProfileUrl: companyProfileUrl.trim() || null,
-        personProfileUrl: personProfileUrl.trim() || null,
-      });
-      toast.success('Capture updated. Re-resolve to pull the company again.');
-      await load({ silent: true });
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-      toast.error(message ?? 'Failed to update capture.');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function resolve() {
-    setResolving(true);
-    try {
-      const res = await api.post(`/api/captures/${captureId}/resolve`);
-      toast.success(res.data?.message ?? 'Company resolved.');
-      await load({ silent: true });
-    } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
-      toast.error(message ?? 'Could not resolve the company.');
-    } finally {
-      setResolving(false);
-    }
-  }
 
   async function enrich() {
     setEnriching(true);
@@ -162,13 +57,13 @@ export default function CaptureDetailPage() {
       const res = await api.post(`/api/captures/${captureId}/enrich`);
       toast.success(
         res.data?.data?.skippedEnrichment
-          ? 'Already in CRM and enriched — skipped re-enrichment.'
-          : 'Target person linked and enrichment started.',
+          ? 'Already in CRM and enriched.'
+          : 'Enrichment started.',
       );
       await load({ silent: true });
+      await leadPage.reload();
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message ?? 'Could not start enrichment.');
     } finally {
       setEnriching(false);
@@ -178,406 +73,75 @@ export default function CaptureDetailPage() {
   async function addToCrm() {
     setAddingCrm(true);
     try {
-      // Link only — enrichment stays a separate explicit action.
       const res = await api.post(`/api/captures/${captureId}/add-to-crm`, { enrich: false });
       toast.success(res.data?.message ?? 'Added to CRM.');
       await load({ silent: true });
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { message?: string } } })?.response?.data
-        ?.message;
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(message ?? 'Could not add to CRM.');
     } finally {
       setAddingCrm(false);
     }
   }
 
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-6xl space-y-3">
-        <div className="h-24 skeleton" />
-        <div className="h-64 skeleton" />
-      </div>
-    );
-  }
+  if (loading) return <LeadDetailSkeleton />;
 
   if (!capture) {
     return (
-      <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-10 text-center">
-        <p className="text-sm text-text-300">This capture no longer exists.</p>
-        <button
-          type="button"
-          onClick={() => router.push('/dashboard/captures')}
-          className="mt-4 text-sm font-semibold text-brand-main"
-        >
+      <div className="mx-auto max-w-[1120px] rounded-xl border border-slate-200 bg-white p-10 text-center">
+        <p className="text-sm text-slate-500">This capture no longer exists.</p>
+        <button type="button" onClick={() => router.push('/dashboard/captures')} className="mt-4 text-sm font-semibold text-violet-700">
           Back to captures
         </button>
       </div>
     );
   }
 
-  const badge = CAPTURE_STATUS_STYLE[capture.status];
-  const authorMissing = capture.error === 'author_unresolved';
+  const authorMissing = capture.error === 'author_unresolved' || capture.deadLead;
 
   return (
-    <div className="mx-auto max-w-6xl animate-fade-in space-y-6 text-text">
-      <Link
-        href="/dashboard/captures"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-text-300 transition hover:text-brand-main"
-      >
-        <IconArrowLeft size={15} />
-        Captures
-      </Link>
-
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe,transparent_35%),linear-gradient(135deg,#ffffff,#f8fafc)] p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 items-start gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-linear-to-br from-[#0A66C2] to-blue-500 text-2xl font-black text-white shadow-lg">
-              {(capture.personName ?? '?').charAt(0).toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-brand-main">
-                {capture.type === 'post'
-                  ? 'LinkedIn post'
-                  : isFromPostComment(capture)
-                    ? 'From post comment'
-                    : 'LinkedIn profile'}
-              </p>
-              <h1 className="mt-0.5 text-2xl font-bold tracking-tight text-slate-950">
-                {capture.personName ?? 'Unknown person'}
-              </h1>
-              {capture.headline ? (
-                <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
-                  {capture.headline}
-                </p>
-              ) : null}
-              {isFromPostComment(capture) && commentSnippet(capture) ? (
-                <p className="mt-2 max-w-2xl rounded-xl border border-sky-100 bg-sky-50/80 px-3 py-2 text-sm leading-6 text-slate-700">
-                  <span className="font-semibold text-sky-800">Their comment: </span>
-                  {commentSnippet(capture)}
-                </p>
-              ) : null}
-              {isFromPostComment(capture) &&
-              typeof capture.sourceContext?.sourcePostUrl === 'string' ? (
-                <p className="mt-2 text-xs text-slate-500">
-                  Scraped from{' '}
-                  {typeof capture.sourceContext.sourcePostAuthor === 'string'
-                    ? `${capture.sourceContext.sourcePostAuthor}'s `
-                    : ''}
-                  post ·{' '}
-                  <a
-                    href={capture.sourceContext.sourcePostUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-brand-main hover:underline"
-                  >
-                    Open source post
-                  </a>
-                </p>
-              ) : null}
-              <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                <span
-                  className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold ${badge.className}`}
-                >
-                  {authorMissing ? 'Needs profile' : badge.label}
-                </span>
-                {isFromPostComment(capture) ? (
-                  <span className="inline-flex rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700">
-                    From comments
-                  </span>
-                ) : null}
-                {capture.location ? (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                    <IconMapPin size={11} />
-                    {capture.location}
-                  </span>
-                ) : null}
-                <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600">
-                  Saved {formatCapturedAt(capture.capturedAt)}
-                </span>
-                {capture.personProfileUrl ? (
-                  <LinkedInLink url={capture.personProfileUrl} compact />
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {capture.leadId ? (
-              <Link
-                href={`/dashboard/leads/${capture.leadId}`}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
-              >
-                Open lead
-                <IconArrowRight size={15} />
-              </Link>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => void addToCrm()}
-              disabled={addingCrm || authorMissing}
-              title="Create or update the CRM lead without starting enrichment"
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:opacity-50"
-            >
-              {addingCrm ? 'Adding…' : capture.leadId ? 'Update in CRM' : 'Add to CRM'}
-            </button>
-            <button
-              type="button"
-              onClick={() => void enrich()}
-              disabled={enriching || capture.status === 'enriching' || authorMissing}
-              title="Scrape company details and start enrichment"
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-main px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-main/80 disabled:opacity-50"
-            >
-              <IconSparkles size={15} />
-              {capture.status === 'enriching'
-                ? 'Enriching…'
-                : capture.status === 'enriched'
-                  ? 'Enriched'
-                  : 'Enrich'}
-            </button>
-          </div>
+    <div className="mx-auto w-full max-w-[1120px] space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Link href="/dashboard/captures" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-violet-700">
+          <IconArrowLeft size={15} />
+          Captures
+        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void addToCrm()}
+            disabled={addingCrm || authorMissing}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 disabled:opacity-50"
+          >
+            {addingCrm ? 'Adding…' : capture.leadId ? 'Update in CRM' : 'Add to CRM'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void enrich()}
+            disabled={enriching || capture.status === 'enriching' || authorMissing}
+            className="inline-flex items-center gap-2 rounded-lg bg-violet-700 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            <IconSparkles size={15} />
+            {capture.status === 'enriching' ? 'Enriching…' : 'Enrich'}
+          </button>
         </div>
       </div>
 
-      {authorMissing ? (
-        <div className="flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <IconAlertTriangle size={17} className="mt-px shrink-0 text-amber-600" />
-          <p className="text-sm leading-6 text-amber-900">
-            LeadHub could not read the author&apos;s profile from this post. Paste their LinkedIn
-            profile url below and save to continue.
-          </p>
-        </div>
+      <CaptureSourceCard capture={capture} />
+
+      {capture.deadLead || authorMissing ? (
+        <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">Dead lead.</p>
       ) : null}
 
-      <TargetProfileInsights
-        data={{
-          leadId: capture.leadId,
-          personName: capture.personName,
-          role: capture.positionTitle ?? capture.headline,
-          companyName: capture.companyResolution?.name ?? capture.companyName,
-          personLinkedinUrl: capture.personProfileUrl,
-          captureReason: capture.type === 'post' ? 'linkedin_post' : 'linkedin_profile',
-          enrichmentStatus: leadInsights?.enrichmentStatus ?? capture.leadEnrichmentStatus,
-          productFit: leadInsights?.productFit,
-          personSummary: leadInsights?.personSummary,
-          outreachAngle: leadInsights?.outreachAngle,
-          suggestedCta: leadInsights?.suggestedCta,
-          connectionDegree: (capture.personSnapshot as { connectionDegree?: string } | null)
-            ?.connectionDegree,
-        }}
-      />
-
-      {!capture.leadId ? (
-        <p className="rounded-xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-xs leading-5 text-text-300">
-          This target is not in LeadHub CRM yet. Add to CRM creates the lead only. Use Enrich when
-          you want LinkedIn/company scraping and the research agent to run.
+      {capture.leadId && leadPage.loading ? <LeadDetailSkeleton /> : null}
+      {capture.leadId && leadPage.lead ? (
+        <LeadDetailView page={{ ...leadPage, lead: leadPage.lead }} initialTab="overview" />
+      ) : null}
+      {!capture.leadId && !authorMissing ? (
+        <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+          Add this profile to CRM to open the same lead view here, including the outreach sequence.
         </p>
       ) : null}
-
-      {/* ── Company resolution ─────────────────────────────────── */}
-      <CompanyResolutionCard
-        resolution={capture.companyResolution}
-        gaps={null}
-        resolving={resolving}
-        onResolve={() => void resolve()}
-      />
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
-          {/* ── Corrections ──────────────────────────────────── */}
-          <section className="space-y-3 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <h2 className="text-sm font-semibold text-text-100">Correct the source</h2>
-              <p className="mt-1 text-xs leading-5 text-text-300">
-                Read from the profile, or parsed from the headline on post captures. Fixing the
-                company url here is the fastest way to resolve a stubborn capture.
-              </p>
-            </div>
-            <LabelledInput
-              label="Position title"
-              value={positionTitle}
-              onChange={setPositionTitle}
-              placeholder="VP of Sales"
-            />
-            <LabelledInput
-              label="Company name"
-              value={companyName}
-              onChange={setCompanyName}
-              placeholder="Acme Inc"
-            />
-            <LabelledInput
-              label="Company LinkedIn url"
-              value={companyProfileUrl}
-              onChange={setCompanyProfileUrl}
-              placeholder="https://www.linkedin.com/company/..."
-            />
-            <LabelledInput
-              label="Person LinkedIn url"
-              value={personProfileUrl}
-              onChange={setPersonProfileUrl}
-              placeholder="https://www.linkedin.com/in/..."
-            />
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => void saveCorrections()}
-                disabled={saving}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
-              >
-                <IconDeviceFloppy size={14} />
-                {saving ? 'Saving…' : 'Save changes'}
-              </button>
-              <span className="text-[11px] text-text-300">
-                Saving a company change clears the current resolution.
-              </span>
-            </div>
-          </section>
-
-          {/* The same profile panel the lead page uses, so a capture and the
-              lead it becomes show the person identically. */}
-          <PersonLinkedInPanel
-            person={snapshot?.person}
-            fromCapture={snapshot?.personFromCapture}
-          />
-        </div>
-
-        <div className="space-y-6">
-          <CompanyLinkedInPanel company={snapshot?.company} colleagues={snapshot?.colleagues} />
-
-          {capture.type === 'post' ? (
-            <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-text-100">Captured post</h2>
-                <a
-                  href={capture.url}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="text-xs font-semibold text-brand-main hover:underline"
-                >
-                  Open on LinkedIn
-                </a>
-              </div>
-              {capture.postPublishedAt ? (
-                <p className="mt-1 text-xs text-text-300">Posted {capture.postPublishedAt}</p>
-              ) : null}
-              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-text-200">
-                {capture.postText || 'No post text was captured.'}
-              </p>
-              {capture.postMetrics &&
-              (capture.postMetrics.reactions ||
-                capture.postMetrics.comments ||
-                capture.postMetrics.reposts) ? (
-                <div className="mt-4 flex gap-4 border-t border-slate-100 pt-3 text-xs text-text-300">
-                  <Metric
-                    icon={<IconHeart size={13} />}
-                    value={capture.postMetrics.reactions ?? 0}
-                    label="reactions"
-                  />
-                  <Metric
-                    icon={<IconMessageCircle size={13} />}
-                    value={capture.postMetrics.comments ?? 0}
-                    label="comments"
-                  />
-                  <Metric
-                    icon={<IconRepeat size={13} />}
-                    value={capture.postMetrics.reposts ?? 0}
-                    label="reposts"
-                  />
-                </div>
-              ) : null}
-              {capture.postMedia?.length ? (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                  {capture.postMedia.map((media, index) => (
-                    <span
-                      key={`${media.url ?? media.type}-${index}`}
-                      className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600"
-                    >
-                      {media.type}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          ) : null}
-
-          <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-text-100">Enrichment</h2>
-            <p className="mt-2 text-sm leading-6 text-text-200">
-              {capture.status === 'enriched' && capture.leadId ? (
-                <>
-                  LeadHub finished enriching this person.{' '}
-                  <Link
-                    href={`/dashboard/leads/${capture.leadId}`}
-                    className="font-semibold text-brand-main hover:underline"
-                  >
-                    Open the lead
-                  </Link>{' '}
-                  to see contacts and research.
-                </>
-              ) : capture.status === 'enriching' ? (
-                'Enrichment is running. This page refreshes on its own.'
-              ) : capture.status === 'failed' ? (
-                <span className="text-red-700">{capture.error ?? 'Enrichment failed.'}</span>
-              ) : (
-                'Not enriched yet. Enrich this target once to research the person and their company.'
-              )}
-            </p>
-
-            {capture.note ? (
-              <div className="mt-4 border-t border-slate-100 pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-wide text-text-300">
-                  Note
-                </p>
-                <p className="mt-1 text-sm text-text-200">{capture.note}</p>
-              </div>
-            ) : null}
-          </section>
-        </div>
-      </div>
     </div>
-  );
-}
-
-function LabelledInput({
-  label,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label: string;
-  value: string;
-  onChange: (next: string) => void;
-  placeholder?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-text-300">
-        {label}
-      </span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="mt-1 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-brand-main focus:outline-none"
-      />
-    </label>
-  );
-}
-
-function Metric({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: number;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      {icon}
-      <span className="font-semibold text-text-200 tabular-nums">{value}</span>
-      {label}
-    </span>
   );
 }

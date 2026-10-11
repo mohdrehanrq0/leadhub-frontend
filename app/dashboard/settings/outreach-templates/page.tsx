@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   IconCheck,
@@ -285,6 +285,9 @@ export default function OutreachTemplatesPage() {
   const [draftConfig, setDraftConfig] = useState<TemplateConfig>(defaultCustomConfig());
   const [showPreview, setShowPreview] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(true);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [importChoices, setImportChoices] = useState<Array<{ key: string; name: string; templateType?: string; picked: boolean; raw: Record<string, unknown> }>>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(
     () => templates.find((t) => t.id === selectedId) ?? null,
@@ -303,6 +306,7 @@ export default function OutreachTemplatesPage() {
       const res = await api.get('/api/outreach/templates');
       const rows = (res.data.data ?? []) as TemplateRow[];
       setTemplates(rows);
+      setCheckedIds(rows.map((row) => row.id));
       if (!selectedId && rows[0]) {
         setSelectedId(rows[0].id);
         setDraftName(rows[0].name);
@@ -435,6 +439,94 @@ export default function OutreachTemplatesPage() {
     }
   };
 
+  const checkedTemplates = templates.filter((t) => checkedIds.includes(t.id));
+
+  const exportTemplates = () => {
+    if (!checkedTemplates.length) {
+      toast.error('Check the templates to export.');
+      return;
+    }
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      templates: checkedTemplates.map((t) => ({
+        name: t.name,
+        description: t.description ?? null,
+        objective: t.objective,
+        templateType: t.templateType,
+        isSystem: t.isSystem,
+        config: t.latestVersion?.config ?? null,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'outreach-templates.json';
+    link.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${checkedTemplates.length} template${checkedTemplates.length === 1 ? '' : 's'}.`);
+  };
+
+  const openImportFile = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as { templates?: unknown[] } | unknown[];
+      const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed.templates) ? parsed.templates : null;
+      if (!rows?.length) {
+        toast.error('That file has no templates.');
+        return;
+      }
+      setImportChoices(
+        rows
+          .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
+          .map((row, index) => ({
+            key: `${index}-${String(row.name ?? 'template')}`,
+            name: String(row.name ?? 'Untitled'),
+            templateType: typeof row.templateType === 'string' ? row.templateType : undefined,
+            picked: false,
+            raw: row,
+          })),
+      );
+    } catch {
+      toast.error('That file is not an outreach template export.');
+    }
+  };
+
+  const importPicked = async () => {
+    const templates = importChoices.filter((row) => row.picked).map((row) => row.raw);
+    if (!templates.length) {
+      toast.error('Check the templates to import.');
+      return;
+    }
+    try {
+      const res = await api.post('/api/outreach/templates/import', { mode: 'replace', templates });
+      const data = res.data.data as { created: string[]; updated: string[] };
+      toast.success(`Imported ${data.created.length} new, updated ${data.updated.length}.`);
+      setImportChoices([]);
+      await load();
+    } catch {
+      toast.error('Could not import the templates you checked.');
+    }
+  };
+
+  const deleteChecked = async () => {
+    const ids = checkedIds.filter((id) => templates.some((t) => t.id === id && !t.isSystem));
+    if (!ids.length) {
+      toast.error('Select custom templates to delete. Built-in templates stay.');
+      return;
+    }
+    if (!confirm(`Delete ${ids.length} custom template${ids.length === 1 ? '' : 's'}?`)) return;
+    try {
+      await api.post('/api/outreach/templates/bulk-delete', { ids });
+      toast.success('Custom templates deleted.');
+      setCheckedIds([]);
+      setSelectedId(null);
+      await load();
+    } catch {
+      toast.error('Could not delete those templates.');
+    }
+  };
+
   const runTest = async () => {
     if (!selectedId && !creating) {
       toast.error('Select a template first.');
@@ -488,9 +580,7 @@ export default function OutreachTemplatesPage() {
       <div className="mb-4">
         <h1 className="text-xl font-bold text-slate-900">Outreach Templates</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Each template is a signal-specific email recipe. Enrichment discovers facts, then the
-          Outreach Engine picks the best-fit template and writes a full personalized email. Create
-          custom templates or use the 12 built-in system recipes.
+          Check the templates you want. Export, import, and delete use that selection. Built-in templates can be exported and copied. Only custom templates can be deleted.
         </p>
       </div>
 
@@ -498,10 +588,42 @@ export default function OutreachTemplatesPage() {
         {/* Sidebar */}
         <aside className="w-full shrink-0 xl:w-72">
           <SettingsCard title="Templates" description="System + workspace custom recipes.">
-            <div className="mb-3">
+            <div className="mb-3 space-y-2">
               <button type="button" className={settingsBtnPrimary} onClick={startCreate}>
                 <IconPlus className="mr-1.5 h-4 w-4" /> Custom template
               </button>
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={templates.length > 0 && checkedIds.length === templates.length}
+                  onChange={() =>
+                    setCheckedIds((prev) => (prev.length === templates.length ? [] : templates.map((t) => t.id)))
+                  }
+                />
+                Select all
+              </label>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-slate-600">
+                <button type="button" className="underline" onClick={exportTemplates}>
+                  Export
+                </button>
+                <button type="button" className="underline" onClick={() => fileRef.current?.click()}>
+                  Import
+                </button>
+                <button type="button" className="underline" onClick={() => void deleteChecked()}>
+                  Delete
+                </button>
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (file) void openImportFile(file);
+                }}
+              />
             </div>
             <div className="max-h-[70vh] space-y-1.5 overflow-y-auto">
               {templates.map((t) => (
@@ -516,7 +638,19 @@ export default function OutreachTemplatesPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm font-bold text-slate-900">{t.name}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checkedIds.includes(t.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={() =>
+                          setCheckedIds((prev) =>
+                            prev.includes(t.id) ? prev.filter((id) => id !== t.id) : [...prev, t.id],
+                          )
+                        }
+                      />
+                      <span className="truncate text-sm font-bold text-slate-900">{t.name}</span>
+                    </span>
                     {t.isSystem ? (
                       <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                         System
@@ -1033,6 +1167,57 @@ export default function OutreachTemplatesPage() {
           </SettingsCard>
         </div>
       </div>
+      {importChoices.length > 0 ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="flex max-h-[80vh] w-full max-w-md flex-col rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-950">Choose templates to import</h3>
+            <p className="mt-1 text-sm text-slate-600">Only the ones you leave checked are imported.</p>
+            <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
+              <input
+                type="checkbox"
+                checked={importChoices.every((row) => row.picked)}
+                onChange={() => {
+                  const allOn = importChoices.every((row) => row.picked);
+                  setImportChoices((prev) => prev.map((row) => ({ ...row, picked: !allOn })));
+                }}
+              />
+              Select all
+            </label>
+            <div className="mt-2 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
+              {importChoices.map((row) => (
+                <label key={row.key} className="flex items-start gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    checked={row.picked}
+                    onChange={() =>
+                      setImportChoices((prev) =>
+                        prev.map((item) => (item.key === row.key ? { ...item, picked: !item.picked } : item)),
+                      )
+                    }
+                  />
+                  <span>
+                    <span className="font-semibold text-slate-900">{row.name}</span>
+                    {row.templateType ? (
+                      <span className="mt-0.5 block text-[11px] capitalize text-slate-500">
+                        {row.templateType.replace(/_/g, ' ')}
+                      </span>
+                    ) : null}
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className={settingsBtnSecondary} onClick={() => setImportChoices([])}>
+                Cancel
+              </button>
+              <button type="button" className={settingsBtnPrimary} onClick={() => void importPicked()}>
+                Import checked
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </SettingsPanel>
   );
 }

@@ -1,5 +1,5 @@
 /**
- * Column-level filter definitions for the Lead CRM grid.
+ * Column-level filter definitions for the Lead grid.
  * Filters map to server query params via LeadQueryFilters.
  */
 
@@ -15,34 +15,34 @@ export const COLUMN_FILTER_CONFIG: Record<
   { label: string; allLabel: string; options: ColumnFilterOption[] }
 > = {
   emailVerificationStatus: {
-    label: 'Verify',
-    allLabel: 'All verification',
+    label: 'Email',
+    allLabel: 'All emails',
     options: [
-      { value: 'valid', label: 'Valid email' },
-      { value: 'invalid', label: 'Invalid' },
+      { value: 'valid', label: 'Verified ✓' },
+      { value: 'invalid', label: 'Invalid ✕' },
       { value: 'catch_all', label: 'Catch-all' },
       { value: 'disposable', label: 'Disposable' },
-      { value: 'unknown', label: 'Unknown / unverified' },
+      { value: 'unknown', label: 'Not verified' },
     ],
   },
   enrichmentStatus: {
-    label: 'Enrichment',
-    allLabel: 'All enrichment',
+    label: 'Research',
+    allLabel: 'All research status',
     options: [
-      { value: 'completed', label: 'Fully enriched' },
-      { value: 'partial', label: 'Mission incomplete' },
-      { value: 'in_progress', label: 'Enriching…' },
+      { value: 'completed', label: 'Complete' },
+      { value: 'partial', label: 'Partial data' },
+      { value: 'in_progress', label: 'In progress' },
       { value: 'failed', label: 'Failed' },
-      { value: 'not_started', label: 'Not enriched' },
+      { value: 'not_started', label: 'Not started' },
     ],
   },
   priority: {
     label: 'Priority',
-    allLabel: 'All priority',
+    allLabel: 'All priorities',
     options: [
-      { value: 'hot', label: 'Hot' },
-      { value: 'warm', label: 'Warm' },
-      { value: 'cold', label: 'Cold' },
+      { value: 'hot', label: '🔥 Hot' },
+      { value: 'warm', label: '☀️ Warm' },
+      { value: 'cold', label: '❄️ Cold' },
       { value: 'unknown', label: 'Unknown' },
     ],
   },

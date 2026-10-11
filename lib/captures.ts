@@ -90,7 +90,7 @@ export interface CaptureCompanyProfile {
 
 /** Employer resolved from the captured LinkedIn profile or post. */
 export interface CaptureCompanyResolution {
-  status: 'resolved' | 'partial' | 'unresolved';
+  status: 'resolved' | 'partial' | 'unresolved' | 'person_only';
   source: 'linkedin_company' | 'capture_dom' | 'headline' | 'manual' | null;
   resolvedAt: string;
   message: string;
@@ -164,15 +164,76 @@ export interface CaptureListRow {
   leadEnrichmentStatus: string | null;
 }
 
+export interface CaptureOutreachStep {
+  id: string;
+  stepNumber: number;
+  subject: string | null;
+  body: string | null;
+  deliveryStatus: string | null;
+}
+
 export interface CaptureDetail extends CaptureListRow {
   personSnapshot: CapturedPerson | null;
   postPublishedAt: string | null;
   postMedia: Array<{ type: string; url?: string; alt?: string }> | null;
   postMetrics: { reactions?: number; comments?: number; reposts?: number } | null;
   enrichmentJobId: string | null;
+  outreachSequence?: CaptureOutreachStep[];
+  deadLead?: boolean;
 }
 
 /** True when this capture was scraped from a LinkedIn post comment. */
+const NAME_BADGE =
+  /\b(?:premium\s+profile|premium|verified|following|follow|author|1st|2nd|3rd)\+?/gi;
+
+function collapseRepeatedName(value: string): string {
+  const parts = value.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2 && parts.length % 2 === 0) {
+    const mid = parts.length / 2;
+    const left = parts.slice(0, mid).join(' ');
+    const right = parts.slice(mid).join(' ');
+    if (left.toLowerCase() === right.toLowerCase()) return left;
+  }
+  return value;
+}
+
+/** Already-saved comment rows stored the LinkedIn badge next to the name. */
+export function displayPersonName(raw?: string | null): string | null {
+  if (!raw?.trim()) return null;
+  const segments = raw
+    .split(/[·•|,]/)
+    .map((part) =>
+      part
+        .replace(NAME_BADGE, ' ')
+        .replace(/[^\p{L}\p{M}\s.'-]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    )
+    .filter((part) => part.length > 1);
+  const name = segments[0];
+  return name ? collapseRepeatedName(name) : null;
+}
+
+/** Hide a comment-row badge or a second copy of the person's name. Keep a real tagline. */
+export function displayHeadline(raw?: string | null, personName?: string | null): string | null {
+  if (!raw?.trim()) return null;
+  const stripped = collapseRepeatedName(
+    raw.replace(NAME_BADGE, ' ').replace(/[·•|,]+/g, ' ').replace(/\s+/g, ' ').trim(),
+  );
+  if (!stripped || stripped.length < 2) return null;
+  if (personName && stripped.toLowerCase() === personName.toLowerCase()) return null;
+  return stripped;
+}
+
+/** Role line under the name. Skip it when it is just the name again. */
+export function displayRole(
+  position?: string | null,
+  headline?: string | null,
+  personName?: string | null,
+): string | null {
+  return displayHeadline(position, personName) ?? displayHeadline(headline, personName);
+}
+
 export function isFromPostComment(row: {
   sourceContext?: Record<string, unknown> | null;
 }): boolean {
@@ -250,10 +311,21 @@ export const RESOLUTION_STYLE: Record<
     className: 'border-amber-200 bg-amber-50 text-amber-800',
   },
   unresolved: {
-    label: 'Company not found',
-    className: 'border-red-200 bg-red-50 text-red-700',
+    label: 'Company details limited',
+    className: 'border-slate-200 bg-slate-50 text-slate-600',
+  },
+  person_only: {
+    label: 'No company',
+    className: 'border-slate-200 bg-slate-50 text-slate-600',
   },
 };
+
+export function resolutionBadge(status: string | null | undefined) {
+  if (status && status in RESOLUTION_STYLE) {
+    return RESOLUTION_STYLE[status as CaptureCompanyResolution['status']];
+  }
+  return RESOLUTION_STYLE.unresolved;
+}
 
 export const GAP_SEVERITY_STYLE: Record<
   CaptureDataGap['severity'],

@@ -17,6 +17,7 @@ import {
   IconKey,
   IconCopyOff,
   IconPlus,
+  IconTrash,
   IconX,
   IconCoin,
 } from '@tabler/icons-react';
@@ -35,6 +36,7 @@ import {
   stageMeta,
 } from '../../../components/leads/types';
 import { AddLeadModal } from '../../../components/leads/AddLeadModal';
+import { DeleteLeadsDialog, type DeleteLeadsRequest } from '../../../components/leads/DeleteLeadsDialog';
 import { LeadsToolbar } from '../../../components/leads/LeadsToolbar';
 import { EnrichmentAgentPicker, type EnrichmentAgentSummary } from '../../../components/leads/EnrichmentAgentPicker';
 import { CrmCommandCenter } from '../../../components/leads/CrmCommandCenter';
@@ -74,7 +76,7 @@ export default function LeadsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [reEnriching, setReEnriching] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const [deleteRequest, setDeleteRequest] = useState<DeleteLeadsRequest | null>(null);
   const [exporting, setExporting] = useState(false);
   const [hasLlmKey, setHasLlmKey] = useState<boolean | null>(null);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
@@ -597,28 +599,13 @@ export default function LeadsPage() {
     }
   };
 
-  const handleDelete = async () => {
-    const leadIds = Array.from(selected);
-    if (leadIds.length === 0) return;
-    const ok = window.confirm(`Delete ${leadIds.length.toLocaleString()} lead(s)? This cannot be undone.`);
-    if (!ok) return;
-
-    try {
-      setDeleting(true);
-      let deleted = 0;
-      for (const chunk of chunkIds(leadIds, BULK_CHUNK)) {
-        const res = await api.delete('/api/leads/bulk', { data: { leadIds: chunk } });
-        deleted += res.data.data?.deleted ?? chunk.length;
-      }
-      toast.success(`Deleted ${deleted.toLocaleString()} lead(s).`);
-      setSelected(new Set());
-      setMatchAll(false);
-      await refreshLeads();
-    } catch (err) {
-      toast.error(errorMessage(err, 'Bulk delete failed.'));
-    } finally {
-      setDeleting(false);
-    }
+  const openDelete = (leadIds: string[], leadLabel?: string) => {
+    setDeleteRequest({
+      leadIds,
+      leadLabel,
+      listId,
+      categoryId,
+    });
   };
 
   const handleExport = async (format: 'csv' | 'xlsx') => {
@@ -726,9 +713,9 @@ export default function LeadsPage() {
   return (
     <div className="mx-auto max-w-7xl animate-fade-in space-y-4 text-text">
       <PageHeader
-        eyebrow="Lead CRM"
-        title="Leads"
-        description="Import, qualify, enrich, and move contacts through the pipeline."
+        eyebrow="Lead Management"
+        title="All Leads"
+        description="Your complete lead database. Import contacts, run AI research, and track them through your sales pipeline."
         actions={
           <>
             {creditBalance !== null && (
@@ -766,7 +753,7 @@ export default function LeadsPage() {
               <IconCopyOff size={16} /> Clean duplicates
             </button>
             <Link href="/dashboard/leads/import" className={btnOutline}>
-              <IconUpload size={16} /> Import CSV
+              <IconUpload size={16} /> Import CSV / Excel
             </Link>
             {/* <Link href="/dashboard/leads/sync" className={btnOutline}>
               <IconRefresh size={16} /> Apify sync
@@ -774,6 +761,9 @@ export default function LeadsPage() {
             <Link href="/dashboard/leads/lists" className={btnOutline}>
               <IconListDetails size={16} /> Lists
             </Link>
+            <button type="button" onClick={() => openDelete(Array.from(selected))} className={btnOutline}>
+              <IconTrash size={16} /> Delete
+            </button>
           </>
         }
       />
@@ -826,12 +816,12 @@ export default function LeadsPage() {
         matchAll={matchAll}
         enriching={enriching}
         reEnriching={reEnriching}
-        deleting={deleting}
+        deleting={false}
         exporting={exporting}
         creditBalance={creditBalance}
         onEnrich={handleEnrich}
         onReEnrich={handleReEnrich}
-        onDelete={() => void handleDelete()}
+        onDelete={() => openDelete(Array.from(selected))}
         onExportCsv={() => void handleExport('csv')}
         onExportXlsx={() => void handleExport('xlsx')}
         bulkStage={bulkStage}
@@ -867,8 +857,8 @@ export default function LeadsPage() {
           </div>
         ) : leads.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
-            <p className="text-sm font-bold text-slate-700">No leads match this view.</p>
-            <p className="mt-1 text-xs text-slate-500">Add a lead, import CSV, or adjust your filters.</p>
+            <p className="text-sm font-bold text-slate-700">No leads found</p>
+            <p className="mt-1 text-xs text-slate-500">Add a lead manually, import from CSV, or try different filters.</p>
           </div>
         ) : (
           <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
@@ -1001,12 +991,21 @@ export default function LeadsPage() {
                           </div>
                           <div className="mt-3 flex items-center justify-between gap-2 text-[11px] text-slate-500">
                             <span className="truncate">{lead.company?.domain || lead.contact?.email || 'No domain'}</span>
-                            <Link
-                              href={`/dashboard/leads/${lead.id}`}
-                              className="inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-white shadow-sm transition hover:bg-blue-700"
-                            >
-                              Case <IconEye size={11} />
-                            </Link>
+                            <span className="inline-flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => openDelete([lead.id], leadName(lead))}
+                                className="inline-flex items-center gap-1 rounded-full border border-rose-200 px-2 py-1 text-[10px] font-black text-rose-700 hover:bg-rose-50"
+                              >
+                                <IconTrash size={11} /> Delete
+                              </button>
+                              <Link
+                                href={`/dashboard/leads/${lead.id}`}
+                                className="inline-flex items-center gap-1 rounded-full bg-slate-950 px-2.5 py-1 text-[10px] font-black text-white shadow-sm transition hover:bg-blue-700"
+                              >
+                                Case <IconEye size={11} />
+                              </Link>
+                            </span>
                           </div>
                         </article>
                       ))}
@@ -1038,6 +1037,7 @@ export default function LeadsPage() {
           onLoadMore={loadMore}
           onPatchLead={(id, payload) => void patchLead(id, payload)}
           onEnrichLead={handleEnrichSingle}
+          onDeleteLead={(lead) => openDelete([lead.id], leadName(lead))}
           enriching={enriching || reEnriching}
           columnLayout={columnLayout}
           onColumnLayoutChange={handleColumnLayoutChange}
@@ -1049,6 +1049,19 @@ export default function LeadsPage() {
           onColumnFilterChange={handleColumnFilterChange}
         />
       )}
+
+      <DeleteLeadsDialog
+        open={deleteRequest !== null}
+        request={deleteRequest}
+        lists={lists}
+        categories={categories}
+        onClose={() => setDeleteRequest(null)}
+        onDeleted={async () => {
+          setSelected(new Set());
+          setMatchAll(false);
+          await refreshLeads();
+        }}
+      />
 
       <AddLeadModal
         open={showAddLeadModal}

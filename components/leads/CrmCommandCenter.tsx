@@ -45,16 +45,16 @@ export function CrmCommandCenter({
   const needsResearch = Math.max(0, leads.length - completed - researching);
 
   const metrics = [
-    { label: 'Pipeline records', value: totalCount.toLocaleString(), detail: `${leads.length.toLocaleString()} loaded`, icon: IconUsers, tone: 'text-blue-700 bg-blue-50/70 border-blue-100 hover:border-blue-200' },
-    { label: 'Needs research', value: needsResearch.toLocaleString(), detail: 'in current view', icon: IconSparkles, tone: 'text-violet-700 bg-violet-50/70 border-violet-100 hover:border-violet-200' },
-    { label: 'Researching now', value: researching.toLocaleString(), detail: 'active jobs', icon: IconClock, tone: 'text-amber-700 bg-amber-50/70 border-amber-100 hover:border-amber-200' },
-    { label: 'Intelligence ready', value: completed.toLocaleString(), detail: 'ready for outreach', icon: IconCircleCheck, tone: 'text-emerald-700 bg-emerald-50/70 border-emerald-100 hover:border-emerald-200' },
+    { label: 'Total leads', value: totalCount.toLocaleString(), detail: `${leads.length.toLocaleString()} loaded`, icon: IconUsers, tone: 'text-blue-700 bg-blue-50/70 border-blue-100 hover:border-blue-200' },
+    { label: 'Not researched', value: needsResearch.toLocaleString(), detail: 'ready to analyze', icon: IconSparkles, tone: 'text-violet-700 bg-violet-50/70 border-violet-100 hover:border-violet-200' },
+    { label: 'In progress', value: researching.toLocaleString(), detail: 'being analyzed', icon: IconClock, tone: 'text-amber-700 bg-amber-50/70 border-amber-100 hover:border-amber-200' },
+    { label: 'Research complete', value: completed.toLocaleString(), detail: 'ready to contact', icon: IconCircleCheck, tone: 'text-emerald-700 bg-emerald-50/70 border-emerald-100 hover:border-emerald-200' },
   ];
 
   const agentMissionText = useMemo(() => {
-    if (!currentAgent) return 'Select an agent to preview research scope.';
+    if (!currentAgent) return 'Choose an AI agent to analyze your leads.';
     const mission = (currentAgent.mission || currentAgent.config?.mission || currentAgent.description || '').trim();
-    return mission || 'Researches company, intent signals, and prepares outreach.';
+    return mission || 'Gathers company info, buying signals, and drafts personalized outreach.';
   }, [currentAgent]);
 
   const activeModuleLabels = useMemo(() => {
@@ -76,20 +76,20 @@ export function CrmCommandCenter({
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
       <div className="grid divide-y divide-slate-100 lg:grid-cols-[minmax(0,1.35fr)_minmax(340px,0.9fr)] lg:divide-x lg:divide-y-0">
-        {/* Left: Pipeline Cockpit */}
+        {/* Left: Sales Pipeline */}
         <div className="flex flex-col justify-between p-3 sm:p-3.5">
           <div>
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">Pipeline cockpit</p>
-                <h2 className="text-xs font-bold text-slate-900 leading-tight">Move accounts forward</h2>
+                <p className="text-[10px] font-black uppercase tracking-[0.14em] text-blue-600">Sales Pipeline</p>
+                <h2 className="text-xs font-bold text-slate-900 leading-tight">Track your leads</h2>
               </div>
               <button
                 type="button"
                 onClick={() => onStageChange('all')}
                 className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-blue-700 transition"
               >
-                All stages ({totalCount.toLocaleString()}) <IconArrowRight size={12} />
+                View all ({totalCount.toLocaleString()}) <IconArrowRight size={12} />
               </button>
             </div>
 
@@ -143,7 +143,7 @@ export function CrmCommandCenter({
           </div>
         </div>
 
-        {/* Right: Enrichment Workspace */}
+        {/* Right: AI Research */}
         <div className="flex flex-col justify-between bg-gradient-to-br from-violet-50/70 via-white to-blue-50/30 p-3 sm:p-3.5">
           <div>
             <div className="flex items-center justify-between gap-2">
@@ -152,15 +152,15 @@ export function CrmCommandCenter({
                   <IconRobot size={14} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">Enrichment workspace</p>
-                  <h2 className="text-xs font-bold text-slate-900 leading-tight">Agent intelligence</h2>
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-violet-600">AI Research</p>
+                  <h2 className="text-xs font-bold text-slate-900 leading-tight">Analyze your leads</h2>
                 </div>
               </div>
               <Link
                 href="/dashboard/settings/enrichment-agents"
                 className="inline-flex items-center gap-0.5 text-[11px] font-bold text-violet-700 hover:text-violet-900 transition"
               >
-                Configure <IconArrowRight size={12} />
+                Settings <IconArrowRight size={12} />
               </Link>
             </div>
 

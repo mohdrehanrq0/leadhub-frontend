@@ -1,6 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { DeleteLeadsDialog } from '../DeleteLeadsDialog';
 import { EnrichmentAgentPicker } from '../EnrichmentAgentPicker';
 import { IdentityConfirmModal, type IdentityCandidate } from '../IdentityConfirmModal';
 import { pickLinkedInUrl } from '../LinkedInLink';
@@ -35,9 +38,17 @@ const TABS: Array<{ id: DetailTab; label: string }> = [
   { id: 'evidence', label: 'Evidence' },
 ];
 
-export function LeadDetailView({ page }: { page: LeadDetailController }) {
+export function LeadDetailView({
+  page,
+  initialTab = 'overview',
+}: {
+  page: LeadDetailController;
+  initialTab?: DetailTab;
+}) {
   const { lead } = page;
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [tab, setTab] = useState<DetailTab>(initialTab);
   const [searchesOpen, setSearchesOpen] = useState(false);
   const [pickedAgent, setPickedAgent] = useState<AgentRef>(lead.enrichmentAgent ?? null);
   const [showWebsite, setShowWebsite] = useState(false);
@@ -75,9 +86,15 @@ export function LeadDetailView({ page }: { page: LeadDetailController }) {
     page.aiIntelligence?.enrichmentProfile?.identity?.linkedin,
   );
   const name =
+    page.linkedinSnapshot?.person?.fullName ||
     [lead.contact?.firstName, lead.contact?.lastName].filter(Boolean).join(' ') ||
     emails[0]?.email ||
     'Unnamed';
+  const linkedInPerson = page.linkedinSnapshot?.person;
+  const linkedInCompany = page.linkedinSnapshot?.company;
+  const crmCompany = lead.company?.name ?? '';
+  const companyLabel =
+    linkedInCompany?.name || (crmCompany.includes('employer TBD') ? '' : crmCompany);
   const enrichmentStatus = lead.enrichmentStatus;
   const incomplete = enrichmentStatus === 'partial' || enrichmentStatus === 'failed';
   const draftSubject = page.draft?.subject ?? '';
@@ -96,8 +113,8 @@ export function LeadDetailView({ page }: { page: LeadDetailController }) {
       <LeadDetailHeader
         lead={lead}
         name={name}
-        title={lead.contact?.role ?? ''}
-        company={lead.company?.name ?? ''}
+        title={linkedInPerson?.headline || lead.contact?.role || ''}
+        company={companyLabel}
         email={emails[0] ?? null}
         personLinkedIn={personLinkedIn}
         companyLinkedIn={companyLinkedIn}
@@ -109,10 +126,25 @@ export function LeadDetailView({ page }: { page: LeadDetailController }) {
         reEnriching={page.reEnriching}
         canEnrich={page.canRunEnrich}
         enrichDisabled={page.enrichDisabled}
-        onDelete={() => void page.remove()}
-        deleting={page.deleting}
+        onDelete={() => {
+          if (lead.enrichmentStatus === 'in_progress') {
+            toast.error('Wait for enrichment to finish before deleting.');
+            return;
+          }
+          setDeleteOpen(true);
+        }}
+        deleting={deleteOpen}
         enriching={lead.enrichmentStatus === 'in_progress'}
         onFindEmail={() => void page.reEnrich()}
+      />
+
+      <DeleteLeadsDialog
+        open={deleteOpen}
+        request={{ leadIds: [lead.id], leadLabel: name }}
+        lists={page.lists}
+        categories={page.categories}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => router.push('/dashboard/leads')}
       />
 
       {incomplete || page.enrichBlock || page.identityHeadline ? (
@@ -212,8 +244,16 @@ export function LeadDetailView({ page }: { page: LeadDetailController }) {
                   />
                 }
               />
-              <PersonSnapshot {...person} />
-              <CompanySnapshot {...company} />
+              {linkedInPerson ? <ProfileTab person={linkedInPerson} /> : <PersonSnapshot {...person} />}
+              {linkedInCompany || company.industry || company.does || company.domain ? (
+                <CompanySnapshot {...company} />
+              ) : linkedInPerson ? (
+                <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                  No company profile was found. The LinkedIn profile above is saved.
+                </p>
+              ) : (
+                <CompanySnapshot {...company} />
+              )}
               <OutreachPreview
                 subject={draftSubject}
                 body={draftBody}

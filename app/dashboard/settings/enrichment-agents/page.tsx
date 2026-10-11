@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   IconAlertCircle,
@@ -91,6 +91,7 @@ export type IcpCriterionType =
   | 'geography'
   | 'business_model'
   | 'tech_stack'
+  | 'persona'
   | 'custom';
 
 export interface IcpCriterion {
@@ -227,6 +228,8 @@ export type Agent = {
   description?: string | null;
   mission?: string | null;
   isDefault: boolean;
+  outreachAgentId?: string | null;
+  outreachAgentName?: string | null;
   config: AgentConfig;
 };
 
@@ -416,6 +419,7 @@ const STANDARD_DEPARTMENTS = [
 ];
 
 const ICP_CRITERIA_TYPES: Array<{ id: IcpCriterionType; label: string }> = [
+  { id: 'persona', label: 'Persona / Role' },
   { id: 'industry', label: 'Industry' },
   { id: 'employee_count', label: 'Company Size' },
   { id: 'business_model', label: 'Business Model' },
@@ -424,6 +428,31 @@ const ICP_CRITERIA_TYPES: Array<{ id: IcpCriterionType; label: string }> = [
   { id: 'revenue', label: 'Revenue / Funding' },
   { id: 'custom', label: 'Custom Criterion' },
 ];
+
+type CoverageGap = { id: string; message: string; severity: 'info' | 'warn' };
+
+type CoverageData = {
+  whoWeScore: string[];
+  whatSignalsCount: string[];
+  gaps: CoverageGap[];
+  empty?: boolean;
+  factoryIcpIgnored?: boolean;
+};
+
+type CoverageSuggestionAction =
+  | 'add_person_target'
+  | 'add_icp_criterion'
+  | 'replace_factory_icp'
+  | 'add_hiring_keyword'
+  | 'add_role_hint';
+
+type CoverageSuggestion = {
+  id: string;
+  action: CoverageSuggestionAction;
+  title: string;
+  why: string;
+  payload: Record<string, unknown>;
+};
 
 const INTENT_SIGNAL_TYPES: Array<{ id: string; label: string; defaultWeight: number; desc: string }> = [
   { id: 'hiring', label: 'Hiring & Headcount Expansion', defaultWeight: 30, desc: 'Active job postings on careers page or job boards' },
@@ -1054,40 +1083,7 @@ function defaultIcpPolicy(): IcpPolicy {
   return {
     enabled: true,
     minScoreToPass: 60,
-    criteria: [
-      {
-        id: 'crit-b2b',
-        label: 'B2B Business Model',
-        type: 'business_model',
-        expectedValue: 'B2B / SaaS / Enterprise',
-        weight: 25,
-        isDisqualifier: false,
-      },
-      {
-        id: 'crit-size',
-        label: 'Target Company Size (50-500)',
-        type: 'employee_count',
-        expectedValue: '50-500',
-        weight: 25,
-        isDisqualifier: false,
-      },
-      {
-        id: 'crit-decision',
-        label: 'Decision Maker Reachable',
-        type: 'custom',
-        expectedValue: 'Founder / C-Level / VP found',
-        weight: 25,
-        isDisqualifier: false,
-      },
-      {
-        id: 'crit-tech',
-        label: 'Modern Tech Stack / Sales Tools',
-        type: 'tech_stack',
-        expectedValue: 'Salesforce, HubSpot, Apollo, or Cloud infrastructure',
-        weight: 25,
-        isDisqualifier: false,
-      },
-    ],
+    criteria: [],
   };
 }
 
@@ -1118,7 +1114,7 @@ function defaultOutreachPolicy(): OutreachPolicy {
     objective: 'start_conversation',
     style: 'consultative',
     ctaType: 'soft_interest',
-    sequenceCount: 1,
+    sequenceCount: 4,
     sequenceDays: [0, 3, 7, 14, 21],
     forbiddenPhrases: [
       "hope you're doing well",
@@ -1402,6 +1398,8 @@ export default function EnrichmentAgentsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
+  const [outreachAgentId, setOutreachAgentId] = useState('');
+  const [outreachAgents, setOutreachAgents] = useState<Array<{ id: string; name: string; isDefault?: boolean }>>([]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isDefault, setIsDefault] = useState(false);
@@ -1411,6 +1409,19 @@ export default function EnrichmentAgentsPage() {
   const [researchPriority, setResearchPriority] = useState<ResearchPriority>('intent');
   const [newForbiddenInput, setNewForbiddenInput] = useState('');
   const [customDeptInput, setCustomDeptInput] = useState('');
+  const [coverage, setCoverage] = useState<CoverageData | null>(null);
+  const [coverageSuggestions, setCoverageSuggestions] = useState<CoverageSuggestion[]>([]);
+  const [coverageLoading, setCoverageLoading] = useState(false);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [appliedSuggestionIds, setAppliedSuggestionIds] = useState<string[]>([]);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [deleteUsage, setDeleteUsage] = useState<{
+    leads: number;
+    lists: number;
+    captureDefault: boolean;
+    replacements: Array<{ id: string; name: string; isDefault: boolean }>;
+    replacementId: string;
+  } | null>(null);
 
   // DB outreach templates for agent preference picker
   type DbTemplate = { id: string; name: string; templateType: string; isSystem: boolean; latestVersion?: { config?: { bodyRecipe?: string } } | null };
@@ -1448,6 +1459,7 @@ export default function EnrichmentAgentsPage() {
           mission: pick.mission ?? (pick.config as AgentConfig)?.mission ?? '',
         });
         setConfig(normalized);
+        setOutreachAgentId(pick.outreachAgentId ?? '');
         setPersonality(personalityFromConfig(normalized));
         setResearchPriority(priorityFromConfig(normalized));
       } else {
@@ -1455,6 +1467,7 @@ export default function EnrichmentAgentsPage() {
         setName('');
         setDescription('');
         setIsDefault(true);
+        setOutreachAgentId('');
         setConfig(defaultConfig());
         setPersonality('outbound');
         setResearchPriority('intent');
@@ -1468,7 +1481,55 @@ export default function EnrichmentAgentsPage() {
 
   useEffect(() => {
     void load();
+    api
+      .get('/api/outreach-agents')
+      .then((res) => setOutreachAgents(res.data.data ?? []))
+      .catch(() => setOutreachAgents([]));
   }, [load]);
+
+  useEffect(() => {
+    if (!config.modules.outreach || outreachAgentId || outreachAgents.length === 0) return;
+    const fallback = outreachAgents.find((agent) => agent.isDefault) ?? outreachAgents[0];
+    if (fallback) setOutreachAgentId(fallback.id);
+  }, [config.modules.outreach, outreachAgentId, outreachAgents]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setCoverageLoading(true);
+      api
+        .post('/api/enrichment-agents/coverage', { config })
+        .then((res) => {
+          if (cancelled) return;
+          setCoverage((res.data?.data as CoverageData) ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setCoverage(null);
+        })
+        .finally(() => {
+          if (!cancelled) setCoverageLoading(false);
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [config]);
+
+  const loadCoverageSuggestions = () => {
+    setSuggestionsLoading(true);
+    api
+      .post('/api/enrichment-agents/coverage-suggestions', { config })
+      .then((res) => {
+        setCoverageSuggestions((res.data?.data as CoverageSuggestion[]) ?? []);
+        setAppliedSuggestionIds([]);
+      })
+      .catch(() => {
+        toast.error('Could not load coverage suggestions.');
+        setCoverageSuggestions([]);
+      })
+      .finally(() => setSuggestionsLoading(false));
+  };
 
   const selectAgent = (agent: Agent) => {
     setSelectedId(agent.id);
@@ -1480,6 +1541,7 @@ export default function EnrichmentAgentsPage() {
       mission: agent.mission ?? agent.config?.mission ?? '',
     });
     setConfig(normalized);
+    setOutreachAgentId(agent.outreachAgentId ?? '');
     setPersonality(personalityFromConfig(normalized));
     setResearchPriority(priorityFromConfig(normalized));
   };
@@ -1489,6 +1551,7 @@ export default function EnrichmentAgentsPage() {
     setName('');
     setDescription('');
     setIsDefault(false);
+    setOutreachAgentId(outreachAgents.find((a) => a.isDefault)?.id ?? outreachAgents[0]?.id ?? '');
     setConfig(defaultConfig());
     setPersonality('outbound');
     setResearchPriority('intent');
@@ -1777,6 +1840,110 @@ export default function EnrichmentAgentsPage() {
     }));
   };
 
+  const applyCoverageSuggestion = (suggestion: CoverageSuggestion) => {
+    const payload = suggestion.payload ?? {};
+    setConfig((prev) => {
+      if (suggestion.action === 'add_person_target') {
+        const objective = (
+          OBJECTIVES.some((o) => o.id === payload.objective) ? payload.objective : 'custom'
+        ) as PersonObjective;
+        const roleHint = typeof payload.roleHint === 'string' ? payload.roleHint : '';
+        const tier = (['required', 'preferred', 'fallback'].includes(String(payload.tier))
+          ? payload.tier
+          : 'preferred') as PersonTier;
+        if (prev.people.targets.length >= 10) return prev;
+        const targets = [
+          ...prev.people.targets,
+          {
+            objective,
+            roleHint,
+            required: tier === 'required',
+            priority: prev.people.targets.length + 1,
+            tier,
+          },
+        ];
+        return {
+          ...prev,
+          modules: { ...prev.modules, people: true },
+          people: {
+            ...prev.people,
+            targets,
+            mode: targets.length > 1 ? 'multi' : prev.people.mode,
+            maxPeople: Math.max(targets.length, prev.people.maxPeople),
+          },
+        };
+      }
+      if (suggestion.action === 'add_role_hint') {
+        const index = typeof payload.targetIndex === 'number' ? payload.targetIndex : 0;
+        const roleHint = typeof payload.roleHint === 'string' ? payload.roleHint : '';
+        return {
+          ...prev,
+          people: {
+            ...prev.people,
+            targets: prev.people.targets.map((t, i) => (i === index ? { ...t, roleHint } : t)),
+          },
+        };
+      }
+      if (suggestion.action === 'add_hiring_keyword') {
+        const keyword = String(payload.keyword ?? '').trim();
+        if (!keyword) return prev;
+        const next = prev.hiringKeywords.includes(keyword)
+          ? prev.hiringKeywords
+          : [...prev.hiringKeywords, keyword];
+        return {
+          ...prev,
+          modules: { ...prev.modules, hiring: true },
+          hiringKeywords: next,
+        };
+      }
+      if (suggestion.action === 'add_icp_criterion') {
+        const type = (ICP_CRITERIA_TYPES.some((t) => t.id === payload.type)
+          ? payload.type
+          : 'persona') as IcpCriterionType;
+        return {
+          ...prev,
+          modules: { ...prev.modules, scoring: true },
+          icpPolicy: {
+            ...prev.icpPolicy,
+            enabled: true,
+            criteria: [
+              ...prev.icpPolicy.criteria,
+              {
+                id: `crit-${Date.now()}`,
+                label: String(payload.label ?? 'Persona'),
+                type,
+                expectedValue: String(payload.expectedValue ?? ''),
+                weight: typeof payload.weight === 'number' ? payload.weight : 20,
+                isDisqualifier: false,
+              },
+            ],
+          },
+        };
+      }
+      if (suggestion.action === 'replace_factory_icp') {
+        const raw = Array.isArray(payload.criteria) ? payload.criteria : [];
+        const criteria: IcpCriterion[] = raw
+          .filter((c): c is Record<string, unknown> => Boolean(c) && typeof c === 'object')
+          .map((c, i) => ({
+            id: `crit-${Date.now()}-${i}`,
+            label: String(c.label ?? ''),
+            type: (ICP_CRITERIA_TYPES.some((t) => t.id === c.type) ? c.type : 'persona') as IcpCriterionType,
+            expectedValue: String(c.expectedValue ?? ''),
+            weight: typeof c.weight === 'number' ? c.weight : 20,
+            isDisqualifier: Boolean(c.isDisqualifier),
+          }));
+        return {
+          ...prev,
+          modules: { ...prev.modules, scoring: true },
+          icpPolicy: { ...prev.icpPolicy, enabled: true, criteria },
+        };
+      }
+      return prev;
+    });
+    setAppliedSuggestionIds((ids) => (ids.includes(suggestion.id) ? ids : [...ids, suggestion.id]));
+    toast.success(`Applied: ${suggestion.title}`);
+  };
+
   // Intent signals
   const updateIntentSignal = (type: string, patch: Partial<IntentSignalConfig>) => {
     setConfig((prev) => {
@@ -1828,6 +1995,10 @@ export default function EnrichmentAgentsPage() {
       toast.error('Name is required.');
       return;
     }
+    if (config.modules.outreach && !outreachAgentId) {
+      toast.error('Choose an outreach agent for Generate Outreach Emails.');
+      return;
+    }
     const sanitized = sanitizeConfigForSave(config);
     if ('error' in sanitized) {
       toast.error(sanitized.error);
@@ -1841,6 +2012,7 @@ export default function EnrichmentAgentsPage() {
         description: description.trim() || undefined,
         mission: (sanitized.mission ?? '').trim() || null,
         isDefault,
+        outreachAgentId: outreachAgentId || null,
         config: sanitized,
       };
 
@@ -1865,13 +2037,105 @@ export default function EnrichmentAgentsPage() {
     }
   };
 
+  const exportAgent = () => {
+    if (!name.trim() || selectedId === 'new' || !selectedId) {
+      toast.error('Save this enrichment agent before exporting it.');
+      return;
+    }
+    const writer = outreachAgents.find((agent) => agent.id === outreachAgentId);
+    const payload = {
+      kind: 'enrichment-agent',
+      version: 1,
+      agent: {
+        name: name.trim(),
+        description: description.trim() || null,
+        mission: (config.mission ?? '').trim() || null,
+        config,
+        outreachAgentName: writer?.name ?? null,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${name.trim().replace(/\s+/g, '-').toLowerCase()}-enrichment-agent.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importAgentFile = async (file: File) => {
+    try {
+      const parsed = JSON.parse(await file.text()) as {
+        kind?: string;
+        agent?: {
+          name?: string;
+          description?: string | null;
+          mission?: string | null;
+          config?: AgentConfig;
+          outreachAgentName?: string | null;
+        };
+      };
+      if (parsed.kind !== 'enrichment-agent' || !parsed.agent?.name || !parsed.agent.config) {
+        toast.error('That file is not an enrichment agent.');
+        return;
+      }
+      const taken = new Set(agents.map((agent) => agent.name.toLowerCase()));
+      let nextName = parsed.agent.name.trim();
+      if (taken.has(nextName.toLowerCase())) {
+        let n = 2;
+        while (taken.has(`${parsed.agent.name.trim()} (${n})`.toLowerCase())) n += 1;
+        nextName = `${parsed.agent.name.trim()} (${n})`.slice(0, 120);
+      }
+      const writer = outreachAgents.find(
+        (agent) => agent.name.toLowerCase() === (parsed.agent?.outreachAgentName ?? '').toLowerCase(),
+      );
+      const res = await api.post('/api/enrichment-agents', {
+        name: nextName,
+        description: parsed.agent.description ?? null,
+        mission: parsed.agent.mission ?? null,
+        isDefault: false,
+        outreachAgentId: writer?.id ?? null,
+        config: parsed.agent.config,
+      });
+      toast.success(`Imported ${nextName}.`);
+      await load(res.data.data.id);
+    } catch (err) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(message ?? 'Could not import that enrichment agent.');
+    }
+  };
+
   const remove = async () => {
     if (!selectedId || selectedId === 'new') return;
-    if (!confirm('Delete this enrichment agent?')) return;
     try {
-      await api.delete(`/api/enrichment-agents/${selectedId}`);
-      toast.success('Agent deleted.');
-      await load(null);
+      const res = await api.get(`/api/enrichment-agents/${selectedId}/usage`);
+      const data = res.data.data as {
+        leads: number;
+        lists: number;
+        captureDefault: boolean;
+        replacements: Array<{ id: string; name: string; isDefault: boolean }>;
+      };
+      setDeleteUsage({
+        ...data,
+        replacementId: data.replacements.find((agent) => agent.isDefault)?.id ?? data.replacements[0]?.id ?? '',
+      });
+    } catch {
+      toast.error('Could not check where this agent is used.');
+    }
+  };
+
+  const confirmRemove = async () => {
+    if (!selectedId || selectedId === 'new' || !deleteUsage) return;
+    try {
+      await api.delete(`/api/enrichment-agents/${selectedId}`, {
+        data: { replacementId: deleteUsage.replacementId || null },
+      });
+      toast.success('Enrichment agent deleted. Linked lists and leads were moved.');
+      setDeleteUsage(null);
+      await load(deleteUsage.replacementId || null);
     } catch (err) {
       const message =
         typeof err === 'object' && err && 'response' in err
@@ -1947,6 +2211,97 @@ export default function EnrichmentAgentsPage() {
 
   const TABS = ALL_TABS.filter((tab) => tab.visible);
 
+  const coverageCard = (
+    <section className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h3 className="text-xs font-black uppercase tracking-[0.12em] text-violet-700">
+            Scoring coverage
+          </h3>
+          <p className="mt-1 text-xs text-slate-600">
+            Score this lead against who this agent is built to find. When a person is captured, we score the person first.
+          </p>
+        </div>
+        <button
+          type="button"
+          className={settingsBtnSecondary}
+          onClick={loadCoverageSuggestions}
+          disabled={suggestionsLoading}
+        >
+          {suggestionsLoading ? <IconLoader2 size={14} className="animate-spin" /> : <IconSparkles size={14} />}
+          Suggest adds
+        </button>
+      </div>
+      {coverageLoading && !coverage ? (
+        <p className="text-xs text-slate-500">Reading this agent’s targets…</p>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Who we score</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-700">
+              {(coverage?.whoWeScore ?? ['No coverage yet.']).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">What signals count</p>
+            <ul className="mt-1 space-y-1 text-xs text-slate-700">
+              {(coverage?.whatSignalsCount ?? []).map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {(coverage?.gaps ?? []).length > 0 && (
+        <ul className="space-y-1">
+          {coverage!.gaps.map((gap) => (
+            <li
+              key={gap.id}
+              className={`flex items-start gap-2 rounded-lg px-2 py-1.5 text-xs ${
+                gap.severity === 'warn' ? 'bg-amber-50 text-amber-800' : 'bg-white text-slate-600'
+              }`}
+            >
+              <IconAlertTriangle size={14} className="mt-0.5 shrink-0" />
+              {gap.message}
+            </li>
+          ))}
+        </ul>
+      )}
+      {coverageSuggestions.length > 0 && (
+        <div className="space-y-2 border-t border-violet-100 pt-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Personalized suggestions
+          </p>
+          {coverageSuggestions.map((s) => {
+            const applied = appliedSuggestionIds.includes(s.id);
+            return (
+              <div
+                key={s.id}
+                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2.5"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold text-slate-900">{s.title}</p>
+                  <p className="mt-0.5 text-xs text-slate-500">{s.why}</p>
+                </div>
+                <button
+                  type="button"
+                  className={settingsBtnSecondary}
+                  disabled={applied}
+                  onClick={() => applyCoverageSuggestion(s)}
+                >
+                  {applied ? <IconCheck size={14} /> : <IconPlus size={14} />}
+                  {applied ? 'Added' : 'Apply'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+
   return (
     <SettingsPanel wide>
       {loading ? (
@@ -2000,6 +2355,25 @@ export default function EnrichmentAgentsPage() {
                     </span>
                   </button>
                 ))}
+                <div className="flex gap-3 px-3 pb-2 text-xs font-semibold text-slate-600">
+                  <button type="button" className="underline" onClick={exportAgent}>
+                    Export this agent
+                  </button>
+                  <button type="button" className="underline" onClick={() => importRef.current?.click()}>
+                    Import an agent
+                  </button>
+                  <input
+                    ref={importRef}
+                    type="file"
+                    accept="application/json,.json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = '';
+                      if (file) void importAgentFile(file);
+                    }}
+                  />
+                </div>
                 {selectedId === 'new' ? (
                   <div className="min-w-44 rounded-xl border border-dashed border-slate-300 px-3 py-2 text-sm font-semibold text-slate-500 xl:min-w-0">
                     New agent
@@ -2205,12 +2579,17 @@ export default function EnrichmentAgentsPage() {
                         <h4 className="text-base font-bold text-slate-900">Generate Outreach Emails</h4>
                       </div>
                       <p className="mt-2 text-sm text-slate-600">
-                        Automatically create personalized cold emails based on enrichment data. The AI will write subject lines and email bodies tailored to each lead.
+                        After enrichment, write a different email for each lead. The outreach agent you pick is the writer: your offer, proof, and notes. The lead’s problem still comes from this enrichment run.
                       </p>
                       {config.modules.outreach && (
                         <div className="mt-3 flex items-center gap-2 text-xs text-green-700 bg-green-50 rounded-lg px-3 py-2 border border-green-200">
                           <IconCheck size={14} />
-                          <span className="font-medium">Outreach generation is enabled</span>
+                          <span className="font-medium">
+                            Outreach generation is enabled
+                            {outreachAgents.find((agent) => agent.id === outreachAgentId)
+                              ? ` · ${outreachAgents.find((agent) => agent.id === outreachAgentId)?.name}`
+                              : ''}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -2218,11 +2597,48 @@ export default function EnrichmentAgentsPage() {
                       <input
                         type="checkbox"
                         checked={config.modules.outreach}
-                        onChange={() => toggleModule('outreach')}
+                        onChange={() => {
+                          const enabling = !config.modules.outreach;
+                          toggleModule('outreach');
+                          if (enabling && !outreachAgentId) {
+                            const fallback = outreachAgents.find((agent) => agent.isDefault) ?? outreachAgents[0];
+                            if (fallback) setOutreachAgentId(fallback.id);
+                          }
+                        }}
                         className="toggle-switch h-6 w-11"
                       />
                     </label>
                   </div>
+                  {config.modules.outreach ? (
+                    <label className="block space-y-1">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Outreach agent for these emails
+                      </span>
+                      <select
+                        value={outreachAgentId}
+                        onChange={(e) => setOutreachAgentId(e.target.value)}
+                        className={settingsInputClass}
+                      >
+                        {outreachAgents.length === 0 ? (
+                          <option value="">No outreach agents yet</option>
+                        ) : (
+                          outreachAgents.map((agent) => (
+                            <option key={agent.id} value={agent.id}>
+                              {agent.name}
+                              {agent.isDefault ? ' (default)' : ''}
+                            </option>
+                          ))
+                        )}
+                      </select>
+                      <p className="text-xs leading-5 text-slate-500">
+                        CRM leads and capture lists that use this enrichment agent generate email with this writer.{' '}
+                        <a href="/dashboard/settings/outreach-agents" className="font-semibold text-violet-700 underline">
+                          Edit outreach agents
+                        </a>
+                        .
+                      </p>
+                    </label>
+                  ) : null}
                 </section>
 
                 {/* Custom Module Toggles */}
@@ -2432,12 +2848,14 @@ export default function EnrichmentAgentsPage() {
                     </div>
                   </div>
                 </section>
+                {coverageCard}
               </div>
             )}
 
             {/* TAB 2: PEOPLE TARGETS */}
             {activeTab === 'people' && (
               <div className="space-y-4 animate-in fade-in duration-200">
+                {coverageCard}
                 {!config.modules.people && (
                   <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
                     <IconAlertCircle size={16} className="shrink-0 text-amber-600" />
@@ -2824,11 +3242,12 @@ export default function EnrichmentAgentsPage() {
             {/* TAB 4: ICP POLICY */}
             {activeTab === 'icp' && (
               <div className="space-y-5 animate-in fade-in duration-200">
+                {coverageCard}
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 p-4">
                   <div>
-                    <h3 className="text-sm font-bold text-slate-900">Policy-Driven ICP Evaluation</h3>
+                    <h3 className="text-sm font-bold text-slate-900">Score this lead</h3>
                     <p className="text-xs text-slate-500">
-                      Score every company against your custom weighted criteria with transparent evidence breakdowns.
+                      Score this lead against who this agent is built to find. When a person is captured, we score the person first — extra criteria here refine company fit.
                     </p>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer font-bold text-xs text-slate-800">
@@ -3268,8 +3687,8 @@ export default function EnrichmentAgentsPage() {
                     {[
                       { step: 1, day: 0, title: 'Email 1: Initial outreach', desc: 'Personalized research & value proposition' },
                       { step: 2, day: 3, title: 'Email 2: Value-add follow-up', desc: 'Share insight or case study without repitching' },
-                      { step: 3, day: 7, title: 'Email 3: Breakup / last touch', desc: 'Graceful exit, zero pressure' },
-                      { step: 4, day: 14, title: 'Email 4: New angle', desc: 'Alternative perspective or trigger' },
+                      { step: 3, day: 7, title: 'Email 3: New angle', desc: 'A different proof point or trigger' },
+                      { step: 4, day: 14, title: 'Email 4: Last touch', desc: 'Short close, zero pressure' },
                       { step: 5, day: 21, title: 'Email 5: Final touch', desc: 'Brief sign-off' },
                     ]
                       .slice(0, config.outreachPolicy.sequenceCount ?? 1)
@@ -3536,8 +3955,8 @@ export default function EnrichmentAgentsPage() {
                 <div>
                   <span className="font-bold text-slate-800">ICP Policy: </span>
                   {config.modules.scoring && config.icpPolicy.enabled
-                    ? `${config.icpPolicy.criteria.length} criteria (min ${config.icpPolicy.minScoreToPass ?? 60}%)`
-                    : 'Default'}
+                    ? `${config.people.targets.length} personas · ${config.icpPolicy.criteria.length} extra criteria`
+                    : 'Off'}
                 </div>
                 <div>
                   <span className="font-bold text-slate-800">Intent: </span>
@@ -3577,6 +3996,45 @@ export default function EnrichmentAgentsPage() {
           </div>
         </div>
       )}
+      {deleteUsage ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-950">Delete this enrichment agent?</h3>
+            <p className="mt-2 text-sm leading-5 text-slate-600">
+              {deleteUsage.leads} leads, {deleteUsage.lists} lists
+              {deleteUsage.captureDefault ? ', and the capture default' : ''} use it. They move to the agent you pick.
+            </p>
+            {deleteUsage.replacements.length > 0 ? (
+              <label className="mt-3 block space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Move them to</span>
+                <select
+                  className={settingsInputClass}
+                  value={deleteUsage.replacementId}
+                  onChange={(e) => setDeleteUsage({ ...deleteUsage, replacementId: e.target.value })}
+                >
+                  {deleteUsage.replacements.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <p className="mt-3 text-sm text-slate-600">
+                This is the only enrichment agent. Leads and lists are unlinked. A fresh default appears the next time this page loads, with nothing attached to the deleted one.
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" className={settingsBtnSecondary} onClick={() => setDeleteUsage(null)}>
+                Cancel
+              </button>
+              <button type="button" className={settingsBtnDanger} onClick={() => void confirmRemove()}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </SettingsPanel>
   );
 }

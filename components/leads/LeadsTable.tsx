@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { IconBuilding, IconEye, IconGripVertical, IconLoader2 } from '@tabler/icons-react';
+import { IconBuilding, IconEye, IconGripVertical, IconLoader2, IconTrash } from '@tabler/icons-react';
 import { ContactCell } from './cells/ContactCell';
 import { CompanyUrlCell } from './cells/CompanyUrlCell';
 import { EmailCell } from './cells/EmailCell';
@@ -43,6 +43,7 @@ type Props = {
   onLoadMore: () => void;
   onPatchLead: (leadId: string, payload: Record<string, unknown>) => void;
   onEnrichLead: (lead: LeadRow) => void;
+  onDeleteLead: (lead: LeadRow) => void;
   enriching: boolean;
   columnLayout: LeadsGridLayout;
   onColumnLayoutChange: (layout: LeadsGridLayout) => void;
@@ -209,6 +210,7 @@ export function LeadsTable(props: Props) {
     onLoadMore,
     onPatchLead,
     onEnrichLead,
+    onDeleteLead,
     enriching,
     columnLayout,
     onColumnLayoutChange,
@@ -225,7 +227,7 @@ export function LeadsTable(props: Props) {
 
   const totalMinWidth = useMemo(() => {
     const dataWidth = layout.order.reduce((sum, id) => sum + getColumnWidth(layout, id), 0);
-    return 48 + dataWidth + 120;
+    return 48 + dataWidth + 168;
   }, [layout]);
 
   useEffect(() => {
@@ -325,7 +327,7 @@ export function LeadsTable(props: Props) {
     return (
       <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
         <p className="text-sm font-semibold text-slate-700">No leads match this view.</p>
-        <p className="mt-1 text-xs text-slate-500">Import CSV leads, run provider sync, or adjust your filters.</p>
+        <p className="mt-1 text-xs text-slate-500">Import a CSV or Excel file, run provider sync, or adjust your filters.</p>
       </div>
     );
   }
@@ -357,7 +359,7 @@ export function LeadsTable(props: Props) {
             {layout.order.map((id) => (
               <col key={id} style={{ width: getColumnWidth(layout, id) }} />
             ))}
-            <col style={{ width: 120 }} />
+            <col style={{ width: 168 }} />
           </colgroup>
           <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 text-[10px] uppercase tracking-[0.12em] text-slate-500 backdrop-blur">
             <tr>
@@ -453,12 +455,21 @@ export function LeadsTable(props: Props) {
                   );
                 })}
                 <td className="sticky right-0 z-10 border-b border-slate-100 bg-white p-4 text-right group-hover:bg-blue-50">
-                  <Link
-                    href={`/dashboard/leads/${lead.id}`}
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  >
-                    <IconEye size={14} /> Case
-                  </Link>
+                  <div className="inline-flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onDeleteLead(lead)}
+                      className="inline-flex items-center gap-1 rounded-xl border border-rose-200 px-2.5 py-2 font-black text-rose-700 hover:bg-rose-50"
+                    >
+                      <IconTrash size={14} />
+                    </button>
+                    <Link
+                      href={`/dashboard/leads/${lead.id}`}
+                      className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-3 py-2 font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <IconEye size={14} /> Case
+                    </Link>
+                  </div>
                 </td>
               </tr>
             ))}

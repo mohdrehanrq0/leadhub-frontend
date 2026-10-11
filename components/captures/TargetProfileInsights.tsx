@@ -34,7 +34,7 @@ export function TargetProfileInsights({ data }: { data: TargetInsightPayload }) 
     data.personSummary?.value ||
     (data.enrichmentStatus === 'completed'
       ? null
-      : 'Enrich this target to see why they fit your ICP.');
+      : 'Enrich this profile and the sequence is written from what we find.');
   const fitScore =
     data.productFit?.score != null ? ` · ${data.productFit.score}%` : '';
 
@@ -52,7 +52,7 @@ export function TargetProfileInsights({ data }: { data: TargetInsightPayload }) 
     data.suggestedCta ||
     (data.enrichmentStatus === 'completed'
       ? null
-      : 'Enrich to generate a recommended outreach angle and first message.');
+      : 'The sequence for this profile appears after enrichment.');
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">

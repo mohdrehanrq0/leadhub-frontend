@@ -108,12 +108,12 @@ export function SelectionActionBar(props: Props) {
         title={
           insufficientCredits
             ? `Need ${selectedCount} credits, have ${creditBalance}`
-            : '1 credit per successful enrichment'
+            : '1 credit per lead analyzed'
         }
         className="inline-flex items-center gap-1 rounded-lg bg-slate-900 px-3 py-2 font-bold text-white disabled:opacity-40"
       >
         {enriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconSparkles size={14} />}
-        Enrich
+        Research
       </button>
       <button
         type="button"
@@ -122,12 +122,12 @@ export function SelectionActionBar(props: Props) {
         title={
           insufficientCredits
             ? `Need ${selectedCount} credits, have ${creditBalance}`
-            : '1 credit per successful enrichment'
+            : '1 credit per lead analyzed'
         }
         className="inline-flex items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 font-bold text-violet-800 disabled:opacity-40"
       >
         {reEnriching ? <IconLoader2 size={14} className="animate-spin" /> : <IconRefresh size={14} />}
-        Re-enrich
+        Re-research
       </button>
       {onExportCsv && (
         <button

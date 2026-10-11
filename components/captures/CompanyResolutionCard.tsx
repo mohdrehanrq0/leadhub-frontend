@@ -8,7 +8,7 @@ import { LinkedInLink } from '@/components/leads/LinkedInLink';
 import {
   DOMAIN_SOURCE_LABEL,
   gapsByField,
-  RESOLUTION_STYLE,
+  resolutionBadge,
   type CaptureCompanyResolution,
   type CaptureDataGap,
 } from '@/lib/captures';
@@ -38,11 +38,10 @@ export function CompanyResolutionCard({
     return (
       <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center shadow-sm">
         <IconSearch size={26} className="mx-auto text-slate-300" />
-        <h2 className="mt-3 text-sm font-semibold text-text-100">Company not resolved yet</h2>
+        <h2 className="mt-3 text-sm font-semibold text-text-100">Using this profile</h2>
         <p className="mx-auto mt-1 max-w-sm text-xs leading-5 text-text-300">
-          LeadHub reads the current role from this profile, follows it to the company&apos;s
-          LinkedIn page, finds their website and reads that too. This runs on its own right
-          after a capture — use the button if it needs another go.
+          Outreach is written from the person on this capture. Company details are added when a
+          LinkedIn page or website is available.
         </p>
         <button
           type="button"
@@ -57,7 +56,7 @@ export function CompanyResolutionCard({
     );
   }
 
-  const badge = RESOLUTION_STYLE[resolution.status];
+  const badge = resolutionBadge(resolution.status);
   const size = resolution.sizeLabel ?? resolution.employeeCount;
 
   return (

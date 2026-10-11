@@ -16,6 +16,7 @@ interface Campaign {
   status: 'draft' | 'active' | 'paused' | 'completed' | 'archived';
   leadsCount: number;
   sentCount: number;
+  recipientCount?: number;
   replyCount: number;
   createdAt: string;
 }
@@ -186,6 +187,7 @@ export default function CampaignsPage() {
                 <p className="text-[10px] text-text-200">Subject: {c.subject}</p>
                 <div className="flex items-center space-x-4 text-[10px] text-text-300 mt-2">
                   <span>Enrolled Leads: <strong className="text-text-200">{c.leadsCount}</strong></span>
+                  <span>Valid emails: <strong className="text-text-200">{c.recipientCount ?? c.leadsCount}</strong></span>
                   <span>Sent: <strong className="text-text-200">{c.sentCount}</strong></span>
                   <span>Replies: <strong className="text-text-200">{c.replyCount}</strong></span>
                 </div>

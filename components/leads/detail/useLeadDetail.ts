@@ -52,10 +52,11 @@ const GENERIC_DOMAINS = new Set([
   'gmx.com',
 ]);
 
-export function useLeadDetail() {
+export function useLeadDetail(leadIdOverride?: string | null) {
   const { activeWorkspaceId, user } = useAuth();
   const router = useRouter();
-  const { id } = useParams() as { id: string };
+  const params = useParams() as { id?: string };
+  const id = leadIdOverride === undefined ? (params.id ?? '') : (leadIdOverride ?? '');
 
   const [lead, setLead] = useState<LeadDetail | null>(null);
   const [categories, setCategories] = useState<LeadCategory[]>([]);
@@ -160,9 +161,14 @@ export function useLeadDetail() {
   }, [loadLead, loadEnrichmentData]);
 
   useEffect(() => {
+    if (!id) {
+      setLead(null);
+      setLoading(false);
+      return;
+    }
     void loadLead();
     void loadEnrichmentData();
-  }, [loadLead, loadEnrichmentData]);
+  }, [id, loadLead, loadEnrichmentData]);
 
   useEffect(() => {
     if (!lead || !id || lead.enrichmentStatus !== 'in_progress') return;

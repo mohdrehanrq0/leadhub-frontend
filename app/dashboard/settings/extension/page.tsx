@@ -30,12 +30,15 @@ export default function ExtensionSettingsPage() {
   const [plainToken, setPlainToken] = useState<string | null>(null);
   const [captureEnrichMode, setCaptureEnrichMode] = useState<CaptureEnrichMode>('manual');
   const [savingMode, setSavingMode] = useState(false);
-  const [agents, setAgents] = useState<Array<{ id: string; name: string }>>([]);
+  const [agents, setAgents] = useState<
+    Array<{ id: string; name: string; isDefault?: boolean; outreachAgentId?: string | null }>
+  >([]);
+  const [writers, setWriters] = useState<Array<{ id: string; name: string; sequenceCount: number; isDefault?: boolean }>>([]);
   const [defaultAgentId, setDefaultAgentId] = useState('');
-  const [sequenceCount, setSequenceCount] = useState(3);
+  const [sendTiming, setSendTiming] = useState('right_away');
   const [autoSend, setAutoSend] = useState(false);
   const [digestSlack, setDigestSlack] = useState(false);
-  const [digestWhatsapp, setDigestWhatsapp] = useState(false);
+  const [whatsappUpdates, setWhatsappUpdates] = useState('');
   const [slackWebhook, setSlackWebhook] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [timezone, setTimezone] = useState('UTC');
@@ -43,14 +46,16 @@ export default function ExtensionSettingsPage() {
   const [savingAutonomy, setSavingAutonomy] = useState(false);
   const [waStatus, setWaStatus] = useState('disconnected');
   const [waQr, setWaQr] = useState<string | null>(null);
+  const [waError, setWaError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
-      const [tokensRes, settingsRes, agentsRes] = await Promise.all([
+      const [tokensRes, settingsRes, agentsRes, writersRes] = await Promise.all([
         api.get('/api/extension/tokens'),
         api.get('/api/captures/settings').catch(() => null),
         api.get('/api/enrichment-agents').catch(() => null),
+        api.get('/api/outreach-agents').catch(() => null),
       ]);
       setTokens(tokensRes.data?.data ?? []);
       const settings = settingsRes?.data?.data;
@@ -58,20 +63,19 @@ export default function ExtensionSettingsPage() {
       if (mode === 'auto' || mode === 'manual') setCaptureEnrichMode(mode);
       if (settings) {
         setDefaultAgentId(settings.defaultAgentId ?? '');
-        setSequenceCount(settings.sequenceCount ?? 3);
+        setSendTiming(settings.sendTiming ?? 'right_away');
         setAutoSend(Boolean(settings.autoSend));
         setDigestSlack(Boolean(settings.digestSlack));
-        setDigestWhatsapp(Boolean(settings.digestWhatsapp));
+        setWhatsappUpdates(
+          settings.whatsappUpdates ?? (settings.digestWhatsapp ? 'both' : ''),
+        );
         setSlackWebhook(settings.slackWebhook ?? '');
         setWhatsappNumber(settings.whatsappNumber ?? '');
         setTimezone(settings.timezone ?? 'UTC');
         setLeadSniperConnected(Boolean(settings.leadSniperConnected));
       }
-      const agentRows = (agentsRes?.data?.data ?? agentsRes?.data ?? []) as Array<{
-        id: string;
-        name: string;
-      }>;
-      setAgents(agentRows);
+      setAgents((agentsRes?.data?.data ?? []) as typeof agents);
+      setWriters((writersRes?.data?.data ?? []) as typeof writers);
     } catch {
       toast.error('Failed to load extension tokens.');
     } finally {
@@ -101,10 +105,12 @@ export default function ExtensionSettingsPage() {
     try {
       await api.patch('/api/captures/settings', {
         defaultAgentId: defaultAgentId || null,
-        sequenceCount,
+        sendTiming,
         autoSend,
         digestSlack,
-        digestWhatsapp,
+        digestWhatsapp:
+          whatsappUpdates === 'morning' || whatsappUpdates === 'evening' || whatsappUpdates === 'both',
+        whatsappUpdates: whatsappUpdates || null,
         slackWebhook: slackWebhook.trim() || null,
         whatsappNumber: whatsappNumber.trim() || null,
         timezone,
@@ -121,9 +127,21 @@ export default function ExtensionSettingsPage() {
     try {
       await api.post('/api/captures/whatsapp/connect');
       setWaStatus('starting');
-      toast.success('Waiting for a WhatsApp QR code from the worker.');
+      setWaError(null);
+      setWaQr(null);
+      toast.success('Starting WhatsApp. The QR code appears here when the worker is ready.');
     } catch {
       toast.error('Could not start WhatsApp.');
+    }
+  }
+
+  async function sendWhatsAppTest() {
+    try {
+      await api.post('/api/captures/whatsapp/test');
+      toast.success('Test message sent to your WhatsApp. Reply in that chat.');
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(message ?? 'Could not send the test message.');
     }
   }
 
@@ -132,10 +150,21 @@ export default function ExtensionSettingsPage() {
       await api.post('/api/captures/whatsapp/disconnect');
       setWaStatus('disconnected');
       setWaQr(null);
+      setWaError(null);
     } catch {
       toast.error('Could not disconnect WhatsApp.');
     }
   }
+
+  useEffect(() => {
+    void api.get('/api/captures/whatsapp').then((res) => {
+      const next = res.data?.data;
+      if (!next) return;
+      setWaStatus(next.status ?? 'disconnected');
+      setWaQr(next.qrDataUrl ?? null);
+      setWaError(next.error ?? null);
+    }).catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     if (waStatus !== 'starting' && waStatus !== 'qr') return;
@@ -145,6 +174,7 @@ export default function ExtensionSettingsPage() {
         if (!next) return;
         setWaStatus(next.status ?? 'disconnected');
         setWaQr(next.qrDataUrl ?? null);
+        setWaError(next.error ?? null);
       });
     }, 2000);
     return () => clearInterval(timer);
@@ -177,6 +207,15 @@ export default function ExtensionSettingsPage() {
       toast.error('Failed to revoke token.');
     }
   }
+
+  const selectedAgent =
+    agents.find((agent) => agent.id === defaultAgentId) ?? agents.find((agent) => agent.isDefault);
+  const writer =
+    writers.find((agent) => agent.id === selectedAgent?.outreachAgentId) ??
+    writers.find((agent) => agent.isDefault);
+  const sequenceLabel = writer
+    ? `${writer.sequenceCount} email${writer.sequenceCount === 1 ? '' : 's'} from ${writer.name}`
+    : 'Set an outreach agent on the enrichment agent';
 
   return (
     <SettingsPanel>
@@ -242,8 +281,9 @@ export default function ExtensionSettingsPage() {
 
       <SettingsCard icon={IconSparkles} title="Autonomous emailing">
         <p className="mb-4 text-sm leading-6 text-slate-600">
-          After a capture dossier is ready, the selected agent writes up to four emails. Lead Sniper
-          pulls messages that are due when auto-send is on.{' '}
+          The default enrichment agent stays as you set it. Sequence length comes from the outreach
+          agent linked to that enrichment agent. Lead Sniper sends when the message is due in the
+          timezone below.{' '}
           {leadSniperConnected ? (
             <span className="font-medium text-emerald-700">Lead Sniper key is connected.</span>
           ) : (
@@ -268,22 +308,28 @@ export default function ExtensionSettingsPage() {
               ))}
             </select>
           </label>
-          <label className="block text-sm">
+          <div className="block text-sm">
             <span className="mb-1 block font-medium text-slate-800">Sequence length</span>
+            <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800">
+              {sequenceLabel}
+            </p>
+          </div>
+          <label className="block text-sm">
+            <span className="mb-1 block font-medium text-slate-800">When to send after enrichment</span>
             <select
-              value={sequenceCount}
-              onChange={(e) => setSequenceCount(Number(e.target.value))}
+              value={sendTiming}
+              onChange={(e) => setSendTiming(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
             >
-              {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>
-                  {n} email{n === 1 ? '' : 's'}
-                </option>
-              ))}
+              <option value="after_enrichment">After enrichment finishes</option>
+              <option value="right_away">Right away after enrichment</option>
+              <option value="after_1_hour">1 hour later</option>
+              <option value="evening">That evening</option>
+              <option value="next_day">The next day</option>
             </select>
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block font-medium text-slate-800">Timezone</span>
+            <span className="mb-1 block font-medium text-slate-800">Timezone for Lead Sniper and digests</span>
             <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
@@ -323,14 +369,19 @@ export default function ExtensionSettingsPage() {
             />
           </label>
           <label className="block text-sm sm:col-span-2">
-            <span className="mb-1 flex items-center gap-2 font-medium text-slate-800">
-              <input
-                type="checkbox"
-                checked={digestWhatsapp}
-                onChange={(e) => setDigestWhatsapp(e.target.checked)}
-              />
-              Morning and evening WhatsApp digest
-            </span>
+            <span className="mb-1 block font-medium text-slate-800">When to message on WhatsApp</span>
+            <select
+              value={whatsappUpdates}
+              onChange={(e) => setWhatsappUpdates(e.target.value)}
+              className="mb-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2"
+            >
+              <option value="">Ask me when I connect</option>
+              <option value="off">Don&apos;t message me</option>
+              <option value="each">Every enrichment, only when something needs me</option>
+              <option value="morning">Morning</option>
+              <option value="evening">Evening</option>
+              <option value="both">Morning and evening</option>
+            </select>
             <input
               value={whatsappNumber}
               onChange={(e) => setWhatsappNumber(e.target.value)}
@@ -346,14 +397,29 @@ export default function ExtensionSettingsPage() {
           <button type="button" onClick={() => void connectWhatsApp()} className={settingsBtnPrimary}>
             Connect WhatsApp
           </button>
+          <button
+            type="button"
+            onClick={() => void sendWhatsAppTest()}
+            disabled={waStatus !== 'ready'}
+            className={settingsBtnPrimary}
+          >
+            Send test message
+          </button>
           <button type="button" onClick={() => void disconnectWhatsApp()} className={settingsBtnDanger}>
             Disconnect
           </button>
           <span className="text-xs text-slate-500">WhatsApp status: {waStatus}</span>
         </div>
+        {waStatus === 'starting' ? (
+          <p className="mt-3 text-sm text-slate-500">Starting WhatsApp in the worker. The QR code shows here in a few seconds.</p>
+        ) : null}
+        {waError ? <p className="mt-3 text-sm text-rose-700">{waError}</p> : null}
         {waQr ? (
           <img src={waQr} alt="WhatsApp QR code" className="mt-4 h-48 w-48 rounded-xl border border-slate-200" />
         ) : null}
+        <p className="mt-3 text-sm leading-6 text-slate-500">
+          After you scan the code, LeadHub asks when you want updates if you have not chosen yet. Reply 1 for each enrichment only when something needs you, 2 for morning, 3 for evening, or 4 for both. Replies you send outside that window wait until then. During the chat you can still say samples, find a name, emails, show 1, approve 1, reject 1, or schedule 1 tomorrow.
+        </p>
       </SettingsCard>
 
       <SettingsCard

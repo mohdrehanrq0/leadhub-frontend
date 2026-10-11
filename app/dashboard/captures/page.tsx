@@ -15,10 +15,12 @@ import {
   CAPTURE_STATUS_STYLE,
   captureKind,
   commentSnippet,
+  displayPersonName,
+  displayRole,
   formatCapturedAt,
   isEnrichmentPending,
   isFromPostComment,
-  RESOLUTION_STYLE,
+  resolutionBadge,
   sourcePostInfo,
   type CaptureListRow,
   type CaptureType,
@@ -28,6 +30,7 @@ import {
   IconBookmark,
   IconBuilding,
   IconExternalLink,
+  IconFilter,
   IconMessage2,
   IconPlus,
   IconSearch,
@@ -92,9 +95,13 @@ export default function CapturesPage() {
   const [newListName, setNewListName] = useState('');
   const [creatingList, setCreatingList] = useState(false);
   const [showCreateList, setShowCreateList] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filterRef = useRef<HTMLDivElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [day, setDay] = useState<'all' | 'today' | 'yesterday'>('all');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [daily, setDaily] = useState({
     profiles: 0,
     comments: 0,
@@ -158,11 +165,19 @@ export default function CapturesPage() {
               fromComments: tab === 'comments' ? true : undefined,
               listId: listFilter || undefined,
               q: debouncedQuery || undefined,
-              day: day === 'all' ? undefined : day,
+              day: fromDate || toDate || day === 'all' ? undefined : day,
+              from: fromDate || undefined,
+              to: toDate || undefined,
               pageSize: 50,
             },
           }),
-          api.get('/api/captures/daily-summary', { params: { day } }).catch(() => null),
+          api.get('/api/captures/daily-summary', {
+            params: {
+              day: fromDate || toDate ? 'all' : day,
+              from: fromDate || undefined,
+              to: toDate || undefined,
+            },
+          }).catch(() => null),
         ]);
         setRows(res.data?.data ?? []);
         setTotal(res.data?.total ?? 0);
@@ -187,12 +202,21 @@ export default function CapturesPage() {
         if (!opts.silent) setLoading(false);
       }
     },
-    [tab, listFilter, debouncedQuery, day],
+    [tab, listFilter, debouncedQuery, day, fromDate, toDate],
   );
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!filterOpen) return;
+    function onPointer(event: MouseEvent) {
+      if (!filterRef.current?.contains(event.target as Node)) setFilterOpen(false);
+    }
+    document.addEventListener('mousedown', onPointer);
+    return () => document.removeEventListener('mousedown', onPointer);
+  }, [filterOpen]);
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -411,9 +435,9 @@ export default function CapturesPage() {
   return (
     <div className="mx-auto max-w-7xl animate-fade-in space-y-6 text-text">
       <PageHeader
-        eyebrow="Lead capture"
-        title="Captures"
-        description="LinkedIn people saved as targets. Create or filter by list here — same lists as the extension (same workspace)."
+        eyebrow="LinkedIn"
+        title="Saved Profiles"
+        description="People you've saved from LinkedIn using our browser extension. Organize them into lists and run AI research."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
@@ -426,49 +450,28 @@ export default function CapturesPage() {
               href="/dashboard/settings/extension"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
-              Capture settings
+              Extension settings
             </Link>
           </div>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ['all', 'All'],
-            ['today', 'Today'],
-            ['yesterday', 'Yesterday'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setDay(id)}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-              day === id ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Profiles saved" value={daily.profiles} tone="slate" />
-        <StatCard label="Comments saved" value={daily.comments} tone="blue" />
-        <StatCard label="Posts saved" value={daily.posts} tone="slate" />
+        <StatCard label="From comments" value={daily.comments} tone="blue" />
+        <StatCard label="From posts" value={daily.posts} tone="slate" />
         <StatCard label="Sequences" value={daily.sequences} tone="blue" />
         <StatCard label="Messages sent" value={daily.sent} tone="emerald" />
-        <StatCard label="Still queued" value={daily.queued} tone="amber" />
+        <StatCard label="Queued" value={daily.queued} tone="amber" />
       </div>
 
       {rows.length > 0 || total > 0 ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <StatCard label="Captures" value={total} tone="slate" />
-          <StatCard label="With list" value={stats.withList} tone="blue" />
-          <StatCard label="No list" value={stats.noList} tone="amber" />
-          <StatCard label="Enriching" value={stats.enriching} tone="amber" />
-          <StatCard label="In CRM" value={stats.inCrm} tone="emerald" />
+          <StatCard label="Total saved" value={total} tone="slate" />
+          <StatCard label="In a list" value={stats.withList} tone="blue" />
+          <StatCard label="Unlisted" value={stats.noList} tone="amber" />
+          <StatCard label="Being analyzed" value={stats.enriching} tone="amber" />
+          <StatCard label="Added to leads" value={stats.inCrm} tone="emerald" />
         </div>
       ) : null}
 
@@ -492,32 +495,143 @@ export default function CapturesPage() {
         </div>
 
         <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center lg:w-auto">
-          <div className="flex items-center gap-2">
-            <select
-              value={listFilter}
-              onChange={(e) => {
-                setListFilter(e.target.value as ListFilter);
-                setSelected(new Set());
-              }}
-              className="h-10 min-w-[10rem] rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:border-brand-main focus:outline-none"
-            >
-              <option value="">All lists</option>
-              <option value="none">No list</option>
-              {lists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name}
-                </option>
-              ))}
-            </select>
+          <div className="relative" ref={filterRef}>
             <button
               type="button"
-              onClick={() => setShowCreateList((v) => !v)}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:border-brand-main/40 hover:text-brand-main"
-              title="Create a new list"
+              onClick={() => setFilterOpen((open) => !open)}
+              className={`inline-flex h-10 items-center gap-1.5 rounded-lg border bg-white px-3 text-sm font-semibold transition ${
+                day !== 'all' || fromDate || toDate || listFilter
+                  ? 'border-brand-main text-brand-main'
+                  : 'border-slate-200 text-slate-700 hover:border-brand-main/40'
+              }`}
+              aria-expanded={filterOpen}
+              aria-label="Filter captures"
             >
-              <IconPlus size={14} />
-              New list
+              <IconFilter size={16} />
+              Filter
             </button>
+            {filterOpen ? (
+              <div className="absolute right-0 z-30 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-3 shadow-lg">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  When
+                </p>
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ['all', 'All'],
+                      ['today', 'Today'],
+                      ['yesterday', 'Yesterday'],
+                    ] as const
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => {
+                        setDay(id);
+                        setFromDate('');
+                        setToDate('');
+                        setSelected(new Set());
+                      }}
+                      className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                        !fromDate && !toDate && day === id
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <label className="block text-[11px] font-semibold text-slate-500">
+                    From
+                    <input
+                      type="date"
+                      value={fromDate}
+                      max={toDate || undefined}
+                      onChange={(e) => {
+                        setFromDate(e.target.value);
+                        setDay('all');
+                        setSelected(new Set());
+                      }}
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-brand-main focus:outline-none"
+                    />
+                  </label>
+                  <label className="block text-[11px] font-semibold text-slate-500">
+                    To
+                    <input
+                      type="date"
+                      value={toDate}
+                      min={fromDate || undefined}
+                      onChange={(e) => {
+                        setToDate(e.target.value);
+                        setDay('all');
+                        setSelected(new Set());
+                      }}
+                      className="mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-brand-main focus:outline-none"
+                    />
+                  </label>
+                </div>
+                <p className="mb-2 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
+                  List
+                </p>
+                <select
+                  value={listFilter}
+                  onChange={(e) => {
+                    setListFilter(e.target.value as ListFilter);
+                    setSelected(new Set());
+                  }}
+                  className="mb-2 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 focus:border-brand-main focus:outline-none"
+                >
+                  <option value="">All lists</option>
+                  <option value="none">No list</option>
+                  {lists.map((list) => (
+                    <option key={list.id} value={list.id}>
+                      {list.name}
+                    </option>
+                  ))}
+                </select>
+                {showCreateList ? (
+                  <form onSubmit={(e) => void createListFromCaptures(e)} className="space-y-2">
+                    <input
+                      value={newListName}
+                      onChange={(e) => setNewListName(e.target.value)}
+                      placeholder="New list name"
+                      autoFocus
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-brand-main focus:bg-white"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCreateList(false);
+                          setNewListName('');
+                        }}
+                        className="h-9 flex-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-600"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={creatingList || !newListName.trim()}
+                        className="h-9 flex-1 rounded-lg bg-brand-main text-xs font-semibold text-white disabled:opacity-50"
+                      >
+                        {creatingList ? 'Creating…' : 'Create'}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateList(true)}
+                    className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-300 text-xs font-semibold text-slate-700 hover:border-brand-main/40 hover:text-brand-main"
+                  >
+                    <IconPlus size={14} />
+                    New list
+                  </button>
+                )}
+              </div>
+            ) : null}
           </div>
           <div className="relative w-full sm:w-72">
             <IconSearch
@@ -534,52 +648,6 @@ export default function CapturesPage() {
         </div>
       </div>
 
-      {showCreateList ? (
-        <form
-          onSubmit={(e) => void createListFromCaptures(e)}
-          className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-end"
-        >
-          <div className="min-w-0 flex-1">
-            <label className="mb-1 block text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">
-              New list name
-            </label>
-            <input
-              value={newListName}
-              onChange={(e) => setNewListName(e.target.value)}
-              placeholder="e.g. Dot commenters"
-              autoFocus
-              className="h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm outline-none focus:border-brand-main focus:bg-white"
-            />
-            <p className="mt-1 text-[11px] leading-4 text-slate-500">
-              Same lists as the extension. Name only here — set motive, agent, and auto-enrich on{' '}
-              <Link href="/dashboard/leads/lists" className="font-semibold text-brand-main hover:underline">
-                Lists
-              </Link>
-              .
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setShowCreateList(false);
-                setNewListName('');
-              }}
-              className="h-10 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={creatingList || !newListName.trim()}
-              className="h-10 rounded-lg bg-brand-main px-4 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {creatingList ? 'Creating…' : 'Create'}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
       {listFilter && listFilter !== 'none' ? (
         <ListEnrichmentHint list={lists.find((l) => l.id === listFilter) ?? null} />
       ) : null}
@@ -595,7 +663,7 @@ export default function CapturesPage() {
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-main/40 hover:text-brand-main disabled:opacity-50"
             >
               <IconSparkles size={13} />
-              Enrich selected
+              Research selected
             </button>
             <button
               type="button"
@@ -603,7 +671,7 @@ export default function CapturesPage() {
               onClick={() => void enrichBulk(rows.map((r) => r.id))}
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:border-brand-main/40 hover:text-brand-main disabled:opacity-50"
             >
-              Enrich all
+              Research all
             </button>
             <button
               type="button"
@@ -611,7 +679,7 @@ export default function CapturesPage() {
               onClick={() => openCrm(selectedIds)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-brand-main px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-main/80 disabled:opacity-50"
             >
-              Add to CRM
+              Add to leads
             </button>
           </div>
         </div>
@@ -629,13 +697,13 @@ export default function CapturesPage() {
             <IconBookmark size={32} className="mx-auto text-slate-300" />
             <h2 className="mt-3 text-base font-semibold text-text-100">
               {listFilter || debouncedQuery || tab !== 'all'
-                ? 'No captures match these filters'
-                : 'No captures yet'}
+                ? 'No profiles match these filters'
+                : 'No saved profiles yet'}
             </h2>
             <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-text-300">
               {listFilter || debouncedQuery || tab !== 'all'
-                ? 'Try another list filter or clear search.'
-                : 'Install the LeadHub extension, then press Save on any LinkedIn profile or post and pick a list.'}
+                ? 'Try a different filter or clear your search.'
+                : 'Install the LeadHub browser extension, then click Save on any LinkedIn profile to capture them here.'}
             </p>
           </div>
         ) : (
@@ -700,10 +768,10 @@ export default function CapturesPage() {
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-base font-semibold text-slate-900">Add to LeadHub CRM</h2>
+                <h2 className="text-base font-semibold text-slate-900">Add to All Leads</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-500">
-                  {crmIds.length} target{crmIds.length > 1 ? 's' : ''}. Creates the lead only —
-                  enrichment stays off unless you turn it on below.
+                  Adding {crmIds.length} {crmIds.length > 1 ? 'people' : 'person'} to your lead database.
+                  You can also run AI research on them.
                 </p>
               </div>
               <button
@@ -736,11 +804,11 @@ export default function CapturesPage() {
               />
               <span>
                 <span className="block text-sm font-semibold text-slate-900">
-                  Also start enrichment
+                  Run AI research
                 </span>
                 <span className="mt-0.5 block text-xs leading-5 text-slate-500">
-                  Scrapes LinkedIn/company details and runs your selected agent. Leave off to only
-                  create the CRM lead.
+                  Gather company info, buying signals, and draft personalized outreach.
+                  Leave off to just save them to your leads.
                 </span>
               </span>
             </label>
@@ -822,12 +890,18 @@ function CaptureTableRow({
 }) {
   const status = CAPTURE_STATUS_STYLE[row.status];
   const resolution = row.companyResolution;
+  const resolutionStyle = resolution ? resolutionBadge(resolution.status) : null;
   const authorMissing = row.error === 'author_unresolved';
   const companyLabel = resolution?.name ?? row.companyName;
+  const personLabel = displayPersonName(row.personName) ?? 'Unknown person';
+  const roleLabel = displayRole(row.positionTitle, row.headline, personLabel);
   const kind = captureKind(row);
   const fromComment = isFromPostComment(row);
   const comment = fromComment ? commentSnippet(row) : null;
   const source = fromComment ? sourcePostInfo(row) : null;
+  const sourceAuthor = source?.author ? displayPersonName(source.author) : null;
+  const sourceIsSamePerson =
+    !!sourceAuthor && sourceAuthor.toLowerCase() === personLabel.toLowerCase();
   const linkedInUrl =
     row.personProfileUrl ?? (row.type === 'post' && row.url ? row.url : null);
 
@@ -839,24 +913,24 @@ function CaptureTableRow({
           checked={selected}
           onChange={onToggle}
           className="h-3.5 w-3.5 rounded border-slate-300"
-          aria-label={`Select ${row.personName ?? 'capture'}`}
+          aria-label={`Select ${personLabel}`}
         />
       </td>
 
       <td className="p-3 align-middle">
         <div className="flex min-w-[11rem] max-w-[16rem] items-start gap-2.5">
           <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
-            {(row.personName ?? '?').charAt(0).toUpperCase()}
+            {personLabel.charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
             <Link
               href={`/dashboard/captures/${row.id}`}
               className="block truncate font-bold text-slate-950 transition hover:text-brand-main"
             >
-              {row.personName ?? 'Unknown person'}
+              {personLabel}
             </Link>
             <p className="mt-0.5 line-clamp-2 text-slate-500">
-              {row.positionTitle ?? row.headline ?? '—'}
+              {roleLabel || '—'}
             </p>
           </div>
         </div>
@@ -869,17 +943,17 @@ function CaptureTableRow({
               <IconBuilding size={13} className="shrink-0 text-slate-400" />
               <span className="truncate">{companyLabel}</span>
             </p>
-            {resolution ? (
+            {resolutionStyle ? (
               <span
-                className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${RESOLUTION_STYLE[resolution.status].className}`}
+                className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${resolutionStyle.className}`}
               >
-                {RESOLUTION_STYLE[resolution.status].label}
+                {resolutionStyle.label}
               </span>
             ) : null}
           </div>
         ) : (
           <p className="text-slate-400">
-            {authorMissing ? 'Author missing' : 'Not resolved'}
+            {authorMissing ? 'Dead lead' : 'Using this profile'}
           </p>
         )}
       </td>
@@ -929,7 +1003,7 @@ function CaptureTableRow({
         <td className="p-3 align-middle">
           {source && (source.author || source.url || source.authorUrl) ? (
             <div className="min-w-0 max-w-[14rem]">
-              {source.author ? (
+              {sourceAuthor && !sourceIsSamePerson ? (
                 source.authorUrl ? (
                   <a
                     href={source.authorUrl}
@@ -937,16 +1011,16 @@ function CaptureTableRow({
                     rel="noreferrer"
                     className="block truncate font-semibold text-slate-800 hover:text-brand-main"
                   >
-                    {source.author}
+                    {sourceAuthor}
                   </a>
                 ) : (
-                  <p className="truncate font-semibold text-slate-800">{source.author}</p>
+                  <p className="truncate font-semibold text-slate-800">{sourceAuthor}</p>
                 )
               ) : (
                 <p className="font-semibold text-slate-600">Source post</p>
               )}
               <p className="mt-0.5 text-[11px] text-slate-500">
-                {source.author ? 'Post author' : 'LinkedIn post'}
+                {sourceAuthor && !sourceIsSamePerson ? 'Post author' : 'LinkedIn post'}
               </p>
               {source.url ? (
                 <a
@@ -993,7 +1067,7 @@ function CaptureTableRow({
           className={`inline-flex rounded-full border px-2 py-1 font-bold ${status.className}`}
           title={row.error ?? undefined}
         >
-          {authorMissing ? 'Needs profile' : status.label}
+          {authorMissing ? 'Dead lead' : status.label}
         </span>
       </td>
 

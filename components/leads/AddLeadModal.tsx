@@ -127,7 +127,7 @@ export function AddLeadModal({
       setExtraLists((prev) => (prev.some((item) => item.id === created.id) ? prev : [...prev, option]));
       onListCreated?.(created);
       toast.success(
-        `List "${created.name}" created. Configure motive, agent, and auto-enrich on Lists.`,
+        `List "${created.name}" created. You can configure it further in Settings.`,
       );
       return option;
     } catch (err) {

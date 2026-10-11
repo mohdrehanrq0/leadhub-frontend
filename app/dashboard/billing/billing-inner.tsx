@@ -157,7 +157,7 @@ export default function BillingPage() {
       <PageHeader
         eyebrow="Billing"
         title="Credits"
-        description={`1 enrichment = 1 credit. Credits are charged only when enrichment finishes successfully. Bring your own ${APOLLO_UI_ENABLED ? 'Apollo, ' : ''}Apify, OpenAI/Gemini, and Reoon keys.`}
+        description={`1 credit = 1 lead analyzed. You're only charged when AI research completes successfully.`}
       />
 
       {pollingCrypto && (
@@ -173,21 +173,21 @@ export default function BillingPage() {
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.available ?? 0).toLocaleString()}
           </p>
-          <p className="mt-1 text-xs text-text-200">credits ready to enrich</p>
+          <p className="mt-1 text-xs text-text-200">credits ready to use</p>
         </div>
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Reserved</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.reservedBalance ?? 0).toLocaleString()}
           </p>
-          <p className="mt-1 text-xs text-text-200">in-flight enrichments</p>
+          <p className="mt-1 text-xs text-text-200">currently being used</p>
         </div>
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Used</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.totalUsed ?? 0).toLocaleString()}
           </p>
-          <p className="mt-1 text-xs text-text-200">successful enrichments</p>
+          <p className="mt-1 text-xs text-text-200">leads analyzed</p>
         </div>
       </div>
 

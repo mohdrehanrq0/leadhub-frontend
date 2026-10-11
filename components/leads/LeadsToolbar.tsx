@@ -159,8 +159,8 @@ export function LeadsToolbar(props: Props) {
           activeClassName="border-emerald-300 bg-emerald-50/60"
         />
         <ToolbarMultiSelect
-          label="Enrichment"
-          emptyLabel="All enrichment"
+          label="Research"
+          emptyLabel="All research status"
           options={COLUMN_FILTER_CONFIG.enrichmentStatus.options}
           values={enrichmentStatuses}
           onChange={onEnrichmentStatusesChange}

@@ -11,6 +11,8 @@ export type EnrichmentAgentSummary = {
   description?: string | null;
   mission?: string | null;
   isDefault: boolean;
+  outreachAgentId?: string | null;
+  outreachAgentName?: string | null;
   config?: {
     mission?: string;
     modules?: {
@@ -225,8 +227,9 @@ export function EnrichmentAgentPicker({
               </div>
             ) : null}
             <p className="text-[11px] leading-4 text-slate-500">
-              Enrichment finds facts. The Outreach Engine turns them into a full email using a
-              hiring / funding / growth template — not a one-line opener.
+              {selectedAgent?.outreachAgentName
+                ? `Outreach agent: ${selectedAgent.outreachAgentName}. Capture lists and CRM leads use this same writer.`
+                : 'Enrichment finds facts. The linked outreach agent writes the emails for both capture lists and CRM leads.'}
             </p>
           </div>
         )}

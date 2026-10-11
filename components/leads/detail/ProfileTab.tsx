@@ -26,6 +26,31 @@ export function ProfileTab({ person }: { person?: LinkedInPersonView }) {
   return (
     <div className="space-y-4">
       <DetailCard>
+        <div className="flex min-w-0 items-start gap-3">
+          {person.photo ? (
+            <img src={person.photo} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+          ) : (
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-slate-100 text-lg font-semibold text-slate-500">
+              {(person.fullName || 'P').charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold text-slate-950">{person.fullName || 'LinkedIn profile'}</p>
+            {person.headline ? <p className="mt-0.5 text-sm leading-6 text-slate-600">{person.headline}</p> : null}
+            {person.linkedinUrl ? (
+              <a
+                href={person.linkedinUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-1 inline-flex text-sm font-semibold text-violet-700 hover:underline"
+              >
+                Open LinkedIn profile
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </DetailCard>
+      <DetailCard>
         <div className="@container">
           <div className="grid min-w-0 gap-3 @min-[600px]:grid-cols-3">
             <Stat label="Connections" value={person.connectionsCount ? person.connectionsCount.toLocaleString() : '—'} />

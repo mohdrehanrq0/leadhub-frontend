@@ -39,15 +39,15 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
 const NAV_MAIN = [
-  { name: 'Leads CRM', href: '/dashboard/leads', icon: IconUsers },
-  // Captures is hidden for every account except CAPTURES_ALLOWED_EMAIL.
-  // { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark },
-  { name: 'Sign-ups', href: '/dashboard/signups', icon: IconMailOpened },
+  { name: 'All Leads', href: '/dashboard/leads', icon: IconUsers },
+  // LinkedIn Prospects is hidden for every account except CAPTURES_ALLOWED_EMAIL.
+  // { name: 'LinkedIn Prospects', href: '/dashboard/captures', icon: IconBookmark },
+  { name: 'Inbound', href: '/dashboard/signups', icon: IconMailOpened },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
   { name: 'Settings', href: '/dashboard/settings', icon: IconSettings },
 ];
 
-const CAPTURES_NAV = { name: 'Captures', href: '/dashboard/captures', icon: IconBookmark };
+const CAPTURES_NAV = { name: 'LinkedIn Prospects', href: '/dashboard/captures', icon: IconBookmark };
 
 export function MainSidebar({
   isOpen,

@@ -621,14 +621,14 @@ export function leadHasEnrichmentInput(lead: LeadRow) {
   return tier !== 'rejected' && tier !== 'discovery';
 }
 
-/** Why enrichment is blocked — shown as a warning chip on lead cards. */
+/** Why research is blocked — shown as a warning chip on lead cards. */
 export function enrichmentBlockReason(lead: LeadRow): string | null {
   if (lead.enrichmentStatus === 'in_progress') return null;
   if (lead.enrichmentStatus === 'completed') return null;
 
   const tier = leadInputTier(lead);
-  if (tier === 'rejected') return 'No company website, LinkedIn, or name — cannot enrich';
-  if (tier === 'discovery') return 'No company website — needs discovery, costs more';
+  if (tier === 'rejected') return 'Missing company info — add website or LinkedIn';
+  if (tier === 'discovery') return 'No website — will search for it (uses extra credits)';
   return null;
 }
 
@@ -646,24 +646,24 @@ export function canReEnrichLead(lead: LeadRow) {
   return lead.enrichmentStatus === 'partial' && leadHasEnrichmentInput(lead);
 }
 
-/** User-facing reason when the enrich button cannot be used (detail header, etc.). */
+/** User-facing reason when the research button cannot be used (detail header, etc.). */
 export function enrichmentDisabledReason(lead: LeadRow): string | null {
   if (lead.enrichmentStatus === 'in_progress') {
-    return 'Enrichment is already in progress.';
+    return 'Research is already running.';
   }
   if (lead.enrichmentStatus === 'needs_identity_confirmation') {
-    return 'Confirm which company this lead is before continuing enrichment.';
+    return 'Please verify which company this lead belongs to before continuing.';
   }
   if (canEnrichLead(lead) || canReEnrichLead(lead)) return null;
 
   const tier = leadInputTier(lead);
   if (tier === 'rejected') {
-    return 'Add a company website, company name, or company LinkedIn URL to enable enrichment.';
+    return 'Add a company website, name, or LinkedIn URL to run research.';
   }
   if (tier === 'discovery') {
-    return 'This lead has only a company name. Add the company website, or run enrichment with discovery enabled to search for it.';
+    return 'This lead only has a company name. Add the website, or run research with discovery enabled to find it.';
   }
-  return 'Enrichment is not available for this lead yet.';
+  return 'Research is not available for this lead yet.';
 }
 
 export const INPUT_TIER_META: Record<
@@ -671,29 +671,29 @@ export const INPUT_TIER_META: Record<
   { label: string; description: string; tone: string }
 > = {
   rejected: {
-    label: 'Cannot enrich',
-    description: 'Nothing identifies the company — no website, LinkedIn URL, or name.',
+    label: 'Missing info',
+    description: 'Add a company website, LinkedIn URL, or company name to run research.',
     tone: 'border-rose-200 bg-rose-50 text-rose-700',
   },
   discovery: {
-    label: 'Needs discovery',
+    label: 'Website unknown',
     description:
-      'Company name only. The website has to be found first, which costs more and can fail.',
+      'We only have the company name. Finding the website uses extra credits and may not succeed.',
     tone: 'border-amber-200 bg-amber-50 text-amber-700',
   },
   base: {
     label: 'Ready',
-    description: 'The company website is known, so research starts immediately.',
+    description: 'Company website is known — research can start immediately.',
     tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   medium: {
     label: 'Good',
-    description: 'Website and company LinkedIn known, so people can be searched directly.',
+    description: 'Company website and LinkedIn are known — we can find the right people.',
     tone: 'border-emerald-200 bg-emerald-50 text-emerald-700',
   },
   good: {
     label: 'Complete',
-    description: 'Company and person are both identified.',
+    description: 'All company and contact info is available.',
     tone: 'border-blue-200 bg-blue-50 text-blue-700',
   },
 };
@@ -722,32 +722,32 @@ export function enrichmentStatusMeta(
 ) {
   switch (status) {
     case 'completed':
-      return { label: 'Enriched', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: '✓' };
+      return { label: 'Researched', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700', icon: '✓' };
     case 'partial': {
       const targetNotFound =
         typeof enrichmentError === 'string' &&
-        (enrichmentError.startsWith('Research complete') ||
+        (enrichmentError.startsWith('Dead lead') ||
           enrichmentError.includes('no contacts matched the agent target'));
       return targetNotFound
         ? {
-            label: 'Target not found',
-            tone: 'border-amber-200 bg-amber-50 text-amber-800',
+            label: 'No data found',
+            tone: 'border-slate-200 bg-slate-50 text-slate-600',
             icon: '○',
           }
         : {
-            label: 'Mission incomplete',
+            label: 'Partial data',
             tone: 'border-amber-200 bg-amber-50 text-amber-700',
             icon: '~',
           };
     }
     case 'in_progress':
-      return { label: 'Enriching…', tone: 'border-blue-200 bg-blue-50 text-blue-700', icon: '⟳' };
+      return { label: 'Analyzing…', tone: 'border-blue-200 bg-blue-50 text-blue-700', icon: '⟳' };
     case 'needs_identity_confirmation':
-      return { label: 'Confirm company', tone: 'border-amber-300 bg-amber-50 text-amber-800', icon: '?' };
+      return { label: 'Verify company', tone: 'border-amber-300 bg-amber-50 text-amber-800', icon: '?' };
     case 'failed':
       return { label: 'Failed', tone: 'border-rose-200 bg-rose-50 text-rose-700', icon: '✕' };
     default:
-      return { label: 'Not enriched', tone: 'border-slate-200 bg-slate-50 text-slate-500', icon: '○' };
+      return { label: 'Not researched', tone: 'border-slate-200 bg-slate-50 text-slate-500', icon: '○' };
   }
 }
 
