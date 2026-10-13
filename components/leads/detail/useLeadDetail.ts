@@ -9,6 +9,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { useLinkedInSnapshot } from '../../enrichment/useEnrichmentData';
 import type { EnrichmentFact } from '../../enrichment/types';
 import { buildIdentityNote } from '../../../lib/identity-reasons';
+import { isGenericInbox } from './model';
 import {
   canEnrichLead,
   canReEnrichLead,
@@ -244,7 +245,7 @@ export function useLeadDetail(leadIdOverride?: string | null) {
     const email = lead?.contact?.email?.trim();
     if (!email?.includes('@')) return null;
     const domain = email.split('@')[1]?.toLowerCase().trim();
-    if (!domain || GENERIC_DOMAINS.has(domain)) return null;
+    if (!domain || GENERIC_DOMAINS.has(domain) || isGenericInbox(email)) return null;
     return domain;
   }, [lead?.company?.domain, lead?.contact?.email]);
 
@@ -327,6 +328,13 @@ export function useLeadDetail(leadIdOverride?: string | null) {
 
   const identityHeadline = useMemo(() => {
     if (!lead) return null;
+    const namedCompany = (lead.company?.name ?? '').trim();
+    const hasCompany =
+      Boolean(lead.company?.domain || lead.company?.website || lead.company?.socialLinks?.linkedin) ||
+      Boolean(namedCompany && !/employer tbd/i.test(namedCompany)) ||
+      Boolean(linkedinSnapshot?.company?.name || linkedinSnapshot?.company?.linkedinUrl);
+    const personLinkedIn = Boolean(lead.contact?.linkedinUrl || linkedinSnapshot?.person?.linkedinUrl);
+    if (personLinkedIn && !hasCompany) return null;
     const enrichmentDone = lead.enrichmentStatus === 'completed' || lead.enrichmentStatus === 'partial';
     const suggestions = lead.researchSuggestions as {
       companyNotFound?: boolean;
@@ -360,7 +368,7 @@ export function useLeadDetail(leadIdOverride?: string | null) {
         researchActivities,
       })?.headline ?? null
     );
-  }, [lead, liveFetchStats, researchActivities]);
+  }, [lead, linkedinSnapshot, liveFetchStats, researchActivities]);
 
   const formatDate = useCallback(
     (value?: string | null) =>

@@ -7,6 +7,7 @@ import { IconArrowLeft, IconDeviceFloppy, IconEye, IconTrash } from '@tabler/ico
 import { toast } from 'sonner';
 import api from '../../../../../lib/api';
 import { EnrichmentAgentPicker } from '../../../../../components/leads/EnrichmentAgentPicker';
+import { isGenericInbox } from '../../../../../components/leads/detail/model';
 import { leadName, LeadList, LeadRow, priorityTone, stageMeta } from '../../../../../components/leads/types';
 
 function errorMessage(err: unknown, fallback: string) {
@@ -190,7 +191,11 @@ export default function LeadListDetailPage() {
                   <tr key={lead.id} className="hover:bg-slate-50">
                     <td className="p-4">
                       <p className="font-black text-slate-950">{leadName(lead)}</p>
-                      <p className="text-slate-500">{lead.contact?.email || lead.contact?.role || 'No contact detail'}</p>
+                      <p className="text-slate-500">
+                        {(lead.contact?.email && !isGenericInbox(lead.contact.email) ? lead.contact.email : null) ||
+                          lead.contact?.role ||
+                          'No contact detail'}
+                      </p>
                     </td>
                     <td className="p-4">
                       <p className="font-bold text-slate-800">{lead.company?.name || 'Unknown'}</p>

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { IconCheck, IconCopy, IconExternalLink, IconMail, IconPlayerPlay, IconX } from '@tabler/icons-react';
 import { toast } from 'sonner';
+import { isGenericInbox } from '../detail/model';
 import { canEnrichLead, type LeadRow } from '../types';
 
 type Props = {
@@ -13,7 +14,8 @@ type Props = {
 };
 
 export function EmailCell({ lead, onEnrich, enriching }: Props) {
-  const email = lead.contact?.email?.trim() || null;
+  const stored = lead.contact?.email?.trim() || '';
+  const email = stored && !isGenericInbox(stored) ? stored : null;
   const enrichable = canEnrichLead(lead) && lead.enrichmentStatus !== 'in_progress';
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);

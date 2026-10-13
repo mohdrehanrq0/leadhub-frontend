@@ -621,10 +621,16 @@ export function leadHasEnrichmentInput(lead: LeadRow) {
   return tier !== 'rejected' && tier !== 'discovery';
 }
 
+/** A person LinkedIn profile with no company site is a valid lead. The website is optional. */
+export function personLinkedInWithoutCompany(lead: LeadRow): boolean {
+  return Boolean(lead.contact?.linkedinUrl) && !leadCompanyDomain(lead) && !leadCompanyLinkedin(lead);
+}
+
 /** Why research is blocked — shown as a warning chip on lead cards. */
 export function enrichmentBlockReason(lead: LeadRow): string | null {
   if (lead.enrichmentStatus === 'in_progress') return null;
   if (lead.enrichmentStatus === 'completed') return null;
+  if (personLinkedInWithoutCompany(lead)) return null;
 
   const tier = leadInputTier(lead);
   if (tier === 'rejected') return 'Missing company info — add website or LinkedIn';
@@ -643,6 +649,7 @@ export function canEnrichLead(lead: LeadRow) {
 export function canReEnrichLead(lead: LeadRow) {
   // Already enriched once — the run itself found the anchors the list row lacks.
   if (lead.enrichmentStatus === 'completed') return true;
+  if (lead.enrichmentStatus === 'partial' && personLinkedInWithoutCompany(lead)) return true;
   return lead.enrichmentStatus === 'partial' && leadHasEnrichmentInput(lead);
 }
 
@@ -655,6 +662,8 @@ export function enrichmentDisabledReason(lead: LeadRow): string | null {
     return 'Please verify which company this lead belongs to before continuing.';
   }
   if (canEnrichLead(lead) || canReEnrichLead(lead)) return null;
+
+  if (personLinkedInWithoutCompany(lead)) return null;
 
   const tier = leadInputTier(lead);
   if (tier === 'rejected') {

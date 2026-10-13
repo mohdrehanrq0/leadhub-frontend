@@ -10,6 +10,7 @@ import { ImportDestinationFields } from '@/components/leads/ImportDestinationFie
 import { EnrichmentAgentPicker } from '@/components/leads/EnrichmentAgentPicker';
 import { ListEnrichmentHint } from '@/components/leads/ListEnrichmentHint';
 import type { LeadCategory, LeadList } from '@/components/leads/types';
+import { visibleEmployer } from '@/lib/employer';
 import {
   CAPTURE_KIND_LABEL,
   CAPTURE_STATUS_STYLE,
@@ -892,7 +893,7 @@ function CaptureTableRow({
   const resolution = row.companyResolution;
   const resolutionStyle = resolution ? resolutionBadge(resolution.status) : null;
   const authorMissing = row.error === 'author_unresolved';
-  const companyLabel = resolution?.name ?? row.companyName;
+  const companyLabel = visibleEmployer(resolution?.status === 'person_only' ? null : (resolution?.name ?? row.companyName));
   const personLabel = displayPersonName(row.personName) ?? 'Unknown person';
   const roleLabel = displayRole(row.positionTitle, row.headline, personLabel);
   const kind = captureKind(row);

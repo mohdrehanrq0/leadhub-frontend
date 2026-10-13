@@ -7,11 +7,14 @@ import { DeleteLeadsDialog } from '../DeleteLeadsDialog';
 import { EnrichmentAgentPicker } from '../EnrichmentAgentPicker';
 import { IdentityConfirmModal, type IdentityCandidate } from '../IdentityConfirmModal';
 import { pickLinkedInUrl } from '../LinkedInLink';
+import { emailSourceHost } from '@/lib/email-display';
+import { isHiddenEmployer, visibleEmployer } from '@/lib/employer';
 import { CompanyTab } from './CompanyTab';
 import { EvidenceTab } from './EvidenceTab';
 import { LeadDetailHeader } from './LeadDetailHeader';
 import {
   collectEmails,
+  isGenericInbox,
   companyPhone,
   companySnapshot,
   dataGaps,
@@ -27,7 +30,7 @@ import { ProfileTab } from './ProfileTab';
 import { RightRail } from './RightRail';
 import { SearchDrawer } from './SearchDrawer';
 import { SignalCard } from './SignalCard';
-import type { DetailTab } from './types';
+import type { DetailTab, EmailEntry } from './types';
 import type { LeadDetailController } from './useLeadDetail';
 
 const TABS: Array<{ id: DetailTab; label: string }> = [
@@ -93,10 +96,17 @@ export function LeadDetailView({
   const linkedInPerson = page.linkedinSnapshot?.person;
   const linkedInCompany = page.linkedinSnapshot?.company;
   const crmCompany = lead.company?.name ?? '';
-  const companyLabel =
-    linkedInCompany?.name || (crmCompany.includes('employer TBD') ? '' : crmCompany);
+  const companyLabel = visibleEmployer(linkedInCompany?.name) || visibleEmployer(crmCompany);
   const enrichmentStatus = lead.enrichmentStatus;
   const incomplete = enrichmentStatus === 'partial' || enrichmentStatus === 'failed';
+  const stealthEmployer = isHiddenEmployer(linkedInCompany?.name) || isHiddenEmployer(crmCompany);
+  const personWithoutCompany =
+    Boolean(linkedInPerson) &&
+    (stealthEmployer ||
+      (!visibleEmployer(linkedInCompany?.name) &&
+        !visibleEmployer(crmCompany) &&
+        !lead.company?.domain &&
+        !lead.company?.website));
   const draftSubject = page.draft?.subject ?? '';
   const draftBody = page.draft?.body ?? '';
   const snapshot = {
@@ -147,7 +157,18 @@ export function LeadDetailView({
         onDeleted={() => router.push('/dashboard/leads')}
       />
 
-      {incomplete || page.enrichBlock || page.identityHeadline ? (
+      {personWithoutCompany ? (
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <EmailFoundNote email={emails[0] ?? null} />
+          <OptionalWebsite
+            show={showWebsite}
+            onShow={() => setShowWebsite(true)}
+            onSave={(website) => void page.saveWebsite(website)}
+          />
+        </div>
+      ) : null}
+
+      {!personWithoutCompany && (incomplete || page.enrichBlock || page.identityHeadline) ? (
         <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
           <p className="min-w-0 truncate">
             {page.identityHeadline || page.enrichBlock || 'Some data missing'}
@@ -245,7 +266,7 @@ export function LeadDetailView({
                 }
               />
               {linkedInPerson ? <ProfileTab person={linkedInPerson} /> : <PersonSnapshot {...person} />}
-              {linkedInCompany || company.industry || company.does || company.domain ? (
+              {!stealthEmployer && (linkedInCompany || company.industry || company.does || company.domain) ? (
                 <CompanySnapshot {...company} />
               ) : linkedInPerson ? (
                 <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
@@ -335,5 +356,75 @@ export function LeadDetailView({
         }}
       />
     </div>
+  );
+}
+
+function EmailFoundNote({ email }: { email: EmailEntry | null }) {
+  if (!email) {
+    return (
+      <p className="min-w-0">
+        No company or website on this LinkedIn profile. A website is optional.
+      </p>
+    );
+  }
+  const host = emailSourceHost(email.sourceUrl);
+  const where = email.sourceTitle?.trim() || host;
+  const generic = isGenericInbox(email.email);
+  return (
+    <p className="min-w-0">
+      Found {email.email}
+      {where && email.sourceUrl ? (
+        <>
+          {' '}
+          on{' '}
+          <a href={email.sourceUrl} target="_blank" rel="noreferrer" className="font-medium underline">
+            {where}
+          </a>
+        </>
+      ) : (
+        '. No source page was saved with this address'
+      )}
+      {generic
+        ? '. It is a shared inbox, so that domain is not the company website.'
+        : '.'}{' '}
+      A website is optional.
+    </p>
+  );
+}
+
+function OptionalWebsite({
+  show,
+  onShow,
+  onSave,
+}: {
+  show: boolean;
+  onShow: () => void;
+  onSave: (website: string) => void;
+}) {
+  if (!show) {
+    return (
+      <button type="button" onClick={onShow} className="shrink-0 text-sm font-medium text-slate-900 underline">
+        Add website
+      </button>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-1.5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const data = new FormData(event.currentTarget);
+        onSave(String(data.get('website') ?? ''));
+      }}
+    >
+      <input
+        name="website"
+        placeholder="company.com"
+        className="h-8 w-36 rounded-lg border border-slate-300 bg-white px-2 text-sm"
+      />
+      <button type="submit" className="text-sm font-medium text-slate-900">
+        Save
+      </button>
+    </form>
   );
 }
