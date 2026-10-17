@@ -139,7 +139,7 @@ export default function CaptureDetailPage() {
       ) : null}
       {!capture.leadId && !authorMissing ? (
         <p className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
-          Add this profile to CRM to open the same lead view here, including the outreach sequence.
+          Add this profile to CRM to open the lead view, including the outreach sequence.
         </p>
       ) : null}
     </div>

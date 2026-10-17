@@ -37,12 +37,21 @@ export default function ExtensionSettingsPage() {
   const [defaultAgentId, setDefaultAgentId] = useState('');
   const [sendTiming, setSendTiming] = useState('right_away');
   const [autoSend, setAutoSend] = useState(false);
+  const [autoLinkedIn, setAutoLinkedIn] = useState(false);
   const [digestSlack, setDigestSlack] = useState(false);
   const [whatsappUpdates, setWhatsappUpdates] = useState('');
   const [slackWebhook, setSlackWebhook] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [timezone, setTimezone] = useState('UTC');
   const [leadSniperConnected, setLeadSniperConnected] = useState(false);
+  const [agentEnabled, setAgentEnabled] = useState(false);
+  const [agentPaused, setAgentPaused] = useState(false);
+  const [quietStart, setQuietStart] = useState(21);
+  const [quietEnd, setQuietEnd] = useState(7);
+  const [draftCap, setDraftCap] = useState(20);
+  const [maxFollowUps, setMaxFollowUps] = useState(1);
+  const [followUpDays, setFollowUpDays] = useState(4);
+  const [savingAgent, setSavingAgent] = useState(false);
   const [savingAutonomy, setSavingAutonomy] = useState(false);
   const [waStatus, setWaStatus] = useState('disconnected');
   const [waQr, setWaQr] = useState<string | null>(null);
@@ -65,6 +74,7 @@ export default function ExtensionSettingsPage() {
         setDefaultAgentId(settings.defaultAgentId ?? '');
         setSendTiming(settings.sendTiming ?? 'right_away');
         setAutoSend(Boolean(settings.autoSend));
+        setAutoLinkedIn(Boolean(settings.autoLinkedIn));
         setDigestSlack(Boolean(settings.digestSlack));
         setWhatsappUpdates(
           settings.whatsappUpdates ?? (settings.digestWhatsapp ? 'both' : ''),
@@ -73,6 +83,13 @@ export default function ExtensionSettingsPage() {
         setWhatsappNumber(settings.whatsappNumber ?? '');
         setTimezone(settings.timezone ?? 'UTC');
         setLeadSniperConnected(Boolean(settings.leadSniperConnected));
+        setAgentEnabled(Boolean(settings.outreachAgentEnabled));
+        setAgentPaused(Boolean(settings.outreachAgentPaused));
+        setQuietStart(settings.outreachQuietStart ?? 21);
+        setQuietEnd(settings.outreachQuietEnd ?? 7);
+        setDraftCap(settings.outreachDraftCap ?? 20);
+        setMaxFollowUps(settings.outreachMaxFollowUps ?? 1);
+        setFollowUpDays(settings.outreachFollowUpWaitDays ?? 4);
       }
       setAgents((agentsRes?.data?.data ?? []) as typeof agents);
       setWriters((writersRes?.data?.data ?? []) as typeof writers);
@@ -107,6 +124,7 @@ export default function ExtensionSettingsPage() {
         defaultAgentId: defaultAgentId || null,
         sendTiming,
         autoSend,
+        autoLinkedIn,
         digestSlack,
         digestWhatsapp:
           whatsappUpdates === 'morning' || whatsappUpdates === 'evening' || whatsappUpdates === 'both',
@@ -354,7 +372,11 @@ export default function ExtensionSettingsPage() {
           </label>
           <label className="flex items-center gap-2 self-end text-sm font-medium text-slate-800">
             <input type="checkbox" checked={autoSend} onChange={(e) => setAutoSend(e.target.checked)} />
-            Auto-send due emails through Lead Sniper
+            Auto-generate the email sequence after enrichment, then send it through Lead Sniper after WhatsApp confirms
+          </label>
+          <label className="flex items-center gap-2 self-end text-sm font-medium text-slate-800 sm:col-span-2">
+            <input type="checkbox" checked={autoLinkedIn} onChange={(e) => setAutoLinkedIn(e.target.checked)} />
+            Auto-generate the LinkedIn message after enrichment, then send it from the silent LeadHub tab.
           </label>
           <label className="block text-sm sm:col-span-2">
             <span className="mb-1 flex items-center gap-2 font-medium text-slate-800">
@@ -453,6 +475,68 @@ export default function ExtensionSettingsPage() {
             enrich and add them to CRM from Captures (or automatically when Auto-enrich is on).
           </li>
         </ol>
+      </SettingsCard>
+
+      <SettingsCard title="LinkedIn outreach agent">
+        <p className="mb-4 text-sm leading-6 text-slate-600">
+          Morning and evening jobs prepare drafts for people you already saved. They do not send
+          LinkedIn invitations or messages. The draft cap is a LeadHub operational policy, not a
+          LinkedIn limit. LinkedIn&apos;s numeric quotas are undisclosed, and staying under an 80%
+          figure does not guarantee account safety.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={agentEnabled} onChange={(event) => setAgentEnabled(event.target.checked)} />
+            Enable morning and evening preparation
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input type="checkbox" checked={agentPaused} onChange={(event) => setAgentPaused(event.target.checked)} />
+            Kill switch — pause scheduling
+          </label>
+          <label className="text-sm text-slate-700">
+            Quiet hours start
+            <input className="mt-1 w-full rounded-lg border px-2 py-1" type="number" min={0} max={23} value={quietStart} onChange={(event) => setQuietStart(Number(event.target.value))} />
+          </label>
+          <label className="text-sm text-slate-700">
+            Quiet hours end
+            <input className="mt-1 w-full rounded-lg border px-2 py-1" type="number" min={0} max={23} value={quietEnd} onChange={(event) => setQuietEnd(Number(event.target.value))} />
+          </label>
+          <label className="text-sm text-slate-700">
+            Drafts per run (LeadHub policy)
+            <input className="mt-1 w-full rounded-lg border px-2 py-1" type="number" min={1} max={100} value={draftCap} onChange={(event) => setDraftCap(Number(event.target.value))} />
+          </label>
+          <label className="text-sm text-slate-700">
+            Max follow-ups
+            <input className="mt-1 w-full rounded-lg border px-2 py-1" type="number" min={0} max={5} value={maxFollowUps} onChange={(event) => setMaxFollowUps(Number(event.target.value))} />
+          </label>
+          <label className="text-sm text-slate-700">
+            Business days before a follow-up
+            <input className="mt-1 w-full rounded-lg border px-2 py-1" type="number" min={1} max={30} value={followUpDays} onChange={(event) => setFollowUpDays(Number(event.target.value))} />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={savingAgent}
+          className={`${settingsBtnPrimary} mt-4`}
+          onClick={() => {
+            setSavingAgent(true);
+            void api
+              .patch('/api/captures/settings', {
+                outreachAgentEnabled: agentEnabled,
+                outreachAgentPaused: agentPaused,
+                outreachQuietStart: quietStart,
+                outreachQuietEnd: quietEnd,
+                outreachDraftCap: draftCap,
+                outreachMaxFollowUps: maxFollowUps,
+                outreachFollowUpWaitDays: followUpDays,
+              })
+              .then(() => toast.success('Outreach agent settings saved.'))
+              .catch(() => toast.error('Could not save outreach agent settings.'))
+              .finally(() => setSavingAgent(false));
+          }}
+        >
+          {savingAgent ? 'Saving…' : 'Save outreach settings'}
+        </button>
       </SettingsCard>
 
       <SettingsCard title="Active tokens" padded={false}>

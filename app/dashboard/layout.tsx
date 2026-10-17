@@ -33,7 +33,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (loading || !user) return;
-    if (pathname.startsWith('/dashboard/captures') && !canSeeCaptures(user.email)) {
+    if (
+      (pathname.startsWith('/dashboard/captures') || pathname.startsWith('/dashboard/outreach')) &&
+      !canSeeCaptures(user.email)
+    ) {
       router.replace('/dashboard/leads');
     }
   }, [user, loading, pathname, router]);

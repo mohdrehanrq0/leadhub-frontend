@@ -40,6 +40,7 @@ export type OutreachRunMessage = {
     };
     selectedType?: string;
     selectionReason?: string;
+    channel?: string;
   };
 };
 
@@ -257,8 +258,18 @@ export function OutreachEmailPanel({
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [generateChannel, setGenerateChannel] = useState<'email' | 'linkedin'>('email');
   const [confirmRegenerate, setConfirmRegenerate] = useState(false);
   const [runs, setRuns] = useState<OutreachRunRow[]>([]);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [sendingLinkedIn, setSendingLinkedIn] = useState(false);
+  const [linkedInQueue, setLinkedInQueue] = useState<{
+    lane: 'today' | 'tomorrow' | 'idle';
+    remaining: { views: number; connects: number; messages: number };
+    sendError?: string | null;
+    outcome?: 'message_sent' | 'invitation_sent' | null;
+  } | null>(null);
+  const [watchLinkedIn, setWatchLinkedIn] = useState(false);
 
   const loadRuns = useCallback(async () => {
     if (!leadId) return;
@@ -272,9 +283,48 @@ export function OutreachEmailPanel({
     }
   }, [leadId]);
 
+  const loadLinkedInQueue = useCallback(async () => {
+    if (!leadId) return;
+    try {
+      const res = await api.get(`/api/outreach-agent/daily?leadId=${leadId}`);
+      setLinkedInQueue(res.data.data ?? null);
+    } catch {
+      setLinkedInQueue(null);
+    }
+  }, [leadId]);
+
   useEffect(() => {
     void loadRuns();
-  }, [loadRuns]);
+    void loadLinkedInQueue();
+  }, [loadRuns, loadLinkedInQueue]);
+
+  useEffect(() => {
+    if (!watchLinkedIn || !leadId) return;
+    let ticks = 0;
+    const timer = window.setInterval(() => {
+      ticks += 1;
+      void api
+        .get(`/api/outreach-agent/daily?leadId=${leadId}`)
+        .then((res) => {
+          const data = res.data.data ?? null;
+          setLinkedInQueue(data);
+          if (data?.outcome === 'message_sent') {
+            toast.success('Message sent on LinkedIn.');
+            setWatchLinkedIn(false);
+          } else if (data?.outcome === 'invitation_sent') {
+            toast.success('Waiting for connection. The note sends after they accept.');
+            setWatchLinkedIn(false);
+          } else if (data?.sendError) {
+            toast.error(data.sendError);
+            setWatchLinkedIn(false);
+          } else if (ticks >= 15) {
+            setWatchLinkedIn(false);
+          }
+        })
+        .catch(() => undefined);
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [watchLinkedIn, leadId]);
 
   // After enrichment finishes, outreach runs on a separate queue — poll briefly.
   useEffect(() => {
@@ -292,36 +342,48 @@ export function OutreachEmailPanel({
   }, [enrichmentStatus, leadId, loadRuns, runs]);
 
   const latest = runs[0] ?? null;
-  const messages = latest?.messages ?? (latest?.message ? [latest.message] : []);
-  const sortedMessages = [...messages].sort(
-    (a, b) => (a.stepNumber ?? 1) - (b.stepNumber ?? 1),
-  );
-  const firstMessage = sortedMessages[0] ?? null;
-  const subject = firstMessage?.subject || fallbackSubject || '';
-  const body = firstMessage?.body || fallbackBody || '';
-  const hasEmail = Boolean(subject.trim() || body.trim());
+  const isLinkedInNote = (msg: OutreachRunMessage) =>
+    msg.validationJson?.channel === 'linkedin' || msg.stepNumber === 101;
+  const emailRun =
+    runs.find((run) => (run.messages ?? []).some((msg) => msg.body && !isLinkedInNote(msg))) ?? null;
+  const emailMessages = [...(emailRun?.messages ?? [])]
+    .filter((msg) => msg.body && !isLinkedInNote(msg))
+    .sort((a, b) => (a.stepNumber ?? 1) - (b.stepNumber ?? 1));
+  const linkedInMessage =
+    runs.flatMap((run) => run.messages ?? []).find((msg) => msg.body && isLinkedInNote(msg)) ?? null;
+  const firstMessage = emailMessages[0] ?? null;
+  const subject = firstMessage?.subject || '';
+  const body = firstMessage?.body || '';
+  const hasEmail = Boolean(body.trim());
   const selectedType =
     firstMessage?.validationJson?.selectedType ||
     outreachIntelligence?.recommendedTemplateTypes?.[0];
 
-  const generate = async (regenerate = false) => {
+  const askGenerate = (channel: 'email' | 'linkedin') => {
+    setGenerateChannel(channel);
+    setConfirmRegenerate(channel === 'email' ? hasEmail : Boolean(linkedInMessage?.body));
+    setConfirmOpen(true);
+  };
+
+  const generate = async (channel: 'email' | 'linkedin' = generateChannel) => {
     setGenerating(true);
     try {
       const res = await api.post(`/api/leads/${leadId}/outreach`, {
         regenerate: true,
         forced: true,
+        channel,
       });
       const data = res.data.data;
       if (data?.status === 'abstained') {
         toast.error(data.abstainReason || 'Outreach abstained — missing required evidence.');
       } else if (data?.status === 'failed') {
         toast.error(data.error || 'Outreach generation failed.');
+      } else if (channel === 'linkedin') {
+        toast.success('LinkedIn message ready. It is written from your agency to this person.');
       } else {
         const stepCount = data?.messages?.length ?? 1;
         toast.success(
-          regenerate
-            ? `Outreach regenerated${stepCount > 1 ? ` (${stepCount} emails)` : ''}.`
-            : `Outreach email ready${stepCount > 1 ? ` — ${stepCount}-step sequence generated` : ''}.`,
+          stepCount > 1 ? `Email sequence ready — ${stepCount} emails.` : 'Email sequence ready.',
         );
       }
       await loadRuns();
@@ -334,6 +396,67 @@ export function OutreachEmailPanel({
       toast.error(message ?? 'Could not generate outreach.');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const sendEmail = async () => {
+    setSendingEmail(true);
+    try {
+      const res = await api.post(`/api/outreach/runs/${leadId}/send-email`);
+      const count = res.data?.data?.count ?? 1;
+      toast.success(count > 1 ? `${count} emails are ready for LeadSniper.` : 'Email is ready for LeadSniper.');
+      await loadRuns();
+    } catch (err) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(message ?? 'Could not send the email to LeadSniper.');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const pingExtension = () =>
+    new Promise<boolean>((resolve) => {
+      const onMessage = (event: MessageEvent) => {
+        const data = event.data as { source?: string; kind?: string } | null;
+        if (data?.source === 'leadhub-extension' && data.kind === 'linkedin-send-ack') {
+          window.removeEventListener('message', onMessage);
+          resolve(true);
+        }
+      };
+      window.addEventListener('message', onMessage);
+      window.postMessage({ source: 'leadhub', kind: 'send-linkedin' }, window.location.origin);
+      window.setTimeout(() => {
+        window.removeEventListener('message', onMessage);
+        resolve(false);
+      }, 1500);
+    });
+
+  const sendLinkedIn = async () => {
+    setSendingLinkedIn(true);
+    try {
+      await api.post(`/api/outreach/runs/${leadId}/send-linkedin`);
+      const started = await pingExtension();
+      if (started) {
+        toast.success('Sending on LinkedIn. This page will confirm when the message or connection request goes through.');
+        setWatchLinkedIn(true);
+      } else {
+        toast.error('Reload the LeadHub extension, then click Send on LinkedIn again.');
+      }
+      await loadRuns();
+      await loadLinkedInQueue();
+      window.setTimeout(() => void loadLinkedInQueue(), 20000);
+      window.setTimeout(() => void loadLinkedInQueue(), 70000);
+    } catch (err) {
+      const message =
+        typeof err === 'object' && err && 'response' in err
+          ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+          : undefined;
+      toast.error(message ?? 'Could not send the LinkedIn note.');
+    } finally {
+      setSendingLinkedIn(false);
     }
   };
 
@@ -414,32 +537,38 @@ export function OutreachEmailPanel({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <IconMail size={16} className="text-violet-700" />
-          <span className="text-sm font-bold text-slate-900">
-            {sortedMessages.length > 1
-              ? `${sortedMessages.length}-Step Outreach Sequence`
-              : 'Personalized Outreach Email'}
-          </span>
+          <span className="text-sm font-bold text-slate-900">Email sequence</span>
         </div>
-        <button
-          type="button"
-          disabled={generating}
-          onClick={() => {
-            setConfirmRegenerate(hasEmail);
-            setConfirmOpen(true);
-          }}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs"
-        >
-          {generating ? (
-            <IconLoader2 size={13} className="animate-spin" />
-          ) : (
-            <IconRefresh size={13} />
-          )}
-          {hasEmail ? 'Regenerate' : 'Generate email'}
-        </button>
+        <div className="flex items-center gap-2">
+          {hasEmail ? (
+            <button
+              type="button"
+              disabled={sendingEmail}
+              onClick={() => void sendEmail()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-700 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-violet-800 disabled:opacity-50"
+            >
+              {sendingEmail ? <IconLoader2 size={13} className="animate-spin" /> : <IconMail size={13} />}
+              Send via LeadSniper
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={generating}
+            onClick={() => askGenerate('email')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50 shadow-xs"
+          >
+            {generating ? (
+              <IconLoader2 size={13} className="animate-spin" />
+            ) : (
+              <IconRefresh size={13} />
+            )}
+            {hasEmail ? 'Regenerate email' : 'Generate email sequence'}
+          </button>
+        </div>
       </div>
 
-      {/* Error / abstain state */}
-      {(latest?.status === 'abstained' || latest?.status === 'failed') && (
+      {(latest?.status === 'abstained' || latest?.status === 'failed') &&
+        !/fit priority (cold|skip)/i.test(latest.error ?? '') && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           {latest.error ||
             (latest.status === 'abstained'
@@ -448,10 +577,7 @@ export function OutreachEmailPanel({
           <button
             type="button"
             className="ml-2 font-semibold text-violet-700 underline"
-            onClick={() => {
-              setConfirmRegenerate(true);
-              setConfirmOpen(true);
-            }}
+            onClick={() => askGenerate('email')}
           >
             Try again
           </button>
@@ -461,13 +587,12 @@ export function OutreachEmailPanel({
       {/* Email content */}
       {hasEmail ? (
         <div className="space-y-3">
-          {sortedMessages.length > 1 ? (
-            // Multi-step sequence view
-            sortedMessages.map((msg, idx) => (
+          {emailMessages.length > 1 ? (
+            emailMessages.map((msg, idx) => (
               <EmailStepCard
                 key={msg.id}
                 step={msg.stepNumber ?? idx + 1}
-                totalSteps={sortedMessages.length}
+                totalSteps={emailMessages.length}
                 subject={msg.subject ?? ''}
                 body={msg.body ?? ''}
                 sendAfterDays={msg.sendAfterDays ?? 0}
@@ -501,10 +626,7 @@ export function OutreachEmailPanel({
           <button
             type="button"
             disabled={generating || enrichmentStatus === 'in_progress'}
-            onClick={() => {
-              setConfirmRegenerate(false);
-              setConfirmOpen(true);
-            }}
+            onClick={() => askGenerate('email')}
             className="mt-4 inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white hover:bg-violet-700 disabled:opacity-50"
           >
             {generating ? (
@@ -512,15 +634,81 @@ export function OutreachEmailPanel({
             ) : (
               <IconMail size={14} />
             )}
-            Generate outreach email
+            Generate email sequence
           </button>
         </div>
       )}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50/60 to-white px-4 py-3">
+          <span className="text-sm font-bold text-slate-900">LinkedIn sequence</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={generating}
+              onClick={() => askGenerate('linkedin')}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              {generating ? <IconLoader2 size={13} className="animate-spin" /> : null}
+              {linkedInMessage?.body ? 'Regenerate LinkedIn' : 'Generate LinkedIn sequence'}
+            </button>
+            {linkedInMessage?.body ? (
+              <button
+                type="button"
+                disabled={sendingLinkedIn}
+                onClick={() => void sendLinkedIn()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-slate-800 disabled:opacity-50"
+              >
+                {sendingLinkedIn ? <IconLoader2 size={13} className="animate-spin" /> : null}
+                Send on LinkedIn
+              </button>
+            ) : null}
+          </div>
+        </div>
+        {linkedInMessage?.body ? (
+          <>
+            <pre className="whitespace-pre-wrap px-4 py-4 font-sans text-sm leading-6 text-slate-800">
+              {linkedInMessage.body}
+            </pre>
+            <div className="border-t border-slate-100 px-4 py-3 text-xs leading-5 text-slate-600">
+              <p>
+                {linkedInQueue?.lane === 'tomorrow'
+                  ? 'Queued for the next day. Today’s limit is already used.'
+                  : linkedInQueue?.lane === 'today'
+                    ? 'Scheduled for today. The extension opens one profile at a time.'
+                    : 'Not queued yet. Send on LinkedIn adds this person to today’s list when there is room.'}
+              </p>
+              {linkedInQueue?.outcome === 'message_sent' ? (
+                <p className="mt-1 font-medium text-emerald-700">Message sent on LinkedIn. It is saved on this lead.</p>
+              ) : linkedInQueue?.outcome === 'invitation_sent' ? (
+                <p className="mt-1 font-medium text-amber-800">
+                  Waiting for connection. Each morning the extension checks this profile and sends the note after they accept.
+                </p>
+              ) : null}
+              {linkedInQueue?.sendError ? (
+                <p className="mt-1 text-rose-700">{linkedInQueue.sendError}</p>
+              ) : null}
+              {linkedInQueue ? (
+                <p className="mt-1 text-slate-500">
+                  Remaining today: {linkedInQueue.remaining.connects} connection requests, {linkedInQueue.remaining.messages}{' '}
+                  messages, {linkedInQueue.remaining.views} profile opens.
+                </p>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm font-semibold text-slate-700">No LinkedIn message yet</p>
+            <p className="mt-1 text-xs text-slate-500">
+              This is a separate note from your agency to this person. It is not a copy of the email.
+            </p>
+          </div>
+        )}
+      </div>
       {confirmOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
           <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl">
             <h2 className="text-base font-semibold text-slate-900">
-              {confirmRegenerate ? 'Regenerate this sequence?' : 'Generate outreach?'}
+              {confirmRegenerate ? 'Regenerate this sequence?' : generateChannel === 'linkedin' ? 'Generate the LinkedIn message?' : 'Generate the email sequence?'}
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Finding an email does not write outreach. This creates the 4-step sequence only because you asked.
@@ -538,7 +726,7 @@ export function OutreachEmailPanel({
                 disabled={generating}
                 onClick={() => {
                   setConfirmOpen(false);
-                  void generate(confirmRegenerate);
+                  void generate(generateChannel);
                 }}
                 className="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
               >

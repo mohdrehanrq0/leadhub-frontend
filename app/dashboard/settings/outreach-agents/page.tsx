@@ -27,6 +27,69 @@ type Offer = {
   caseStudies?: CaseStudy[];
 };
 
+const PROMPT_RULES = [
+  'Each lead gets a different email. The problem comes only from that lead’s enrichment. Never store or reuse a problem here.',
+  'Phrase the solution for this person. Do not paste this prompt into the email.',
+  'Use a proof point only when it matches this lead. If none match, cite none. Never invent a customer or a metric.',
+  'One idea per email. Sound like a person typing.',
+].join('\n');
+
+const DEFAULT_USER_PROMPT = [
+  'Write outreach for our company. Use only the facts in this user prompt. Do not invent customers, metrics, or services.',
+  '',
+  '## Solution',
+  'What you sell. Paste it from your docs.',
+  '',
+  '## How we provide the solution',
+  'The delivery: product, service, process, and timeline.',
+  '',
+  '## How we help',
+  'The kinds of companies, roles, and problems this is for.',
+  '',
+  '## Who we work with',
+  'Customers or segments you can name. Leave this blank if you would rather not.',
+  '',
+  '## Anything else to follow',
+  PROMPT_RULES,
+].join('\n');
+
+function promptSection(title: string, body: string | undefined, placeholder: string): string {
+  const text = body?.trim();
+  return `## ${title}\n${text || placeholder}`;
+}
+
+function composeUserPrompt(instruction: string, offer?: Offer): string {
+  const notes = instruction.trim();
+  if (notes.includes('## Solution') && notes.includes('## Anything else to follow')) return notes;
+  const studies = (offer?.caseStudies ?? [])
+    .map((study) => [study.title, study.who, study.summary, study.url].filter(Boolean).join(' — '))
+    .filter(Boolean);
+  const extra = [notes, studies.length ? `Case studies:\n${studies.map((line) => `- ${line}`).join('\n')}` : '']
+    .filter(Boolean)
+    .join('\n\n');
+  return [
+    'Write outreach using only the facts in this user prompt. Do not invent customers, metrics, or services.',
+    '',
+    promptSection('Solution', offer?.solutions, 'What you sell. Paste it from your docs.'),
+    '',
+    promptSection(
+      'How we provide the solution',
+      offer?.howWeDeliver,
+      'The delivery: product, service, process, and timeline.',
+    ),
+    '',
+    promptSection('How we help', offer?.whoWeHelp, 'The kinds of companies, roles, and problems this is for.'),
+    '',
+    promptSection(
+      'Who we work with',
+      offer?.whoWeWorkWith,
+      'Customers or segments you can name. Leave this blank if you would rather not.',
+    ),
+    '',
+    promptSection('Anything else to follow', extra, PROMPT_RULES),
+  ].join('\n');
+}
+
 type OutreachAgent = {
   id: string;
   name: string;
@@ -43,8 +106,8 @@ type OutreachAgent = {
 const EMPTY: Omit<OutreachAgent, 'id'> = {
   name: '',
   description: '',
-  instruction: '',
-  offer: { caseStudies: [] },
+  instruction: DEFAULT_USER_PROMPT,
+  offer: {},
   sequenceCount: 4,
   sequenceDays: [0, 3, 7, 14],
   humanize: true,
@@ -77,14 +140,8 @@ export default function OutreachAgentsPage() {
     setDraft({
       name: agent.name,
       description: agent.description ?? '',
-      instruction: agent.instruction ?? '',
-      offer: {
-        solutions: agent.offer?.solutions ?? '',
-        howWeDeliver: agent.offer?.howWeDeliver ?? '',
-        whoWeHelp: agent.offer?.whoWeHelp ?? '',
-        whoWeWorkWith: agent.offer?.whoWeWorkWith ?? '',
-        caseStudies: agent.offer?.caseStudies ?? [],
-      },
+      instruction: composeUserPrompt(agent.instruction ?? '', agent.offer),
+      offer: {},
       sequenceCount: agent.sequenceCount || 4,
       sequenceDays: agent.sequenceDays?.length ? agent.sequenceDays : [0, 3, 7, 14],
       humanize: agent.humanize !== false,
@@ -112,10 +169,6 @@ export default function OutreachAgentsPage() {
     void load();
   }, [load]);
 
-  const setOffer = (patch: Partial<Offer>) => {
-    setDraft((prev) => ({ ...prev, offer: { ...prev.offer, ...patch } }));
-  };
-
   const prefill = async () => {
     setSaving(true);
     try {
@@ -125,12 +178,13 @@ export default function OutreachAgentsPage() {
       setDraft({
         ...EMPTY,
         ...data,
-        offer: { caseStudies: [], ...(data.offer ?? {}) },
+        instruction: composeUserPrompt(data.instruction ?? '', data.offer),
+        offer: {},
         humanize: true,
         punchyConfidence: 95,
         isDefault: agents.length === 0,
       });
-      toast.success('Filled from your company profile. Edit anything before saving.');
+      toast.success('Filled the user prompt from your company profile. Edit it before saving.');
     } catch {
       toast.error('Could not prefill from the company profile.');
     } finally {
@@ -146,10 +200,8 @@ export default function OutreachAgentsPage() {
     const payload = {
       ...draft,
       name: draft.name.trim(),
-      offer: {
-        ...draft.offer,
-        caseStudies: (draft.offer.caseStudies ?? []).filter((row) => row.summary?.trim() || row.title?.trim()),
-      },
+      instruction: draft.instruction.trim(),
+      offer: {},
     };
     setSaving(true);
     try {
@@ -280,7 +332,7 @@ export default function OutreachAgentsPage() {
     <SettingsPanel wide>
       <SettingsCard
         title="Outreach agents"
-        description="The name is only a label for picking this writer on an enrichment agent. It is not the email. The agent stores what you sell, how you deliver it, who you help, who you work with, and any case studies. Enrichment finds the problem for each lead, and the writer drafts a different email every time."
+        description="The name is only a label for picking this writer on an enrichment agent. It is not the email. Everything the writer may say about you lives in one user prompt: the solution, how you provide it, how you help, who you work with, and any extra rules. New accounts start with that prompt already filled. Enrichment finds the problem for each lead, and the writer drafts a different email every time."
       >
         <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           <div className="space-y-2">
@@ -380,106 +432,20 @@ export default function OutreachAgentsPage() {
             </div>
 
             <p className="text-xs leading-5 text-slate-500">
-              The lead’s problem is not stored here. Enrichment finds it for that person and company, and the email is written from that discovery.
+              The lead’s problem is not stored here. Enrichment finds it for that person and company, and the email is written from that discovery plus this user prompt.
             </p>
 
-            {(
-              [
-                ['solutions', 'Solutions we provide', 'Paste from your docs. What you actually sell.'],
-                ['howWeDeliver', 'How we provide the solution', 'The delivery: product, service, process, timeline.'],
-                ['whoWeHelp', 'Who we help', 'The kinds of companies and roles this is for.'],
-                ['whoWeWorkWith', 'Who we work with', 'Customers or segments you can name. Leave blank if you would rather not.'],
-              ] as const
-            ).map(([key, label, help]) => (
-              <label key={key} className="block space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
-                <textarea
-                  className={settingsInputClass + ' h-24 py-2'}
-                  value={draft.offer[key] ?? ''}
-                  onChange={(e) => setOffer({ [key]: e.target.value })}
-                />
-                <p className="text-[11px] leading-4 text-slate-500">{help}</p>
-              </label>
-            ))}
-
-            <div className="space-y-2 rounded-xl border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Case studies</p>
-                  <p className="text-[11px] leading-4 text-slate-500">
-                    Optional. For each lead, the writer may use one example that matches that company. If none match, it cites none.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className={settingsBtnSecondary}
-                  onClick={() =>
-                    setOffer({
-                      caseStudies: [...(draft.offer.caseStudies ?? []), { title: '', who: '', summary: '', url: '' }],
-                    })
-                  }
-                >
-                  Add
-                </button>
-              </div>
-              {(draft.offer.caseStudies ?? []).map((study, index) => (
-                <div key={index} className="space-y-2 rounded-lg border border-slate-100 p-2">
-                  <input
-                    className={settingsInputClass}
-                    placeholder="Title"
-                    value={study.title ?? ''}
-                    onChange={(e) => {
-                      const caseStudies = [...(draft.offer.caseStudies ?? [])];
-                      caseStudies[index] = { ...study, title: e.target.value };
-                      setOffer({ caseStudies });
-                    }}
-                  />
-                  <input
-                    className={settingsInputClass}
-                    placeholder="Who it was for"
-                    value={study.who ?? ''}
-                    onChange={(e) => {
-                      const caseStudies = [...(draft.offer.caseStudies ?? [])];
-                      caseStudies[index] = { ...study, who: e.target.value };
-                      setOffer({ caseStudies });
-                    }}
-                  />
-                  <textarea
-                    className={settingsInputClass + ' h-20 py-2'}
-                    placeholder="What happened and the result"
-                    value={study.summary ?? ''}
-                    onChange={(e) => {
-                      const caseStudies = [...(draft.offer.caseStudies ?? [])];
-                      caseStudies[index] = { ...study, summary: e.target.value };
-                      setOffer({ caseStudies });
-                    }}
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      className={settingsInputClass}
-                      placeholder="Link"
-                      value={study.url ?? ''}
-                      onChange={(e) => {
-                        const caseStudies = [...(draft.offer.caseStudies ?? [])];
-                        caseStudies[index] = { ...study, url: e.target.value };
-                        setOffer({ caseStudies });
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className={settingsBtnSecondary}
-                      onClick={() =>
-                        setOffer({
-                          caseStudies: (draft.offer.caseStudies ?? []).filter((_, i) => i !== index),
-                        })
-                      }
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <label className="block space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">User prompt</span>
+              <textarea
+                className={settingsInputClass + ' h-96 py-2 font-mono text-[13px] leading-5'}
+                value={draft.instruction}
+                onChange={(e) => setDraft((prev) => ({ ...prev, instruction: e.target.value }))}
+              />
+              <p className="text-[11px] leading-4 text-slate-500">
+                This is the full brief the writer uses. Keep the headings, and edit the text under each one. Solution, how you provide it, how you help, who you work with, and any extra rules all belong here.
+              </p>
+            </label>
 
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <input
@@ -488,15 +454,6 @@ export default function OutreachAgentsPage() {
                 onChange={(e) => setDraft((prev) => ({ ...prev, humanize: e.target.checked }))}
               />
               Humanize the copy, and punch it up only when the evidence is 95% confident
-            </label>
-
-            <label className="block space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Anything else the writer should follow</span>
-              <textarea
-                className={settingsInputClass + ' h-48 py-2'}
-                value={draft.instruction}
-                onChange={(e) => setDraft((prev) => ({ ...prev, instruction: e.target.value }))}
-              />
             </label>
 
             <label className="flex items-center gap-2 text-sm text-slate-700">
