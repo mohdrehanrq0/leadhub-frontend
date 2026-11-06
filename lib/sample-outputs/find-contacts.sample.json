@@ -1,0 +1,42 @@
+{
+  "recipeId": "find-contacts",
+  "status": "ready",
+  "summary": {
+    "found_strong": 2,
+    "found_partial": 1,
+    "not_found": 0,
+    "credits_charged": 30
+  },
+  "candidates": [
+    {
+      "name": "Alex Rivera",
+      "title": "VP Sales",
+      "company": "Harborline Analytics",
+      "linkedin_url": "https://www.linkedin.com/in/example-alex-rivera",
+      "tier": "confirmed_current",
+      "persona_match": "strong",
+      "matched_on": ["title", "department"],
+      "billed": true
+    },
+    {
+      "name": "Sam Chen",
+      "title": "Head of Growth",
+      "company": "Northbeam Analytics",
+      "linkedin_url": "https://www.linkedin.com/in/example-sam-chen",
+      "tier": "confirmed_current",
+      "persona_match": "strong",
+      "matched_on": ["title", "seniority"],
+      "billed": true
+    },
+    {
+      "name": "Jordan Lee",
+      "title": "Director of Partnerships",
+      "company": "Brightlane Ops",
+      "linkedin_url": "https://www.linkedin.com/in/example-jordan-lee",
+      "tier": "likely_current",
+      "persona_match": "partial",
+      "matched_on": ["department"],
+      "billed": false
+    }
+  ]
+}

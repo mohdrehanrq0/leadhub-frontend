@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { IconHistory, IconLoader2, IconSearch } from '@tabler/icons-react';
 import {
@@ -13,27 +12,71 @@ import {
   type MyRecipe,
   type RecipeDefinition,
 } from '@/lib/recipes-api';
+import { mineRecipeHref, recipeCardCopy } from '@/lib/recipe-card-copy';
 import { cn } from '@/lib/utils';
 import { spinnerClass } from '@/components/ui/styles';
+import { RecipeSamplePreview } from '@/components/recipes/RecipeSamplePreview';
 
 type ListFilter = 'all' | 'mine';
 
-function costLabel(recipe: RecipeDefinition): string {
-  const per = recipe.credits.per_confirmed_candidate;
-  if (typeof per === 'number' && per > 0) {
-    return `${per} per strong match`;
-  }
-  return `${recipe.credits.base || 1} per brief`;
+type CardRow = {
+  key: string;
+  kind: 'builtin' | 'mine';
+  id: string;
+  name: string;
+  plainLine: string;
+  io: string;
+  cost: string;
+  costDetail?: string;
+  runHref: string;
+  customizeHref?: string;
+  sampleRecipeId: string;
+  myId?: string;
+};
+
+function builtinCard(r: RecipeDefinition): CardRow {
+  const copy = recipeCardCopy(r.id);
+  return {
+    key: r.id,
+    kind: 'builtin',
+    id: r.id,
+    name: r.name,
+    plainLine: copy.plainLine,
+    io: copy.io,
+    cost: copy.cost,
+    costDetail: copy.costDetail,
+    runHref: `/research/recipes/${r.id}`,
+    customizeHref:
+      r.id === 'prospect-brief' ? `/research/recipes/prospect-brief?mode=customize` : undefined,
+    sampleRecipeId: r.id,
+  };
 }
 
-function ioLabel(recipe: RecipeDefinition): string {
-  if (recipe.id === 'find-contacts') return 'Companies → People';
-  if (recipe.id === 'clean-list') return 'CSV → Clean CSV';
-  return 'Person/Company → Brief';
+function mineCard(m: MyRecipe): CardRow {
+  const copy = recipeCardCopy(m.baseRecipeId);
+  return {
+    key: m.id,
+    kind: 'mine',
+    id: m.id,
+    name: m.name,
+    plainLine: m.description?.trim() || copy.plainLine,
+    io: copy.io,
+    cost: copy.cost,
+    costDetail: copy.costDetail,
+    runHref:
+      m.baseRecipeId === 'prospect-brief'
+        ? `/research/recipes/prospect-brief?mode=run&my=${m.id}`
+        : mineRecipeHref(m.baseRecipeId, m.id),
+    customizeHref:
+      m.baseRecipeId === 'prospect-brief'
+        ? mineRecipeHref(m.baseRecipeId, m.id)
+        : undefined,
+    sampleRecipeId: m.baseRecipeId,
+    myId: m.id,
+  };
 }
 
 export default function ResearchWorkspacePage() {
-  const router = useRouter();
   const [recipes, setRecipes] = useState<RecipeDefinition[]>([]);
   const [mine, setMine] = useState<MyRecipe[]>([]);
   const [creditBalance, setCreditBalance] = useState<number | null>(null);
@@ -53,34 +96,16 @@ export default function ResearchWorkspacePage() {
   }, []);
 
   const rows = useMemo(() => {
-    const builtIn = recipes.map((r) => ({
-      key: r.id,
-      kind: 'builtin' as const,
-      id: r.id,
-      name: r.name,
-      description: r.description ?? '',
-      io: ioLabel(r),
-      cost: costLabel(r),
-      href: `/research/recipes/${r.id}`,
-    }));
-    const saved = mine.map((m) => ({
-      key: m.id,
-      kind: 'mine' as const,
-      id: m.id,
-      name: m.name,
-      description: m.description ?? `Saved from ${m.baseRecipeId}`,
-      io: 'Companies → People',
-      cost: '1 per strong match',
-      href: `/research/recipes/${m.baseRecipeId}?my=${m.id}`,
-      myId: m.id,
-    }));
+    const builtIn = recipes.map(builtinCard);
+    const saved = mine.map(mineCard);
     const all = filter === 'mine' ? saved : [...builtIn, ...saved];
     const query = q.trim().toLowerCase();
     if (!query) return all;
     return all.filter(
       (r) =>
         r.name.toLowerCase().includes(query) ||
-        r.description.toLowerCase().includes(query),
+        r.plainLine.toLowerCase().includes(query) ||
+        r.io.toLowerCase().includes(query),
     );
   }, [recipes, mine, filter, q]);
 
@@ -108,7 +133,7 @@ export default function ResearchWorkspacePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Recipes</h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Pick a recipe, confirm who you want, then run. Charged only for strong matches.
+            Give an input, get a clear result. Credits shown up front.
             {creditBalance !== null ? ` · ${creditBalance} credits` : null}
           </p>
         </div>
@@ -122,7 +147,7 @@ export default function ResearchWorkspacePage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px]">
+        <div className="relative min-w-[200px] flex-1">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
             className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-400"
@@ -148,81 +173,86 @@ export default function ResearchWorkspacePage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
-            <tr>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">What it does</th>
-              <th className="px-4 py-3">Input → Output</th>
-              <th className="px-4 py-3">Cost</th>
-              <th className="px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr
-                key={row.key}
-                className="cursor-pointer border-t border-zinc-100 hover:bg-zinc-50"
-                onClick={() => router.push(row.href)}
-              >
-                <td className="px-4 py-3 font-medium text-zinc-900">
-                  {row.name}
-                  {row.kind === 'mine' ? (
-                    <span className="ml-2 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
-                      Mine
-                    </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-3 text-zinc-600">{row.description || '—'}</td>
-                <td className="px-4 py-3 text-zinc-600">{row.io}</td>
-                <td className="px-4 py-3 text-zinc-600">{row.cost}</td>
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex gap-2">
-                    <Link
-                      href={row.href}
-                      className="rounded-md bg-zinc-900 px-2.5 py-1 text-xs font-medium text-white"
-                    >
-                      Run
-                    </Link>
-                    <Link
-                      href={`${row.href}${row.href.includes('?') ? '&' : '?'}edit=1`}
-                      className="rounded-md border border-zinc-200 px-2.5 py-1 text-xs"
-                    >
-                      Edit
-                    </Link>
-                    {row.kind === 'mine' && 'myId' in row ? (
-                      <button
-                        type="button"
-                        className="text-xs text-red-600"
-                        onClick={() => onDeleteMine(row.myId!)}
-                      >
-                        Delete
-                      </button>
+      {rows.length ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          {rows.map((row) => (
+            <article
+              key={row.key}
+              className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-zinc-900">
+                    {row.name}
+                    {row.kind === 'mine' ? (
+                      <span className="ml-2 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
+                        Mine
+                      </span>
                     ) : null}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!rows.length ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-zinc-500">
-                  {filter === 'mine' ? (
-                    <>
-                      No saved recipes yet.{' '}
-                      <Link href="/research/recipes/find-contacts" className="underline">
-                        Create from Find contacts
-                      </Link>
-                    </>
-                  ) : (
-                    'No recipes found.'
-                  )}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+                  </h2>
+                  <p className="mt-1.5 text-sm text-zinc-600">{row.plainLine}</p>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+                <span>{row.io}</span>
+                <span>
+                  <span className="font-medium text-zinc-800">{row.cost}</span>
+                  {row.costDetail ? ` · ${row.costDetail}` : null}
+                </span>
+              </div>
+
+              <RecipeSamplePreview recipeId={row.sampleRecipeId} />
+
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Link
+                  href={row.runHref}
+                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800"
+                >
+                  Run
+                </Link>
+                {row.customizeHref ? (
+                  <Link
+                    href={row.customizeHref}
+                    className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
+                  >
+                    Customize
+                  </Link>
+                ) : null}
+                {row.kind === 'mine' && row.myId ? (
+                  <button
+                    type="button"
+                    className="ml-auto text-xs text-red-600 hover:underline"
+                    onClick={() => onDeleteMine(row.myId!)}
+                  >
+                    Delete
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-12 text-center text-sm text-zinc-500">
+          {filter === 'mine' ? (
+            <>
+              No saved recipes yet.{' '}
+              <Link
+                href="/research/recipes/prospect-brief?mode=customize"
+                className="underline"
+              >
+                Customize Prospect brief
+              </Link>{' '}
+              or{' '}
+              <Link href="/research/recipes/find-contacts" className="underline">
+                Find contacts
+              </Link>
+            </>
+          ) : (
+            'No recipes found.'
+          )}
+        </div>
+      )}
     </div>
   );
 }
