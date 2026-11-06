@@ -61,10 +61,13 @@ interface EndpointDoc {
 const ALL_SCOPES = [
   { id: 'leads:read', label: 'leads:read', desc: 'Read & filter CRM leads' },
   { id: 'leads:write', label: 'leads:write', desc: 'Push / create leads in LeadCRM' },
-  { id: 'enrich:write', label: 'enrich:write', desc: 'Trigger on-demand AI lead enrichment' },
+  { id: 'enrich:write', label: 'enrich:write', desc: 'Trigger on-demand AI lead enrichment (also grants runs:write)' },
+  { id: 'recipes:read', label: 'recipes:read', desc: 'List recipes and poll run results' },
+  { id: 'runs:write', label: 'runs:write', desc: 'Start and delete recipe runs' },
   { id: 'signups:read', label: 'signups:read', desc: 'Fetch website signup leads' },
   { id: 'signups:write', label: 'signups:write', desc: 'Ingest signup leads' },
   { id: 'account:read', label: 'account:read', desc: 'Read workspace profile, credits & stats' },
+  { id: 'webhooks:manage', label: 'webhooks:manage', desc: 'Register webhook endpoints (run.completed, enrichment.*)' },
 ];
 
 export default function DeveloperApiPage() {
@@ -565,8 +568,8 @@ print(response.json())`;
               LeadCRM REST API & Tokens
             </h1>
             <p className="max-w-2xl text-sm leading-relaxed text-slate-300">
-              Push leads, trigger on-demand AI enrichment, sync inbound signups, and query CRM data
-              programmatically using your workspace API tokens.
+              Run recipes (Prospect brief, Clean list), push leads, trigger enrichment, and sync
+              signups with workspace API tokens. OpenAPI: /api/docs.
             </p>
           </div>
 
@@ -686,6 +689,44 @@ print(response.json())`;
           </div>
         </div>
       ) : null}
+
+      {/* ─── Recipes API ─── */}
+      <SettingsCard
+        icon={IconSparkles}
+        title="Recipes API (v1)"
+        description="Prospect brief and Clean list. Scopes: recipes:read, runs:write. Events: run.completed, run.failed. n8n: install community package n8n-nodes-leadhub."
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-settings-muted">
+            Base{' '}
+            <code className="rounded bg-settings-canvas px-1.5 py-0.5 font-mono">
+              {getApiBaseUrl()}/api/v1
+            </code>
+            . Automate from n8n with the LeadHub community node (
+            <code className="rounded bg-settings-canvas px-1 font-mono">n8n-nodes-leadhub</code>).
+          </p>
+          <pre className="overflow-x-auto rounded-xl border border-settings-line bg-slate-950 p-4 text-[11px] leading-relaxed text-slate-100">{`# List recipes
+curl "${getApiBaseUrl()}/api/v1/recipes" \\
+  -H "Authorization: Bearer lh_…" \\
+  -H "X-Workspace-ID: <workspace_uuid>"
+
+# Start Prospect brief
+curl -X POST "${getApiBaseUrl()}/api/v1/recipes/prospect-brief/runs" \\
+  -H "Authorization: Bearer lh_…" -H "X-Workspace-ID: <workspace_uuid>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"inputs":{"company_url":"https://stripe.com"},"optional_steps":["email_find"],"idempotency_key":"run-001"}'
+
+# Start Clean list
+curl -X POST "${getApiBaseUrl()}/api/v1/recipes/clean-list/runs" \\
+  -H "Authorization: Bearer lh_…" -H "X-Workspace-ID: <workspace_uuid>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"rows":[{"full_name":"Jane Doe","company_name":"Acme","company_url":"https://acme.com"}]}'
+
+# Poll / CSV export
+curl "${getApiBaseUrl()}/api/v1/runs/<run_id>" -H "Authorization: Bearer lh_…" -H "X-Workspace-ID: <workspace_uuid>"
+curl "${getApiBaseUrl()}/api/v1/runs/<run_id>/results?format=csv" -H "Authorization: Bearer lh_…" -H "X-Workspace-ID: <workspace_uuid>"`}</pre>
+        </div>
+      </SettingsCard>
 
       {/* ─── API Tokens Card ─── */}
       <SettingsCard

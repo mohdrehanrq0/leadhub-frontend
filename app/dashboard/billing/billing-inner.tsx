@@ -11,7 +11,7 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
-import { APOLLO_UI_ENABLED } from '../../../lib/features';
+import { APOLLO_UI_ENABLED, BYOK_UI_ENABLED } from '../../../lib/features';
 import { useAuth } from '../../../context/AuthContext';
 import { PageHeader } from '../../../components/layout/PageHeader';
 import {
@@ -27,6 +27,8 @@ import {
 
 type CreditBalance = {
   balance: number;
+  freeBalance: number;
+  freeExpiresAt: string | null;
   reservedBalance: number;
   totalPurchased: number;
   totalUsed: number;
@@ -39,6 +41,8 @@ type CreditTxn = {
   amount: number;
   balanceAfter: number;
   description: string | null;
+  operation: string | null;
+  priceVersion: number | null;
   createdAt: string;
 };
 
@@ -167,13 +171,26 @@ export default function BillingPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Available</p>
           <p className="mt-1 text-3xl font-bold text-text-100">
             {(balance?.available ?? 0).toLocaleString()}
           </p>
           <p className="mt-1 text-xs text-text-200">credits ready to use</p>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Free Credits</p>
+          <p className="mt-1 text-3xl font-bold text-emerald-600">
+            {(balance?.freeBalance ?? 0).toLocaleString()}
+          </p>
+          {balance?.freeExpiresAt ? (
+            <p className="mt-1 text-xs text-amber-600">
+              expires {new Date(balance.freeExpiresAt).toLocaleDateString()}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-text-200">signup bonus</p>
+          )}
         </div>
         <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Reserved</p>
@@ -261,7 +278,12 @@ export default function BillingPage() {
                   className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-0"
                 >
                   <div>
-                    <p className="font-medium capitalize text-text-100">{txn.type}</p>
+                    <p className="font-medium capitalize text-text-100">
+                      {txn.type}
+                      {txn.operation && (
+                        <span className="ml-2 text-xs font-normal text-primary">{txn.operation}</span>
+                      )}
+                    </p>
                     <p className="text-[11px] text-text-200">
                       {txn.description || '—'} · {new Date(txn.createdAt).toLocaleString()}
                     </p>
@@ -312,12 +334,14 @@ export default function BillingPage() {
         </div>
       </section>
 
-      <p className="text-xs text-text-200">
-        Need API keys?{' '}
-        <Link href="/dashboard/settings/api-keys" className="font-semibold text-primary underline">
-          Configure BYOK providers
-        </Link>
-      </p>
+      {BYOK_UI_ENABLED && (
+        <p className="text-xs text-text-200">
+          Need API keys?{' '}
+          <Link href="/dashboard/settings/api-keys" className="font-semibold text-primary underline">
+            Configure BYOK providers
+          </Link>
+        </p>
+      )}
 
       <CreditCheckoutModal
         pack={checkoutPack}

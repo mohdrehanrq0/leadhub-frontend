@@ -1,0 +1,92 @@
+{
+  "version": "research-brief-v1",
+  "jobId": "sample-prospect-brief",
+  "leadId": "sample-lead",
+  "workspaceId": "sample-workspace",
+  "status": "ready",
+  "progress": {
+    "currentStep": "preparing_brief",
+    "steps": [
+      { "id": "resolving_identity", "label": "Resolving identity", "state": "completed" },
+      { "id": "collecting_sources", "label": "Collecting sources", "state": "completed" },
+      { "id": "verifying_findings", "label": "Verifying findings", "state": "completed" },
+      { "id": "preparing_brief", "label": "Preparing research brief", "state": "completed" }
+    ],
+    "enrichmentStatus": "completed",
+    "jobStatus": "completed"
+  },
+  "person": {
+    "name": { "value": "Alex Rivera", "status": "found", "sourceUrl": "https://example-corp.io/team" },
+    "title": { "value": "VP Sales", "status": "found" },
+    "profileUrl": { "value": "https://www.linkedin.com/in/example-alex-rivera", "status": "found" },
+    "roleEvidence": {
+      "value": "Listed as VP Sales on the company team page.",
+      "status": "found",
+      "sourceUrl": "https://example-corp.io/team"
+    },
+    "companyMatch": { "value": true, "status": "found" }
+  },
+  "company": {
+    "name": { "value": "Harborline Analytics", "status": "found" },
+    "website": { "value": "https://harborline.example", "status": "found" },
+    "domain": { "value": "harborline.example", "status": "found" },
+    "description": {
+      "value": "Revenue analytics for mid-market B2B SaaS teams.",
+      "status": "found",
+      "sourceUrl": "https://harborline.example"
+    },
+    "productsServices": {
+      "value": "Pipeline forecasting, cohort retention dashboards, CRM sync.",
+      "status": "found"
+    },
+    "industry": { "value": "Business intelligence", "status": "found" },
+    "businessModel": { "value": "B2B SaaS", "status": "found" }
+  },
+  "developments": [
+    {
+      "title": "funding",
+      "summary": "Announced a Series A focused on expanding the forecasting product line (2026).",
+      "type": "funding",
+      "sourceUrl": "https://harborline.example/blog/series-a",
+      "publicationDate": "2026-02-18",
+      "retrievedAt": "2026-10-01",
+      "status": "found",
+      "confidence": 0.84
+    }
+  ],
+  "email": {
+    "requested": false,
+    "address": { "value": null, "status": "not_requested" },
+    "verificationStatus": { "value": null, "status": "not_requested" }
+  },
+  "sources": [
+    {
+      "fieldKey": "company.description",
+      "label": "Company overview",
+      "url": "https://harborline.example",
+      "status": "found",
+      "retrievedAt": "2026-10-01"
+    },
+    {
+      "fieldKey": "person.roleEvidence",
+      "label": "Role evidence",
+      "url": "https://example-corp.io/team",
+      "status": "found",
+      "retrievedAt": "2026-10-01"
+    }
+  ],
+  "opener": {
+    "opener": {
+      "value": "Saw Harborline’s Series A note on forecasting — curious how your team is handling mid-quarter pipeline slips.",
+      "status": "found"
+    },
+    "closing": {
+      "value": "Happy to share a one-pager on how similar SaaS teams tighten forecast accuracy.",
+      "status": "found"
+    },
+    "whatYouSell": {
+      "value": "Outbound research briefs for B2B sales teams",
+      "status": "found"
+    }
+  }
+}

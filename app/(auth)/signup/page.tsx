@@ -37,7 +37,13 @@ export default function SignupPage() {
       await signup(email, password, firstName, lastName);
       toast.success('Account created! Please enter the verification code sent to your email.');
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Signup failed.');
+      const message = err instanceof Error ? err.message : 'Signup failed.';
+      toast.error(message);
+      if (message.toLowerCase().includes('private beta')) {
+        toast.message('Need an invite?', {
+          description: 'Use Request beta access on the home page.',
+        });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -127,6 +133,17 @@ export default function SignupPage() {
         <Link href="/login" className="text-brand-main hover:underline">
           Sign in
         </Link>
+      </p>
+      <p className="mt-3 text-center text-[11px] text-gray-500">
+        By signing up you agree to our{' '}
+        <Link href="/terms" className="text-brand-main hover:underline">
+          Terms
+        </Link>{' '}
+        and{' '}
+        <Link href="/privacy" className="text-brand-main hover:underline">
+          Privacy
+        </Link>
+        . Private beta — invite only unless your email is allowlisted.
       </p>
     </AuthSplitLayout>
   );

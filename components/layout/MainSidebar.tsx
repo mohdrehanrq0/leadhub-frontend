@@ -3,20 +3,21 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
-import { canSeeCaptures } from '@/lib/captures';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
+import api from '@/lib/api';
 import {
-  IconBookmark,
+  IconBook2,
   IconChevronLeft,
   IconChevronRight,
+  IconCode,
   IconCoin,
+  IconHistory,
   IconLogout,
-  IconMailOpened,
   IconSettings,
-  IconUsers,
+  IconTool,
   IconX,
 } from '@tabler/icons-react';
 
@@ -38,16 +39,20 @@ type MainSidebarProps = {
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
-const NAV_MAIN = [
-  { name: 'All Leads', href: '/dashboard/leads', icon: IconUsers },
-  // LinkedIn Prospects is hidden for every account except CAPTURES_ALLOWED_EMAIL.
-  // { name: 'LinkedIn Prospects', href: '/dashboard/captures', icon: IconBookmark },
-  { name: 'Inbound', href: '/dashboard/signups', icon: IconMailOpened },
+const NAV_RECIPE_LIBRARY = [
+  { name: 'Recipes', href: '/research', icon: IconBook2 },
+  { name: 'Tools', href: '/tools', icon: IconTool },
+  { name: 'Runs', href: '/research/history', icon: IconHistory },
+  { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
-  { name: 'Settings', href: '/dashboard/settings', icon: IconSettings },
 ];
 
-const CAPTURES_NAV = { name: 'LinkedIn Prospects', href: '/dashboard/captures', icon: IconBookmark };
+type CreditBalanceData = {
+  balance: number;
+  freeBalance: number;
+  freeExpiresAt: string | null;
+  available: number;
+};
 
 export function MainSidebar({
   isOpen,
@@ -60,6 +65,7 @@ export function MainSidebar({
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<CreditBalanceData | null>(null);
   const hoverCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedCollapse = useRef(false);
 
@@ -72,6 +78,22 @@ export function MainSidebar({
       setIsCollapsed(saved === 'true');
     }
   }, []);
+
+  const fetchCredits = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    try {
+      const { data } = await api.get('/api/v1/credits/balance');
+      if (data.success && data.data) {
+        setCreditBalance(data.data);
+      }
+    } catch {
+      // silently fail
+    }
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    void fetchCredits();
+  }, [fetchCredits]);
 
   const toggleCollapse = () => {
     const next = !isCollapsed;
@@ -90,27 +112,34 @@ export function MainSidebar({
   useEffect(() => () => clearHoverCollapseTimer(), []);
 
   const showExpandedChrome = !isCollapsed || isHoverExpanded;
-  const navItems = canSeeCaptures(user.email)
-    ? [NAV_MAIN[0], CAPTURES_NAV, ...NAV_MAIN.slice(1)]
-    : NAV_MAIN;
+  const navItems = NAV_RECIPE_LIBRARY;
 
   const isActive = (href: string) => {
-    if (href === '/dashboard/leads') {
-      return pathname === href || pathname.startsWith('/dashboard/leads/');
+    if (href === '/research') {
+      return (
+        pathname === '/research' ||
+        (pathname.startsWith('/research/') &&
+          !pathname.startsWith('/research/history') &&
+          !pathname.startsWith('/research/jobs'))
+      );
     }
-    if (href === '/dashboard/signups') {
-      return pathname === href || pathname.startsWith('/dashboard/signups/');
+    if (href === '/research/history') {
+      return (
+        pathname === '/research/history' ||
+        pathname.startsWith('/research/history/') ||
+        pathname.startsWith('/research/jobs')
+      );
     }
-    if (href === '/dashboard/captures') {
-      return pathname === href || pathname.startsWith('/dashboard/captures/');
-    }
-    if (href === '/dashboard/settings') {
-      return pathname === href || pathname.startsWith('/dashboard/settings/');
+    if (href === '/dashboard/settings/developer-api') {
+      return (
+        pathname.startsWith('/dashboard/settings/developer-api') ||
+        pathname.startsWith('/dashboard/settings/api-keys')
+      );
     }
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
-  const renderNav = (items: Array<{ name: string; href: string; icon: typeof IconUsers }>) =>
+  const renderNav = (items: typeof NAV_RECIPE_LIBRARY) =>
     items.map((item) => {
       const active = isActive(item.href);
       const Icon = item.icon;
@@ -173,7 +202,7 @@ export function MainSidebar({
             <div className={cn('border-b border-sidebar-border py-5', showExpandedChrome ? 'px-4' : 'px-3')}>
               <div className="flex items-center justify-between">
                 <Link
-                  href="/dashboard/leads"
+                  href="/research"
                   className={cn('flex items-center', showExpandedChrome ? 'space-x-3' : 'w-full justify-center')}
                 >
                   <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center">
@@ -182,7 +211,7 @@ export function MainSidebar({
                   {showExpandedChrome ? (
                     <div className="overflow-hidden">
                       <h1 className="text-base font-bold whitespace-nowrap text-sidebar-text">LeadHub</h1>
-                      <p className="text-xs whitespace-nowrap text-sidebar-muted">AI GTM platform</p>
+                      <p className="text-xs whitespace-nowrap text-sidebar-muted">Recipe library</p>
                     </div>
                   ) : null}
                 </Link>
@@ -240,6 +269,37 @@ export function MainSidebar({
               <div className="mb-6 space-y-1">{renderNav(navItems)}</div>
             </nav>
 
+            {/* Credit Meter */}
+            {creditBalance !== null && (
+              <div className={cn('shrink-0 border-t border-sidebar-border p-3', showExpandedChrome ? 'px-3' : 'px-2')}>
+                <Link
+                  href="/dashboard/billing"
+                  className={cn(
+                    'flex items-center rounded-lg bg-sidebar-hover/50 transition-colors hover:bg-sidebar-hover',
+                    showExpandedChrome ? 'justify-between px-3 py-2' : 'justify-center p-2',
+                  )}
+                  title={!showExpandedChrome ? `${creditBalance.available} credits` : undefined}
+                >
+                  <div className={cn('flex items-center gap-2', !showExpandedChrome && 'flex-col gap-0.5')}>
+                    <IconCoin size={showExpandedChrome ? 16 : 18} className="text-amber-500" />
+                    <span className={cn('font-semibold text-sidebar-text', showExpandedChrome ? 'text-sm' : 'text-xs')}>
+                      {creditBalance.available.toLocaleString()}
+                    </span>
+                  </div>
+                  {showExpandedChrome && (
+                    <div className="text-right">
+                      <div className="text-xs text-sidebar-muted">credits</div>
+                      {creditBalance.freeBalance > 0 && creditBalance.freeExpiresAt && (
+                        <div className="text-[10px] text-amber-500">
+                          {creditBalance.freeBalance} free · exp {new Date(creditBalance.freeExpiresAt).toLocaleDateString()}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Link>
+              </div>
+            )}
+
             <div className="shrink-0 border-t border-sidebar-border bg-sidebar-bg/90 p-3">
               <div
                 className={cn(
@@ -258,6 +318,13 @@ export function MainSidebar({
                     <p className="truncate text-[10px] text-sidebar-muted">{user.email}</p>
                   </div>
                 ) : null}
+                <Link
+                  href="/dashboard/settings/workspace"
+                  className="ml-1 rounded-lg p-1.5 text-sidebar-muted transition-all hover:bg-sidebar-hover hover:text-sidebar-text"
+                  title="Settings"
+                >
+                  <IconSettings size={16} />
+                </Link>
                 <button
                   type="button"
                   onClick={onLogout}

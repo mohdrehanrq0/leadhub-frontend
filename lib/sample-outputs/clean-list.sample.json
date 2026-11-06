@@ -1,0 +1,48 @@
+{
+  "recipeId": "clean-list",
+  "status": "ready",
+  "summary": {
+    "inputRows": 4,
+    "kept": 3,
+    "dropped": 1,
+    "enriched": 2
+  },
+  "rows": [
+    {
+      "fullName": "Alex Rivera",
+      "title": "VP Sales",
+      "companyName": "Harborline Analytics",
+      "companyDomain": "harborline.example",
+      "linkedinUrl": "https://www.linkedin.com/in/example-alex-rivera",
+      "email": null,
+      "status": "ready",
+      "notes": "Identity resolved; email not requested"
+    },
+    {
+      "fullName": "Sam Chen",
+      "title": "Head of Growth",
+      "companyName": "Northbeam Analytics",
+      "companyDomain": "northbeam.example",
+      "linkedinUrl": "https://www.linkedin.com/in/example-sam-chen",
+      "email": null,
+      "status": "ready",
+      "notes": "Company match confirmed"
+    },
+    {
+      "fullName": "Jordan Lee",
+      "title": "Director of Partnerships",
+      "companyName": "Brightlane Ops",
+      "companyDomain": "brightlane.example",
+      "linkedinUrl": null,
+      "email": null,
+      "status": "partial",
+      "notes": "No public LinkedIn URL; company page used"
+    }
+  ],
+  "dropped": [
+    {
+      "fullName": "Unknown Contact",
+      "reason": "Could not resolve person or company identity"
+    }
+  ]
+}

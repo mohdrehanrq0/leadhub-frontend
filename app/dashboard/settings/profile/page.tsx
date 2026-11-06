@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { IconMail, IconShieldCheck, IconUserCircle } from '@tabler/icons-react';
 import { SettingsCard, SettingsPanel } from '@/components/settings/primitives';
 import { useAuth } from '@/context/AuthContext';
@@ -63,6 +64,20 @@ export default function ProfileSettingsPage() {
             </div>
           </div>
         </dl>
+      </SettingsCard>
+
+      <SettingsCard title="Legal">
+        <p className="text-sm text-slate-600">
+          Review how we handle research data and account use.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-4 text-sm font-medium">
+          <Link href="/privacy" className="text-settings-accent hover:underline">
+            Privacy
+          </Link>
+          <Link href="/terms" className="text-settings-accent hover:underline">
+            Terms
+          </Link>
+        </div>
       </SettingsCard>
     </SettingsPanel>
   );

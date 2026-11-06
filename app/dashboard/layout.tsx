@@ -7,8 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { MainSidebar } from '../../components/layout/MainSidebar';
 import { spinnerClass } from '../../components/ui/styles';
 import { cn } from '../../lib/utils';
-import { canSeeCaptures } from '../../lib/captures';
 import { isSettingsPath } from '../../lib/settings-nav';
+import { parkedRedirectFor } from '../../lib/parked-routes';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, onboardingStep, onboardingLoading, activeWorkspaceId, setActiveWorkspaceId } =
@@ -33,11 +33,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   useEffect(() => {
     if (loading || !user) return;
-    if (
-      (pathname.startsWith('/dashboard/captures') || pathname.startsWith('/dashboard/outreach')) &&
-      !canSeeCaptures(user.email)
-    ) {
-      router.replace('/dashboard/leads');
+    const redirect = parkedRedirectFor(pathname);
+    if (redirect) {
+      router.replace(redirect);
     }
   }, [user, loading, pathname, router]);
 
