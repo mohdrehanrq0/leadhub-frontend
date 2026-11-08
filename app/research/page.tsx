@@ -13,6 +13,7 @@ import {
   type RecipeDefinition,
 } from '@/lib/recipes-api';
 import { mineRecipeHref, recipeCardCopy } from '@/lib/recipe-card-copy';
+import { RECIPE_ENGINE_V2 } from '@/lib/features';
 import { cn } from '@/lib/utils';
 import { spinnerClass } from '@/components/ui/styles';
 import { RecipeSamplePreview } from '@/components/recipes/RecipeSamplePreview';
@@ -137,13 +138,20 @@ export default function ResearchWorkspacePage() {
             {creditBalance !== null ? ` · ${creditBalance} credits` : null}
           </p>
         </div>
-        <Link
-          href="/research/history"
-          className="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-zinc-900"
-        >
-          <IconHistory className="h-4 w-4" />
-          Runs
-        </Link>
+        <div className="flex items-center gap-4">
+          {RECIPE_ENGINE_V2 ? (
+            <Link href="/research/engine" className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">
+              Recipe engine
+            </Link>
+          ) : null}
+          <Link
+            href="/research/history"
+            className="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-zinc-900"
+          >
+            <IconHistory className="h-4 w-4" />
+            Runs
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

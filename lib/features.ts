@@ -28,3 +28,6 @@ export const EXTENSION_SETTINGS_UI = false;
 
 /** BYOK (Bring Your Own Keys) settings UI — disabled when using platform keys. */
 export const BYOK_UI_ENABLED = false;
+
+/** Recipe-as-data engine editor (/research/engine). Keep in sync with backend RECIPE_ENGINE_V2. */
+export const RECIPE_ENGINE_V2 = process.env.NEXT_PUBLIC_RECIPE_ENGINE_V2 === 'true';
