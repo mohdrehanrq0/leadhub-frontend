@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'sonner';
 import { AuthSplitLayout } from '../../../components/layout/AuthSplitLayout';
 import { authFieldClass, btnPrimary, spinnerClass } from '../../../components/ui/styles';
+import { AUTH_SIGNUP_UI } from '../../../lib/features';
 
 function LoginForm() {
   const { user, loading, login, onboardingStep, onboardingLoading } = useAuth();
@@ -121,12 +122,14 @@ function LoginForm() {
           {submitting ? 'Logging in...' : 'Sign In'}
         </button>
       </form>
-      <p className="mt-4 text-center text-[11px] text-gray-500">
-        Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-brand-main hover:underline">
-          Sign up
-        </Link>
-      </p>
+      {AUTH_SIGNUP_UI ? (
+        <p className="mt-4 text-center text-[11px] text-gray-500">
+          Don&apos;t have an account?{' '}
+          <Link href="/signup" className="text-brand-main hover:underline">
+            Sign up
+          </Link>
+        </p>
+      ) : null}
     </AuthSplitLayout>
   );
 }

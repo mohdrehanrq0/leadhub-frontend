@@ -7,6 +7,7 @@ import { useAuth } from '../../../context/AuthContext';
 import { toast } from 'sonner';
 import { AuthSplitLayout } from '../../../components/layout/AuthSplitLayout';
 import { authFieldClass, btnPrimary, spinnerClass } from '../../../components/ui/styles';
+import { AUTH_SIGNUP_UI } from '../../../lib/features';
 
 export default function SignupPage() {
   const { user, loading, signup, onboardingStep, onboardingLoading } = useAuth();
@@ -17,8 +18,16 @@ export default function SignupPage() {
   const [lastName, setLastName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  // Signup is hidden — keep page code, redirect visitors to login.
+  useEffect(() => {
+    if (!AUTH_SIGNUP_UI) {
+      router.replace('/login');
+    }
+  }, [router]);
+
   // Automatically redirect if already authenticated
   useEffect(() => {
+    if (!AUTH_SIGNUP_UI) return;
     if (!loading && user) {
       if (!user.emailVerifiedAt) {
         router.replace(`/verify-email?email=${encodeURIComponent(user.email)}`);
@@ -49,7 +58,7 @@ export default function SignupPage() {
     }
   };
 
-  if (loading || user) {
+  if (!AUTH_SIGNUP_UI || loading || user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-bg-100">
         <div className={spinnerClass} />

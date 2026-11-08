@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import LeadHubBrandLockup from '../components/common/LeadHubBrandLockup';
 import { SampleOutputs } from '../components/landing/SampleOutputs';
 import { spinnerClass } from '../components/ui/styles';
+import { AUTH_SIGNUP_UI } from '../lib/features';
 
 const BETA_REQUEST_URL =
   process.env.NEXT_PUBLIC_BETA_REQUEST_URL ?? 'mailto:beta@leadhub.io?subject=LeadHub%20beta%20access';
@@ -47,12 +48,14 @@ export default function RootIndex() {
           <Link href="/login" className="text-sm font-medium text-slate-700 hover:text-slate-900">
             Log in
           </Link>
-          <Link
-            href="/signup"
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-          >
-            Sign up
-          </Link>
+          {AUTH_SIGNUP_UI ? (
+            <Link
+              href="/signup"
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              Sign up
+            </Link>
+          ) : null}
         </div>
       </header>
 
@@ -74,12 +77,21 @@ export default function RootIndex() {
           >
             Request beta access
           </a>
-          <Link
-            href="/signup"
-            className="rounded-xl border border-slate-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white"
-          >
-            Sign up
-          </Link>
+          {AUTH_SIGNUP_UI ? (
+            <Link
+              href="/signup"
+              className="rounded-xl border border-slate-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white"
+            >
+              Sign up
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-xl border border-slate-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white"
+            >
+              Log in
+            </Link>
+          )}
           <a
             href="#samples"
             className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-white/70"

@@ -8,6 +8,12 @@ export const APOLLO_UI_ENABLED = false;
 /** Enables Recipes · Runs · API · Billing primary nav. */
 export const RECIPE_LIBRARY_NAV = true;
 
+/**
+ * Account registration UI + /signup route.
+ * Keep false to hide signup; set true to restore self-serve join.
+ */
+export const AUTH_SIGNUP_UI = false;
+
 /** Parked / killed product surfaces — default off for Week 1. */
 export const LEADS_CRM_UI = false;
 export const SIGNUPS_UI = false;
