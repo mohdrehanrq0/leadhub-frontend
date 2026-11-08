@@ -12,7 +12,7 @@ import {
 import type { Icon } from '@tabler/icons-react';
 import {
   AGENT_BUILDER_UI,
-  EXTENSION_SETTINGS_UI,
+  EXTENSION_CONNECTION_ENABLED,
   OUTREACH_UI,
 } from '@/lib/features';
 
@@ -77,8 +77,8 @@ const ALL_SETTINGS_NAV: (SettingsNavItem & { enabled: boolean })[] = [
     name: 'Browser Extension',
     href: '/dashboard/settings/extension',
     icon: IconPuzzle,
-    description: 'Install the Chrome extension to save LinkedIn profiles directly to LeadHub.',
-    enabled: EXTENSION_SETTINGS_UI,
+    description: 'Connect the Chrome extension so LeadHub can queue LinkedIn steps within your daily caps.',
+    enabled: EXTENSION_CONNECTION_ENABLED,
   },
   {
     name: 'Your Profile',

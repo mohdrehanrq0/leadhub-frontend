@@ -5,7 +5,7 @@ import {
   AGENT_BUILDER_UI,
   CAMPAIGNS_UI,
   CAPTURES_UI,
-  EXTENSION_SETTINGS_UI,
+  EXTENSION_CONNECTION_ENABLED,
   LEADS_CRM_UI,
   LISTS_UI,
   MONITORING_UI,
@@ -56,7 +56,7 @@ export function parkedRedirectFor(pathname: string): string | null {
     }
   }
 
-  if (!EXTENSION_SETTINGS_UI && pathname.startsWith('/dashboard/settings/extension')) {
+  if (!EXTENSION_CONNECTION_ENABLED && pathname.startsWith('/dashboard/settings/extension')) {
     return '/dashboard/settings/workspace';
   }
 

@@ -52,9 +52,12 @@ export default function RecipeEngineListPage() {
           <h1 className="text-xl font-semibold text-slate-900">Recipe engine</h1>
           <p className="text-sm text-slate-500">Data recipes built from registry nodes. Every save is a new version.</p>
         </div>
-        <button type="button" onClick={onCreate} disabled={creating} className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-          <IconPlus size={16} /> New recipe
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href="/dashboard/settings/extension" className="text-sm font-medium text-blue-600 hover:text-blue-800">Connect browser extension</Link>
+          <button type="button" onClick={onCreate} disabled={creating} className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+            <IconPlus size={16} /> New recipe
+          </button>
+        </div>
       </div>
       {recipes.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">No engine recipes yet.</div>

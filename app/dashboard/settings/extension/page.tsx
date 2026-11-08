@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { IconCopy, IconPlus, IconPuzzle, IconSparkles, IconTrash } from '@tabler/icons-react';
+import { EXTENSION_SETTINGS_UI, RECIPE_ENGINE_V2 } from '@/lib/features';
+import { IconCopy, IconExternalLink, IconPlus, IconPuzzle, IconSparkles, IconTrash } from '@tabler/icons-react';
 import {
   SettingsCard,
   SettingsEmpty,
@@ -21,6 +22,16 @@ interface ExtensionToken {
   lastUsedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+}
+
+interface LinkedInAllowance {
+  date: string;
+  warmupWeek: number;
+  connectsAllowed: number;
+  messagesAllowed: number;
+  connectsRemaining: number;
+  messagesRemaining: number;
+  viewsRemaining: number;
 }
 
 export default function ExtensionSettingsPage() {
@@ -56,15 +67,19 @@ export default function ExtensionSettingsPage() {
   const [waStatus, setWaStatus] = useState('disconnected');
   const [waQr, setWaQr] = useState<string | null>(null);
   const [waError, setWaError] = useState<string | null>(null);
+  const [allowance, setAllowance] = useState<LinkedInAllowance | null>(null);
+
+  const legacyFull = EXTENSION_SETTINGS_UI;
+  const connected = tokens.some((t) => t.lastUsedAt);
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       const [tokensRes, settingsRes, agentsRes, writersRes] = await Promise.all([
         api.get('/api/extension/tokens'),
-        api.get('/api/captures/settings').catch(() => null),
+        legacyFull ? api.get('/api/captures/settings').catch(() => null) : Promise.resolve(null),
         api.get('/api/enrichment-agents').catch(() => null),
-        api.get('/api/outreach-agents').catch(() => null),
+        legacyFull ? api.get('/api/outreach-agents').catch(() => null) : Promise.resolve(null),
       ]);
       setTokens(tokensRes.data?.data ?? []);
       const settings = settingsRes?.data?.data;
@@ -93,6 +108,10 @@ export default function ExtensionSettingsPage() {
       }
       setAgents((agentsRes?.data?.data ?? []) as typeof agents);
       setWriters((writersRes?.data?.data ?? []) as typeof writers);
+      if (RECIPE_ENGINE_V2) {
+        const allowanceRes = await api.get('/api/extension/linkedin-allowance').catch(() => null);
+        setAllowance(allowanceRes?.data?.data ?? null);
+      }
     } catch {
       toast.error('Failed to load extension tokens.');
     } finally {
@@ -175,6 +194,7 @@ export default function ExtensionSettingsPage() {
   }
 
   useEffect(() => {
+    if (!legacyFull) return;
     void api.get('/api/captures/whatsapp').then((res) => {
       const next = res.data?.data;
       if (!next) return;
@@ -182,9 +202,10 @@ export default function ExtensionSettingsPage() {
       setWaQr(next.qrDataUrl ?? null);
       setWaError(next.error ?? null);
     }).catch(() => undefined);
-  }, []);
+  }, [legacyFull]);
 
   useEffect(() => {
+    if (!legacyFull) return;
     if (waStatus !== 'starting' && waStatus !== 'qr') return;
     const timer = setInterval(() => {
       void api.get('/api/captures/whatsapp').then((res) => {
@@ -196,7 +217,7 @@ export default function ExtensionSettingsPage() {
       });
     }, 2000);
     return () => clearInterval(timer);
-  }, [waStatus]);
+  }, [waStatus, legacyFull]);
 
   async function create() {
     setCreating(true);
@@ -255,6 +276,69 @@ export default function ExtensionSettingsPage() {
         </div>
       ) : null}
 
+      <SettingsCard
+        icon={IconPuzzle}
+        title="Browser extension connection"
+        actions={
+          <button type="button" onClick={() => void create()} disabled={creating} className={settingsBtnPrimary}>
+            <IconPlus size={15} />
+            {creating ? 'Creating…' : 'Connect extension'}
+          </button>
+        }
+      >
+        <p className="mb-4 text-sm leading-6 text-slate-600">
+          Status:{' '}
+          {connected ? (
+            <span className="font-medium text-emerald-700">Connected — the extension has called LeadHub.</span>
+          ) : tokens.length ? (
+            <span className="font-medium text-amber-700">Token created — paste it into the extension popup to finish.</span>
+          ) : (
+            <span className="font-medium text-slate-700">Not connected yet.</span>
+          )}
+        </p>
+        <ol className="space-y-3 text-sm leading-6 text-slate-600">
+          <li className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">1</span>
+            <span>
+              Build and load the extension: <code className="rounded bg-slate-100 px-1 text-xs">cd leadhub-extension &amp;&amp; pnpm build</code>, then in{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">chrome://extensions</code> enable Developer mode → Load unpacked → select the{' '}
+              <code className="rounded bg-slate-100 px-1 text-xs">dist/</code> folder.
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">2</span>
+            Click <strong>Connect extension</strong> here. A one-time <code className="rounded bg-slate-100 px-1 text-xs">lhx_…</code> token is shown once — copy it.
+          </li>
+          <li className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">3</span>
+            Open the extension popup and paste the token → <strong>Connect account</strong>. For a local API, set{' '}
+            <code className="rounded bg-slate-100 px-1 text-xs">leadhub_api_base</code> to <code className="rounded bg-slate-100 px-1 text-xs">http://localhost:4001</code> in the service-worker console.
+          </li>
+          <li className="flex gap-3">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">4</span>
+            Reload this page — status becomes Connected. Then run a recipe ending in <code className="rounded bg-slate-100 px-1 text-xs">out.linkedin_queue</code>; the extension only ever receives today&apos;s backend-allowed batch.
+          </li>
+        </ol>
+        {RECIPE_ENGINE_V2 ? (
+          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+            {allowance ? (
+              <p>
+                Today ({allowance.date}, warm-up week {allowance.warmupWeek + 1}):{' '}
+                <strong>{allowance.connectsRemaining}</strong> of {allowance.connectsAllowed} connections left ·{' '}
+                <strong>{allowance.messagesRemaining}</strong> of {allowance.messagesAllowed} messages left.
+              </p>
+            ) : (
+              <p>Could not load today&apos;s LinkedIn allowance — check that the backend is running with RECIPE_ENGINE_V2=true.</p>
+            )}
+            <Link href="/research/engine" className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800">
+              Open recipe engine <IconExternalLink size={13} />
+            </Link>
+          </div>
+        ) : null}
+      </SettingsCard>
+
+      {legacyFull ? (
+      <>
       <SettingsCard icon={IconSparkles} title="Capture enrich mode">
         <p className="mb-4 text-sm leading-6 text-slate-600">
           Controls what happens when the extension saves a LinkedIn person. Manual Save never
@@ -443,6 +527,8 @@ export default function ExtensionSettingsPage() {
           After you scan the code, LeadHub asks when you want updates if you have not chosen yet. Reply 1 for each enrichment only when something needs you, 2 for morning, 3 for evening, or 4 for both. Replies you send outside that window wait until then. During the chat you can still say samples, find a name, emails, show 1, approve 1, reject 1, or schedule 1 tomorrow.
         </p>
       </SettingsCard>
+      </>
+      ) : null}
 
       <SettingsCard
         icon={IconPuzzle}
@@ -471,12 +557,14 @@ export default function ExtensionSettingsPage() {
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">
               3
             </span>
-            On any LinkedIn profile or post, press Save to LeadHub. That person becomes your target —
-            enrich and add them to CRM from Captures (or automatically when Auto-enrich is on).
+            {RECIPE_ENGINE_V2
+              ? 'Run a recipe that ends in out.linkedin_queue — queued notes appear in the extension within today’s backend allowance.'
+              : 'On any LinkedIn profile or post, press Save to LeadHub. That person becomes your target — enrich and add them to CRM from Captures (or automatically when Auto-enrich is on).'}
           </li>
         </ol>
       </SettingsCard>
 
+      {legacyFull ? (
       <SettingsCard title="LinkedIn outreach agent">
         <p className="mb-4 text-sm leading-6 text-slate-600">
           Morning and evening jobs prepare drafts for people you already saved. They do not send
@@ -538,6 +626,7 @@ export default function ExtensionSettingsPage() {
           {savingAgent ? 'Saving…' : 'Save outreach settings'}
         </button>
       </SettingsCard>
+      ) : null}
 
       <SettingsCard title="Active tokens" padded={false}>
         {loading ? (
