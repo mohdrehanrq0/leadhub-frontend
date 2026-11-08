@@ -115,6 +115,12 @@ export default function RecipeEngineEditorPage() {
   async function onRun(mode: 'test' | 'full') {
     setRunning(mode);
     try {
+      // Run the steps on screen: persist edits as a new version first when they differ.
+      if (JSON.stringify(steps) !== JSON.stringify(recipe?.steps ?? [])) {
+        const saved = await saveEngineRecipeVersion(id, { steps, costCap: costCap ? Number(costCap) : undefined });
+        setRecipe(saved);
+        setVersions(await listEngineRecipeVersions(id));
+      }
       const result = await runEngineRecipe(id, { mode, costCap: costCap ? Number(costCap) : undefined });
       setRun(result);
       if (result.status === 'completed') toast.success(`Run completed — est. ${result.estimatedCost}, actual ${result.actualCost} credits`);
