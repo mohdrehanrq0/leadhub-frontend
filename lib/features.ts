@@ -32,6 +32,10 @@ export const BYOK_UI_ENABLED = false;
 /** Recipe-as-data engine editor (/research/engine). Keep in sync with backend RECIPE_ENGINE_V2. */
 export const RECIPE_ENGINE_V2 = process.env.NEXT_PUBLIC_RECIPE_ENGINE_V2 === 'true';
 
-/** Browser extension connection (Settings → Browser Extension). On when the full
- * extension surface is restored OR when the recipe engine needs the LinkedIn queue. */
-export const EXTENSION_CONNECTION_ENABLED = EXTENSION_SETTINGS_UI || RECIPE_ENGINE_V2;
+/**
+ * Settings → Browser Extension (token create / connect).
+ * Always on for internal LeadHub use — connecting the extension is required to
+ * test LinkedIn queue handoff. Full legacy capture/outreach cards on that page
+ * still require EXTENSION_SETTINGS_UI.
+ */
+export const EXTENSION_CONNECTION_ENABLED = true;
