@@ -66,13 +66,49 @@ export type CampaignActivity = {
   occurredAt: string;
   sequenceId: string | null;
   prospectName: string;
+  summary?: string;
 };
 
 export const DEFAULT_MESSAGE_TEMPLATE =
   '{Hi|Hey|Hello} {{firstName|there}}, saw your work at {{companyName|your company}} and wanted to connect.';
 
 export function statusLabel(status: string) {
-  return status.replace(/_/g, ' ');
+  switch (status) {
+    case 'queued':
+      return 'Queued';
+    case 'in_progress':
+      return 'Sending';
+    case 'waiting':
+      return 'Waiting for connection';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    case 'skipped':
+      return 'Skipped';
+    case 'dropped':
+      return 'Dropped';
+    default:
+      return status.replace(/_/g, ' ');
+  }
+}
+
+export function relationshipLabel(status: string) {
+  switch (status) {
+    case 'connected':
+      return 'Connected';
+    case 'pending':
+      return 'Connection request already sent';
+    case 'not_connected':
+      return 'Not connected';
+    default:
+      return null;
+  }
+}
+
+export function activitySummary(item: CampaignActivity) {
+  if (item.summary?.trim()) return item.summary;
+  return [item.eventType, item.proposedAction, item.resultStatus].filter(Boolean).join(' · ');
 }
 
 export function statusDotClass(status: string) {

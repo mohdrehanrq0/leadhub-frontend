@@ -10,6 +10,7 @@ import { MessageTemplateEditor } from '@/components/campaigns/MessageTemplateEdi
 import { PageHeader } from '@/components/layout/PageHeader';
 import { btnOutline, btnPrimary, cardClass, inputClass } from '@/components/ui/styles';
 import { DEFAULT_MESSAGE_TEMPLATE } from '@/lib/campaigns';
+import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 import type { LeadList } from '@/components/leads/types';
 
 type Step = 'details' | 'leads' | 'message' | 'review';
@@ -74,7 +75,10 @@ export default function NewCampaignPage() {
       await api.post(`/api/campaigns/${campaignId}/leads`, { listIds: selectedListIds });
       if (start) {
         await api.post(`/api/campaigns/${campaignId}/start`);
-        toast.success('Campaign started. The extension will process leads under daily caps.');
+        flushLinkedInOutbox();
+        window.setTimeout(() => flushLinkedInOutbox(), 2_000);
+        window.setTimeout(() => flushLinkedInOutbox(), 8_000);
+        toast.success('Campaign started. Keep LinkedIn open — the LeadHub extension processes leads under daily caps.');
       } else {
         toast.success('Campaign saved as draft.');
       }

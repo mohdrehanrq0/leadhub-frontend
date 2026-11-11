@@ -9,6 +9,8 @@ import api from '@/lib/api';
 import { MessageTemplateEditor } from '@/components/campaigns/MessageTemplateEditor';
 import { btnOutline, btnPrimary, cardClass, inputClass } from '@/components/ui/styles';
 import {
+  activitySummary,
+  relationshipLabel,
   statusDotClass,
   statusLabel,
   type CampaignActivity,
@@ -16,6 +18,7 @@ import {
   type CampaignDetail,
   type CampaignLeadRow,
 } from '@/lib/campaigns';
+import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 
 type Tab = 'analytics' | 'leads' | 'activity' | 'settings';
 
@@ -87,7 +90,11 @@ export default function CampaignDetailPage() {
     setBusy(true);
     try {
       await api.post(`/api/campaigns/${campaignId}/start`);
-      toast.success('Campaign started.');
+      // Wake the extension outbox immediately (alarm alone can take up to ~1 min).
+      flushLinkedInOutbox();
+      window.setTimeout(() => flushLinkedInOutbox(), 2_000);
+      window.setTimeout(() => flushLinkedInOutbox(), 8_000);
+      toast.success('Campaign started. The extension will process leads under today’s LinkedIn caps.');
       await loadCampaign();
       await loadAnalytics();
       await loadLeads();
@@ -98,6 +105,26 @@ export default function CampaignDetailPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function nudgeExtension() {
+    const ok = await flushLinkedInOutbox();
+    if (!ok) {
+      toast.error(
+        'LeadHub extension did not respond. Reload the unpacked extension from leadhub-extension/dist, stay on localhost:3000, and keep a LinkedIn tab open.',
+      );
+      return;
+    }
+    toast.success('Extension woke up — it should open the next LinkedIn profile shortly.');
+    window.setTimeout(() => {
+      void loadLeads();
+      void loadAnalytics();
+      void loadActivity();
+    }, 5_000);
+    window.setTimeout(() => {
+      void loadLeads();
+      void loadActivity();
+    }, 20_000);
   }
 
   async function stopCampaign() {
@@ -161,11 +188,16 @@ export default function CampaignDetailPage() {
             {campaign.leadsCount} lead{campaign.leadsCount === 1 ? '' : 's'} · drop after {campaign.settings.dropTrackingDays} days
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {campaign.status === 'active' ? (
-            <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50" disabled={busy} onClick={() => void stopCampaign()}>
-              <IconPlayerStop size={16} /> Stop campaign
-            </button>
+            <>
+              <button type="button" className={btnOutline} disabled={busy} onClick={() => void nudgeExtension()}>
+                Process next lead
+              </button>
+              <button type="button" className="inline-flex items-center gap-2 rounded-xl bg-rose-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-50" disabled={busy} onClick={() => void stopCampaign()}>
+                <IconPlayerStop size={16} /> Stop campaign
+              </button>
+            </>
           ) : (
             <button type="button" className={btnPrimary} disabled={busy || campaign.status === 'archived'} onClick={() => void startCampaign()}>
               <IconPlayerPlay size={16} /> {campaign.status === 'paused' ? 'Resume' : 'Start'} campaign
@@ -280,8 +312,16 @@ export default function CampaignDetailPage() {
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className={`h-2 w-2 rounded-full ${statusDotClass(lead.status)}`} />
-                          <span className="capitalize">{statusLabel(lead.status)}</span>
+                          <span>{statusLabel(lead.status)}</span>
                         </div>
+                        {relationshipLabel(lead.relationshipStatus) ? (
+                          <div className="text-xs text-slate-500">{relationshipLabel(lead.relationshipStatus)}</div>
+                        ) : null}
+                        {lead.sentAt ? (
+                          <div className="text-xs text-slate-400">
+                            Last action {new Date(lead.sentAt).toLocaleString()}
+                          </div>
+                        ) : null}
                         {lead.lastError ? <div className="text-xs text-rose-600">{lead.lastError}</div> : null}
                       </td>
                       <td className="px-4 py-3 text-xs text-slate-500">{lead.flowStep || '—'}</td>
@@ -304,12 +344,7 @@ export default function CampaignDetailPage() {
               <div key={item.id} className="flex items-start justify-between gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                 <div>
                   <div className="text-sm font-medium text-slate-900">{item.prospectName}</div>
-                  <div className="text-xs text-slate-500">
-                    {item.eventType}
-                    {item.proposedAction ? ` · ${item.proposedAction}` : ''}
-                    {item.resultStatus ? ` → ${item.resultStatus}` : ''}
-                    {item.reasonCode ? ` (${item.reasonCode})` : ''}
-                  </div>
+                  <div className="text-sm text-slate-700">{activitySummary(item)}</div>
                 </div>
                 <time className="shrink-0 text-xs text-slate-400">
                   {new Date(item.occurredAt).toLocaleString()}
