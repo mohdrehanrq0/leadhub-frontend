@@ -1,19 +1,163 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { EXTENSION_SETTINGS_UI, RECIPE_ENGINE_V2 } from '@/lib/features';
-import { IconCopy, IconExternalLink, IconPlus, IconPuzzle, IconSparkles, IconTrash } from '@tabler/icons-react';
+import {
+  IconAlertTriangle,
+  IconCheck,
+  IconCopy,
+  IconExternalLink,
+  IconPlus,
+  IconPuzzle,
+  IconSparkles,
+  IconTrash,
+} from '@tabler/icons-react';
 import {
   SettingsCard,
   SettingsEmpty,
   SettingsPanel,
   settingsBtnDanger,
   settingsBtnPrimary,
+  settingsBtnSecondary,
 } from '@/components/settings/primitives';
 import type { CaptureEnrichMode } from '@/lib/captures';
+
+async function copyText(value: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    // Fall through to legacy path (some browsers block clipboard without focus).
+  }
+  try {
+    const el = document.createElement('textarea');
+    el.value = value;
+    el.setAttribute('readonly', '');
+    el.style.position = 'fixed';
+    el.style.left = '-9999px';
+    document.body.appendChild(el);
+    el.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(el);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function ExtensionTokenModal({
+  token,
+  onDismiss,
+}: {
+  token: string;
+  onDismiss: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 50);
+    return () => window.clearTimeout(id);
+  }, [token]);
+
+  async function handleCopy() {
+    const ok = await copyText(token);
+    if (ok) {
+      setCopied(true);
+      toast.success('Token copied');
+    } else {
+      toast.error('Could not copy automatically — select the token and press ⌘C / Ctrl+C.');
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="extension-token-modal-title"
+    >
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-xl">
+        <div className="border-b border-slate-100 px-5 py-4">
+          <h2 id="extension-token-modal-title" className="text-base font-semibold text-slate-900">
+            Connect browser extension
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Paste this token into the extension popup, then click Connect account.
+          </p>
+        </div>
+
+        <div className="space-y-4 px-5 py-5">
+          <div className="flex gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-950">
+            <IconAlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-600" />
+            <p>
+              <strong>Shown only once.</strong> LeadHub stores a hash of this token — after you close
+              this dialog you cannot view it again. Copy it now, or create a new token later.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="extension-one-time-token" className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+              One-time token
+            </label>
+            <div className="flex gap-2">
+              <input
+                id="extension-one-time-token"
+                ref={inputRef}
+                type="text"
+                readOnly
+                value={token}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-900 outline-none focus:border-settings-accent focus:ring-[3px] focus:ring-settings-accent/20"
+              />
+              <button
+                type="button"
+                onClick={() => void handleCopy()}
+                className={settingsBtnPrimary}
+              >
+                {copied ? <IconCheck size={15} /> : <IconCopy size={15} />}
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          <ol className="list-decimal space-y-1.5 pl-4 text-sm leading-6 text-slate-600">
+            <li>Click <strong>Copy</strong> (or select the token and press ⌘C / Ctrl+C).</li>
+            <li>Open the LeadHub Chrome extension popup.</li>
+            <li>Paste the token → <strong>Connect account</strong>.</li>
+          </ol>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 px-5 py-4">
+          <button type="button" onClick={onDismiss} className={settingsBtnSecondary}>
+            {copied ? "I've pasted it — done" : 'Close without copying'}
+          </button>
+          {!copied ? (
+            <button type="button" onClick={() => void handleCopy()} className={settingsBtnPrimary}>
+              <IconCopy size={15} />
+              Copy token
+            </button>
+          ) : (
+            <button type="button" onClick={onDismiss} className={settingsBtnPrimary}>
+              <IconCheck size={15} />
+              Done
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface ExtensionToken {
   id: string;
@@ -223,8 +367,13 @@ export default function ExtensionSettingsPage() {
     setCreating(true);
     try {
       const res = await api.post('/api/extension/tokens', { label: 'Chrome Extension' });
-      setPlainToken(res.data?.data?.token ?? null);
-      toast.success('Token created — copy it into the extension now.');
+      const token = (res.data?.data?.token as string | undefined) ?? null;
+      if (!token) {
+        toast.error('Token was created but the one-time secret was missing. Revoke it and try again.');
+        await load();
+        return;
+      }
+      setPlainToken(token);
       await load();
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -259,28 +408,14 @@ export default function ExtensionSettingsPage() {
   return (
     <SettingsPanel>
       {plainToken ? (
-        <div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm">
-          <p className="font-medium text-amber-900">Paste this into the extension now — it will not be shown again.</p>
-          <code className="block break-all rounded-lg bg-white/80 p-3 font-mono text-xs text-amber-950">{plainToken}</code>
-          <button
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(plainToken);
-              toast.success('Copied');
-            }}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900 underline"
-          >
-            <IconCopy size={13} />
-            Copy to clipboard
-          </button>
-        </div>
+        <ExtensionTokenModal token={plainToken} onDismiss={() => setPlainToken(null)} />
       ) : null}
 
       <SettingsCard
         icon={IconPuzzle}
         title="Browser extension connection"
         actions={
-          <button type="button" onClick={() => void create()} disabled={creating} className={settingsBtnPrimary}>
+          <button type="button" onClick={() => void create()} disabled={creating || Boolean(plainToken)} className={settingsBtnPrimary}>
             <IconPlus size={15} />
             {creating ? 'Creating…' : 'Connect extension'}
           </button>
@@ -330,8 +465,8 @@ export default function ExtensionSettingsPage() {
             ) : (
               <p>Could not load today&apos;s LinkedIn allowance — check that the backend is running with RECIPE_ENGINE_V2=true.</p>
             )}
-            <Link href="/research/engine" className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800">
-              Open recipe engine <IconExternalLink size={13} />
+            <Link href="/research" className="inline-flex items-center gap-1 font-medium text-blue-600 hover:text-blue-800">
+              Open recipes <IconExternalLink size={13} />
             </Link>
           </div>
         ) : null}
@@ -530,16 +665,7 @@ export default function ExtensionSettingsPage() {
       </>
       ) : null}
 
-      <SettingsCard
-        icon={IconPuzzle}
-        title="How it works"
-        actions={
-          <button type="button" onClick={() => void create()} disabled={creating} className={settingsBtnPrimary}>
-            <IconPlus size={15} />
-            {creating ? 'Creating…' : 'Connect extension'}
-          </button>
-        }
-      >
+      <SettingsCard icon={IconPuzzle} title="How it works">
         <ol className="space-y-3 text-sm leading-6 text-slate-600">
           <li className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">
@@ -551,7 +677,7 @@ export default function ExtensionSettingsPage() {
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">
               2
             </span>
-            Create a token and paste it into the extension popup.
+            Click <strong>Connect extension</strong> — a one-time token appears in a modal. Copy it, then paste it into the extension popup.
           </li>
           <li className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">

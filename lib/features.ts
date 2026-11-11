@@ -21,16 +21,19 @@ export const CAPTURES_UI = false;
 export const OUTREACH_UI = false;
 export const MONITORING_UI = false;
 export const TEAM_UI = false;
-export const LISTS_UI = false;
-export const CAMPAIGNS_UI = false;
+export const LISTS_UI = true;
+export const CAMPAIGNS_UI = true;
 export const AGENT_BUILDER_UI = false;
 export const EXTENSION_SETTINGS_UI = false;
 
 /** BYOK (Bring Your Own Keys) settings UI — disabled when using platform keys. */
 export const BYOK_UI_ENABLED = false;
 
-/** Recipe-as-data engine editor (/research/engine). Keep in sync with backend RECIPE_ENGINE_V2. */
-export const RECIPE_ENGINE_V2 = process.env.NEXT_PUBLIC_RECIPE_ENGINE_V2 === 'true';
+/**
+ * Recipe-as-data engine — Research home (/research) + editor (/research/engine/[id]).
+ * Keep in sync with backend RECIPE_ENGINE_V2. Defaults on unless explicitly set false.
+ */
+export const RECIPE_ENGINE_V2 = process.env.NEXT_PUBLIC_RECIPE_ENGINE_V2 !== 'false';
 
 /**
  * Settings → Browser Extension (token create / connect).

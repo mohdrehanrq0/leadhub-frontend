@@ -15,11 +15,14 @@ import {
   IconCode,
   IconCoin,
   IconHistory,
+  IconListDetails,
   IconLogout,
+  IconSend,
   IconSettings,
   IconTool,
   IconX,
 } from '@tabler/icons-react';
+import { CAMPAIGNS_UI, LISTS_UI } from '@/lib/features';
 
 type User = {
   firstName?: string;
@@ -43,6 +46,12 @@ const NAV_RECIPE_LIBRARY = [
   { name: 'Recipes', href: '/research', icon: IconBook2 },
   { name: 'Tools', href: '/tools', icon: IconTool },
   { name: 'Runs', href: '/research/history', icon: IconHistory },
+  ...(LISTS_UI
+    ? [{ name: 'Prospect Lists', href: '/dashboard/prospect-lists', icon: IconListDetails }]
+    : []),
+  ...(CAMPAIGNS_UI
+    ? [{ name: 'Campaigns', href: '/dashboard/campaigns', icon: IconSend }]
+    : []),
   { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
 ];

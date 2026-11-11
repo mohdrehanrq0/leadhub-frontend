@@ -758,7 +758,7 @@ export default function LeadsPage() {
             {/* <Link href="/dashboard/leads/sync" className={btnOutline}>
               <IconRefresh size={16} /> Apify sync
             </Link> */}
-            <Link href="/dashboard/leads/lists" className={btnOutline}>
+            <Link href="/dashboard/prospect-lists" className={btnOutline}>
               <IconListDetails size={16} /> Lists
             </Link>
             <button type="button" onClick={() => openDelete(Array.from(selected))} className={btnOutline}>

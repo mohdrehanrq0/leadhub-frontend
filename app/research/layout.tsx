@@ -80,7 +80,15 @@ export default function ResearchLayout({ children }: { children: React.ReactNode
           </button>
           <span className="ml-2 text-sm font-semibold text-slate-800">Recipes</span>
         </header>
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+        <main
+          className={
+            pathname.startsWith('/research/engine/')
+              ? 'min-h-0 flex-1 overflow-hidden p-0'
+              : 'min-h-0 flex-1 overflow-y-auto p-4 md:p-8'
+          }
+        >
+          {children}
+        </main>
       </div>
     </div>
   );

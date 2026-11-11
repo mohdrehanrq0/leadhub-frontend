@@ -2,122 +2,61 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { IconHistory, IconLoader2, IconSearch } from '@tabler/icons-react';
-import {
-  deleteMyRecipe,
-  fetchCreditBalance,
-  listMyRecipes,
-  listRecipes,
-  type MyRecipe,
-  type RecipeDefinition,
-} from '@/lib/recipes-api';
-import { mineRecipeHref, recipeCardCopy } from '@/lib/recipe-card-copy';
+import { IconHistory, IconLoader2, IconPlus, IconSearch } from '@tabler/icons-react';
 import { RECIPE_ENGINE_V2 } from '@/lib/features';
-import { cn } from '@/lib/utils';
+import {
+  createEngineRecipe,
+  listEngineRecipes,
+  type EngineRecipe,
+} from '@/lib/recipe-engine-api';
 import { spinnerClass } from '@/components/ui/styles';
-import { RecipeSamplePreview } from '@/components/recipes/RecipeSamplePreview';
+import { cn } from '@/lib/utils';
 
-type ListFilter = 'all' | 'mine';
-
-type CardRow = {
-  key: string;
-  kind: 'builtin' | 'mine';
-  id: string;
-  name: string;
-  plainLine: string;
-  io: string;
-  cost: string;
-  costDetail?: string;
-  runHref: string;
-  customizeHref?: string;
-  sampleRecipeId: string;
-  myId?: string;
-};
-
-function builtinCard(r: RecipeDefinition): CardRow {
-  const copy = recipeCardCopy(r.id);
-  return {
-    key: r.id,
-    kind: 'builtin',
-    id: r.id,
-    name: r.name,
-    plainLine: copy.plainLine,
-    io: copy.io,
-    cost: copy.cost,
-    costDetail: copy.costDetail,
-    runHref: `/research/recipes/${r.id}`,
-    customizeHref:
-      r.id === 'prospect-brief' ? `/research/recipes/prospect-brief?mode=customize` : undefined,
-    sampleRecipeId: r.id,
-  };
-}
-
-function mineCard(m: MyRecipe): CardRow {
-  const copy = recipeCardCopy(m.baseRecipeId);
-  return {
-    key: m.id,
-    kind: 'mine',
-    id: m.id,
-    name: m.name,
-    plainLine: m.description?.trim() || copy.plainLine,
-    io: copy.io,
-    cost: copy.cost,
-    costDetail: copy.costDetail,
-    runHref:
-      m.baseRecipeId === 'prospect-brief'
-        ? `/research/recipes/prospect-brief?mode=run&my=${m.id}`
-        : mineRecipeHref(m.baseRecipeId, m.id),
-    customizeHref:
-      m.baseRecipeId === 'prospect-brief'
-        ? mineRecipeHref(m.baseRecipeId, m.id)
-        : undefined,
-    sampleRecipeId: m.baseRecipeId,
-    myId: m.id,
-  };
-}
-
-export default function ResearchWorkspacePage() {
-  const [recipes, setRecipes] = useState<RecipeDefinition[]>([]);
-  const [mine, setMine] = useState<MyRecipe[]>([]);
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<ListFilter>('all');
+export default function ResearchRecipesPage() {
+  const router = useRouter();
+  const [recipes, setRecipes] = useState<EngineRecipe[]>([]);
+  const [loading, setLoading] = useState(RECIPE_ENGINE_V2);
+  const [creating, setCreating] = useState(false);
   const [q, setQ] = useState('');
 
   useEffect(() => {
-    Promise.all([listRecipes(), listMyRecipes().catch(() => []), fetchCreditBalance()])
-      .then(([list, my, balance]) => {
-        setRecipes(list);
-        setMine(my);
-        setCreditBalance(balance);
-      })
+    if (!RECIPE_ENGINE_V2) return;
+    listEngineRecipes()
+      .then(setRecipes)
       .catch(() => toast.error('Could not load recipes'))
       .finally(() => setLoading(false));
   }, []);
 
-  const rows = useMemo(() => {
-    const builtIn = recipes.map(builtinCard);
-    const saved = mine.map(mineCard);
-    const all = filter === 'mine' ? saved : [...builtIn, ...saved];
+  const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
-    if (!query) return all;
-    return all.filter(
+    if (!query) return recipes;
+    return recipes.filter(
       (r) =>
         r.name.toLowerCase().includes(query) ||
-        r.plainLine.toLowerCase().includes(query) ||
-        r.io.toLowerCase().includes(query),
+        (r.description ?? '').toLowerCase().includes(query),
     );
-  }, [recipes, mine, filter, q]);
+  }, [recipes, q]);
 
-  async function onDeleteMine(id: string) {
+  async function onCreate() {
+    setCreating(true);
     try {
-      await deleteMyRecipe(id);
-      setMine((prev) => prev.filter((m) => m.id !== id));
-      toast.success('Deleted');
+      const recipe = await createEngineRecipe({ name: 'Untitled recipe', steps: [] });
+      router.push(`/research/engine/${recipe.id}`);
     } catch {
-      toast.error('Could not delete');
+      toast.error('Could not create recipe');
+      setCreating(false);
     }
+  }
+
+  if (!RECIPE_ENGINE_V2) {
+    return (
+      <div className="mx-auto max-w-3xl rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+        Recipe engine is disabled. Set <code className="rounded bg-slate-100 px-1 text-xs">NEXT_PUBLIC_RECIPE_ENGINE_V2=true</code> and backend{' '}
+        <code className="rounded bg-slate-100 px-1 text-xs">RECIPE_ENGINE_V2=true</code>, then restart both servers.
+      </div>
+    );
   }
 
   if (loading) {
@@ -129,136 +68,78 @@ export default function ResearchWorkspacePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
+    <div className="mx-auto w-full max-w-4xl space-y-5 p-4 md:p-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Recipes</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            Give an input, get a clear result. Credits shown up front.
-            {creditBalance !== null ? ` · ${creditBalance} credits` : null}
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Recipes</h1>
+          <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+            Build lead workflows from registry nodes — URL lists, LinkedIn enrich, AI prompts, email waterfall, and outputs.
+            Open a starter, edit the prompt/rubric, then run a test of 5 rows.
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          {RECIPE_ENGINE_V2 ? (
-            <Link href="/research/engine" className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">
-              Recipe engine
-            </Link>
-          ) : null}
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href="/research/history"
-            className="inline-flex items-center gap-1.5 text-sm text-zinc-600 hover:text-zinc-900"
+            className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900"
           >
             <IconHistory className="h-4 w-4" />
             Runs
           </Link>
+          <Link
+            href="/dashboard/settings/extension"
+            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+          >
+            Connect extension
+          </Link>
+          <button
+            type="button"
+            onClick={() => void onCreate()}
+            disabled={creating}
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            <IconPlus size={16} />
+            {creating ? 'Creating…' : 'New recipe'}
+          </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[200px] flex-1">
-          <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <input
-            className="w-full rounded-lg border border-zinc-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-zinc-400"
-            placeholder="Search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-          />
-        </div>
-        <div className="flex rounded-lg border border-zinc-200 p-0.5 text-xs">
-          {(['all', 'mine'] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              className={cn(
-                'rounded-md px-3 py-1.5 capitalize',
-                filter === f ? 'bg-zinc-900 text-white' : 'text-zinc-600',
-              )}
-              onClick={() => setFilter(f)}
-            >
-              {f === 'all' ? 'All' : 'Mine'}
-            </button>
-          ))}
-        </div>
+      <div className="relative">
+        <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-slate-400"
+          placeholder="Search recipes"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+        />
       </div>
 
-      {rows.length ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {rows.map((row) => (
-            <article
-              key={row.key}
-              className="flex flex-col rounded-xl border border-zinc-200 bg-white p-5 shadow-sm"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-zinc-900">
-                    {row.name}
-                    {row.kind === 'mine' ? (
-                      <span className="ml-2 rounded-full bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
-                        Mine
-                      </span>
-                    ) : null}
-                  </h2>
-                  <p className="mt-1.5 text-sm text-zinc-600">{row.plainLine}</p>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
-                <span>{row.io}</span>
-                <span>
-                  <span className="font-medium text-zinc-800">{row.cost}</span>
-                  {row.costDetail ? ` · ${row.costDetail}` : null}
-                </span>
-              </div>
-
-              <RecipeSamplePreview recipeId={row.sampleRecipeId} />
-
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Link
-                  href={row.runHref}
-                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800"
-                >
-                  Run
-                </Link>
-                {row.customizeHref ? (
-                  <Link
-                    href={row.customizeHref}
-                    className="rounded-md border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-800 hover:bg-zinc-50"
-                  >
-                    Customize
-                  </Link>
-                ) : null}
-                {row.kind === 'mine' && row.myId ? (
-                  <button
-                    type="button"
-                    className="ml-auto text-xs text-red-600 hover:underline"
-                    onClick={() => onDeleteMine(row.myId!)}
-                  >
-                    Delete
-                  </button>
-                ) : null}
-              </div>
-            </article>
-          ))}
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
+          {recipes.length === 0
+            ? 'No recipes yet. Create one or refresh to load starters (Prospect brief, Clean list, Find contacts, Post commenters).'
+            : 'No recipes match that search.'}
         </div>
       ) : (
-        <div className="rounded-xl border border-dashed border-zinc-200 px-4 py-12 text-center text-sm text-zinc-500">
-          {filter === 'mine' ? (
-            <>
-              No saved recipes yet.{' '}
-              <Link
-                href="/research/recipes/prospect-brief?mode=customize"
-                className="underline"
-              >
-                Customize Prospect brief
-              </Link>{' '}
-              or{' '}
-              <Link href="/research/recipes/find-contacts" className="underline">
-                Find contacts
-              </Link>
-            </>
-          ) : (
-            'No recipes found.'
-          )}
+        <div className="space-y-3">
+          {filtered.map((recipe) => (
+            <Link
+              key={recipe.id}
+              href={`/research/engine/${recipe.id}`}
+              className={cn(
+                'block rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300',
+              )}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-slate-900">{recipe.name}</span>
+                <span className="shrink-0 text-xs text-slate-400">
+                  v{recipe.version} · {recipe.steps.length} steps
+                </span>
+              </div>
+              {recipe.description ? (
+                <p className="mt-1 text-sm leading-6 text-slate-500">{recipe.description}</p>
+              ) : null}
+            </Link>
+          ))}
         </div>
       )}
     </div>

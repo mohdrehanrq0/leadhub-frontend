@@ -442,7 +442,7 @@ export default function CapturesPage() {
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Link
-              href="/dashboard/leads/lists"
+              href="/dashboard/prospect-lists"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               Manage lists

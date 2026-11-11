@@ -18,24 +18,37 @@ export function ConfigForm({
   schema,
   value,
   onChange,
+  compact = false,
 }: {
   schema: ConfigFieldSchema[];
   value: Record<string, unknown>;
   onChange: (next: Record<string, unknown>) => void;
+  /** Denser controls for the flow inspector. */
+  compact?: boolean;
 }) {
-  if (!schema.length) return <p className="text-sm text-slate-500">No configuration needed.</p>;
+  const inputClass = compact
+    ? 'h-8 w-full min-w-0 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-brand-main focus:ring-2 focus:ring-brand-main/20'
+    : settingsInputClass;
+  const labelClass = compact
+    ? 'mb-1 block text-[11px] font-medium text-slate-700'
+    : 'mb-1 block text-sm font-medium text-slate-700';
+  const helpClass = compact ? 'mt-1 block text-[10px] text-slate-400' : 'mt-1 block text-xs text-slate-400';
+
+  if (!schema.length) {
+    return <p className="text-xs text-slate-500">No configuration needed.</p>;
+  }
   return (
-    <div className="space-y-4">
+    <div className={cn(compact ? 'space-y-3' : 'space-y-4')}>
       {schema.map((field) => {
         const current = value[field.key] ?? field.default ?? '';
         return (
           <label key={field.key} className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-700">
+            <span className={labelClass}>
               {field.label}{field.required ? ' *' : ''}
             </span>
             {field.type === 'textarea' || field.type === 'string_list' || field.type === 'url_list' ? (
               <textarea
-                className={cn(settingsInputClass, 'h-auto min-h-20 py-2')}
+                className={cn(inputClass, compact ? 'h-auto min-h-16 py-1.5' : 'h-auto min-h-20 py-2')}
                 value={field.type === 'textarea' ? String(current ?? '') : listText(current)}
                 placeholder={field.placeholder}
                 onChange={(e) =>
@@ -45,13 +58,13 @@ export function ConfigForm({
             ) : field.type === 'boolean' ? (
               <input
                 type="checkbox"
-                className="h-4 w-4 accent-blue-600"
+                className="h-3.5 w-3.5 accent-brand-main"
                 checked={Boolean(current)}
                 onChange={(e) => onChange({ ...value, [field.key]: e.target.checked })}
               />
             ) : field.type === 'select' ? (
               <select
-                className={settingsInputClass}
+                className={inputClass}
                 value={String(current ?? '')}
                 onChange={(e) => onChange({ ...value, [field.key]: e.target.value })}
               >
@@ -59,7 +72,7 @@ export function ConfigForm({
               </select>
             ) : (
               <input
-                className={settingsInputClass}
+                className={inputClass}
                 type={field.type === 'number' ? 'number' : 'text'}
                 value={String(current ?? '')}
                 placeholder={field.placeholder}
@@ -68,7 +81,7 @@ export function ConfigForm({
                 }
               />
             )}
-            {field.help ? <span className="mt-1 block text-xs text-slate-400">{field.help}</span> : null}
+            {field.help ? <span className={helpClass}>{field.help}</span> : null}
           </label>
         );
       })}

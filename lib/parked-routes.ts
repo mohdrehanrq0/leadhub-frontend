@@ -21,20 +21,23 @@ export const PARKED_REDIRECT = '/research';
  * Returns a redirect target if `pathname` is a parked surface, else null.
  */
 export function parkedRedirectFor(pathname: string): string | null {
-  if (!LEADS_CRM_UI) {
-    if (
-      pathname === '/dashboard/leads' ||
-      pathname.startsWith('/dashboard/leads/') ||
-      pathname.startsWith('/dashboard/leads/lists') ||
-      pathname.startsWith('/dashboard/leads/sync') ||
-      pathname.startsWith('/dashboard/leads/import')
-    ) {
-      return '/research/history';
-    }
+  const isProspectLists =
+    pathname === '/dashboard/prospect-lists' || pathname.startsWith('/dashboard/prospect-lists/');
+  const isLegacyLists =
+    pathname === '/dashboard/leads/lists' || pathname.startsWith('/dashboard/leads/lists/');
+
+  if (!LISTS_UI && (isProspectLists || isLegacyLists)) {
+    return '/research/history';
   }
 
-  if (!LISTS_UI && pathname.startsWith('/dashboard/leads/lists')) {
-    return '/research/history';
+  if (!LEADS_CRM_UI) {
+    const isLeadsCrm =
+      pathname === '/dashboard/leads' ||
+      pathname.startsWith('/dashboard/leads/');
+    // Lists stay reachable via their own flag even while the broader CRM is parked.
+    if (isLeadsCrm && !isLegacyLists) {
+      return '/research/history';
+    }
   }
 
   if (!SIGNUPS_UI && (pathname === '/dashboard/signups' || pathname.startsWith('/dashboard/signups/'))) {

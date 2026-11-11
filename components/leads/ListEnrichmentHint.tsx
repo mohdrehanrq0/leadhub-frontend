@@ -25,7 +25,7 @@ export function ListEnrichmentHint({
       <p className={`text-[11px] leading-4 text-slate-500 ${className}`}>
         Creating a list saves the name only. Configure outreach motive, default agent, and
         auto-enrich on the{' '}
-        <Link href="/dashboard/leads/lists" className="font-semibold text-brand-main hover:underline">
+        <Link href="/dashboard/prospect-lists" className="font-semibold text-brand-main hover:underline">
           Lists
         </Link>{' '}
         page.
@@ -60,7 +60,7 @@ export function ListEnrichmentHint({
           ) : null}
         </div>
         <Link
-          href={`/dashboard/leads/lists/${list.id}`}
+          href={`/dashboard/prospect-lists/${list.id}`}
           className="shrink-0 font-semibold text-brand-main hover:underline"
         >
           Configure list

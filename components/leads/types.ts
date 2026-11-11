@@ -391,6 +391,8 @@ export type LeadList = {
    * true = always enrich on capture, false = never, null = inherit workspace mode.
    */
   autoEnrichOnCapture?: boolean | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type LeadRow = {
