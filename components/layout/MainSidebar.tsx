@@ -9,17 +9,17 @@ import GetLogo from '@/components/common/getLogo';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import api from '@/lib/api';
 import {
-  IconBook2,
+  // IconBook2, // Recipes tab parked
   IconChevronLeft,
   IconChevronRight,
   IconCode,
   IconCoin,
-  IconHistory,
+  // IconHistory, // Runs tab parked
   IconListDetails,
   IconLogout,
   IconSend,
   IconSettings,
-  IconTool,
+  // IconTool, // Tools tab parked
   IconX,
 } from '@tabler/icons-react';
 import { CAMPAIGNS_UI, LISTS_UI } from '@/lib/features';
@@ -43,9 +43,10 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
 const NAV_RECIPE_LIBRARY = [
-  { name: 'Recipes', href: '/research', icon: IconBook2 },
-  { name: 'Tools', href: '/tools', icon: IconTool },
-  { name: 'Runs', href: '/research/history', icon: IconHistory },
+  // Recipes / Tools / Runs tabs parked — restore when those surfaces ship again.
+  // { name: 'Recipes', href: '/research', icon: IconBook2 },
+  // { name: 'Tools', href: '/tools', icon: IconTool },
+  // { name: 'Runs', href: '/research/history', icon: IconHistory },
   ...(LISTS_UI
     ? [{ name: 'Prospect Lists', href: '/dashboard/prospect-lists', icon: IconListDetails }]
     : []),

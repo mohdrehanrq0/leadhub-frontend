@@ -1,8 +1,11 @@
-/**
- * Ask the LeadHub Chrome extension to pull the next LinkedIn outbox job.
- * Resolves true when the dashboard-bridge content script acknowledges.
- */
-export function flushLinkedInOutbox(timeoutMs = 2500): Promise<boolean> {
+export type LinkedInOutboxFlushMode = 'all' | 'retry' | 'recheck';
+
+/** Ask the extension to drain the LinkedIn outbox and any message_1st People Search campaigns. */
+export function flushLinkedInOutbox(
+  timeoutMs = 2500,
+  campaignId?: string,
+  mode: LinkedInOutboxFlushMode = 'all',
+): Promise<boolean> {
   if (typeof window === 'undefined') return Promise.resolve(false);
 
   return new Promise((resolve) => {
@@ -25,6 +28,14 @@ export function flushLinkedInOutbox(timeoutMs = 2500): Promise<boolean> {
 
     window.addEventListener('message', onMessage);
     const timer = window.setTimeout(() => finish(false), timeoutMs);
-    window.postMessage({ source: 'leadhub', kind: 'send-linkedin' }, window.location.origin);
+    window.postMessage(
+      {
+        source: 'leadhub',
+        kind: 'send-linkedin',
+        campaignId: campaignId || undefined,
+        mode,
+      },
+      window.location.origin,
+    );
   });
 }
