@@ -44,7 +44,17 @@ import { cancelLinkedInCampaignOutbox, flushLinkedInOutbox } from '@/lib/flush-l
 
 type Tab = 'analytics' | 'leads' | 'activity' | 'settings';
 
-const LEAD_FILTERS = ['all', 'completed', 'in_progress', 'waiting', 'queued', 'failed', 'skipped', 'dropped'] as const;
+const LEAD_FILTERS = [
+  'all',
+  'completed',
+  'replied',
+  'in_progress',
+  'waiting',
+  'queued',
+  'failed',
+  'skipped',
+  'dropped',
+] as const;
 
 function activityAccent(summary: string) {
   const s = summary.toLowerCase();
@@ -589,15 +599,15 @@ export default function CampaignDetailPage() {
                   { label: 'Enrolled', value: String(total), hint: 'Harvested or listed' },
                   { label: 'Sent', value: String(campaign.sentCount), hint: 'Messages delivered' },
                   { label: 'Completed', value: String(completed), hint: 'Finished' },
+                  { label: 'Replied', value: String(analytics.replied), hint: 'Inbound LinkedIn reply' },
                   { label: 'Failed', value: String(analytics.failed), hint: 'Needs attention' },
                   { label: 'Queued', value: String(Math.max(0, total - completed - (analytics.failed ?? 0))), hint: 'Waiting to send' },
-                  { label: 'Actions', value: String(analytics.actions), hint: 'Extension events' },
                 ]
               : [
                   { label: 'Accepted', value: String(analytics.accepted), hint: 'Connected on LinkedIn' },
                   { label: 'Waiting', value: String(waiting), hint: 'Invite pending' },
-                  { label: 'Actions', value: String(analytics.actions), hint: 'Sends + checks' },
                   { label: 'Completed', value: String(completed), hint: 'Finished sequence' },
+                  { label: 'Replied', value: String(analytics.replied), hint: 'Inbound LinkedIn reply' },
                   { label: 'Failed', value: String(analytics.failed), hint: 'Needs attention' },
                   { label: 'Dropped', value: String(dropped), hint: 'Tracking window ended' },
                 ]

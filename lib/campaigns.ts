@@ -206,6 +206,8 @@ export function statusLabel(status: string) {
       return 'Skipped';
     case 'dropped':
       return 'Dropped';
+    case 'replied':
+      return 'Replied';
     case 'all':
       return 'All';
     default:
@@ -299,12 +301,12 @@ export function leadNextStep(lead: CampaignLeadRow): {
       hint: 'Invite tracking ended before they accepted. No message will be sent.',
     };
   }
-  if (lead.status === 'failed') {
+  if (lead.status === 'failed' || seq === 'error' || seq === 'restricted') {
     return {
       label: 'Failed',
       meta: null,
       tone: 'danger',
-      hint: lead.lastError || 'Last LinkedIn action failed.',
+      hint: lead.lastError || lead.stopReason || 'Last LinkedIn action failed.',
     };
   }
   // Only trust "Message sent" when a real DM was recorded — not completed+profile_changed.
