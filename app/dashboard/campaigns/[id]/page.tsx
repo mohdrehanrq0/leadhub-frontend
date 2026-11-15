@@ -40,7 +40,7 @@ import {
   type CampaignSequence,
 } from '@/lib/campaigns';
 import { toTemplateLead } from '@/lib/message-template';
-import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
+import { cancelLinkedInCampaignOutbox, flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 
 type Tab = 'analytics' | 'leads' | 'activity' | 'settings';
 
@@ -210,8 +210,12 @@ export default function CampaignDetailPage() {
     setBusy(true);
     try {
       await api.post(`/api/campaigns/${campaignId}/stop`);
-      toast.success('Campaign stopped.');
+      // Drop extension outbox / SERP / reply work for this campaign immediately.
+      void cancelLinkedInCampaignOutbox(campaignId);
+      toast.success('Campaign stopped. Queue cleared.');
       await loadCampaign();
+      await loadLeads();
+      await loadAnalytics();
     } catch (err) {
       toast.error(
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Could not stop.',
@@ -420,7 +424,8 @@ export default function CampaignDetailPage() {
     setBusy(true);
     try {
       await api.delete(`/api/campaigns/${campaignId}`);
-      toast.success('Campaign deleted.');
+      void cancelLinkedInCampaignOutbox(campaignId);
+      toast.success('Campaign deleted. Related queue removed.');
       router.push('/dashboard/campaigns');
     } catch (err) {
       toast.error(

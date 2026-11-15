@@ -72,7 +72,10 @@ export function CreditCheckoutModal({ pack, open, onClose, onSuccess }: Props) {
           currency: data.currency,
           orderId: data.orderId,
           name: 'LeadHub',
-          description: `${pack.name} — ${pack.credits.toLocaleString()} credits`,
+          description:
+            pack.slug === 'pro-monthly' || pack.credits === 0
+              ? `${pack.name} — 30 days`
+              : `${pack.name} — ${pack.credits.toLocaleString()} credits`,
           email: data.email || user?.email,
           prefillName: data.name,
           onSuccess: async (response) => {
@@ -81,7 +84,11 @@ export function CreditCheckoutModal({ pack, open, onClose, onSuccess }: Props) {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
-            toast.success(`${pack.credits.toLocaleString()} credits added to your wallet.`);
+            toast.success(
+              pack.slug === 'pro-monthly' || pack.credits === 0
+                ? 'LeadHub Pro is now active.'
+                : `${pack.credits.toLocaleString()} credits added to your wallet.`,
+            );
             onSuccess?.();
             onClose();
           },

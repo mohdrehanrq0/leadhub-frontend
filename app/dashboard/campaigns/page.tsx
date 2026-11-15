@@ -14,6 +14,7 @@ import {
   statusLabel,
   type CampaignSummary,
 } from '@/lib/campaigns';
+import { cancelLinkedInCampaignOutbox } from '@/lib/flush-linkedin-outbox';
 
 export default function CampaignsPage() {
   const router = useRouter();
@@ -65,7 +66,8 @@ export default function CampaignsPage() {
     setBusyId(id);
     try {
       await api.delete(`/api/campaigns/${id}`);
-      toast.success('Campaign deleted.');
+      void cancelLinkedInCampaignOutbox(id);
+      toast.success('Campaign deleted. Related queue removed.');
       await loadCampaigns();
     } catch (err) {
       toast.error(

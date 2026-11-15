@@ -3,11 +3,10 @@
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import GetLogo from '@/components/common/getLogo';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
-import api from '@/lib/api';
 import {
   // IconBook2, // Recipes tab parked
   IconChevronLeft,
@@ -57,13 +56,6 @@ const NAV_RECIPE_LIBRARY = [
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
 ];
 
-type CreditBalanceData = {
-  balance: number;
-  freeBalance: number;
-  freeExpiresAt: string | null;
-  available: number;
-};
-
 export function MainSidebar({
   isOpen,
   onClose,
@@ -75,7 +67,6 @@ export function MainSidebar({
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
-  const [creditBalance, setCreditBalance] = useState<CreditBalanceData | null>(null);
   const hoverCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedCollapse = useRef(false);
 
@@ -88,22 +79,6 @@ export function MainSidebar({
       setIsCollapsed(saved === 'true');
     }
   }, []);
-
-  const fetchCredits = useCallback(async () => {
-    if (!activeWorkspaceId) return;
-    try {
-      const { data } = await api.get('/api/v1/credits/balance');
-      if (data.success && data.data) {
-        setCreditBalance(data.data);
-      }
-    } catch {
-      // silently fail
-    }
-  }, [activeWorkspaceId]);
-
-  useEffect(() => {
-    void fetchCredits();
-  }, [fetchCredits]);
 
   const toggleCollapse = () => {
     const next = !isCollapsed;
@@ -279,36 +254,7 @@ export function MainSidebar({
               <div className="mb-6 space-y-1">{renderNav(navItems)}</div>
             </nav>
 
-            {/* Credit Meter */}
-            {creditBalance !== null && (
-              <div className={cn('shrink-0 border-t border-sidebar-border p-3', showExpandedChrome ? 'px-3' : 'px-2')}>
-                <Link
-                  href="/dashboard/billing"
-                  className={cn(
-                    'flex items-center rounded-lg bg-sidebar-hover/50 transition-colors hover:bg-sidebar-hover',
-                    showExpandedChrome ? 'justify-between px-3 py-2' : 'justify-center p-2',
-                  )}
-                  title={!showExpandedChrome ? `${creditBalance.available} credits` : undefined}
-                >
-                  <div className={cn('flex items-center gap-2', !showExpandedChrome && 'flex-col gap-0.5')}>
-                    <IconCoin size={showExpandedChrome ? 16 : 18} className="text-amber-500" />
-                    <span className={cn('font-semibold text-sidebar-text', showExpandedChrome ? 'text-sm' : 'text-xs')}>
-                      {creditBalance.available.toLocaleString()}
-                    </span>
-                  </div>
-                  {showExpandedChrome && (
-                    <div className="text-right">
-                      <div className="text-xs text-sidebar-muted">credits</div>
-                      {creditBalance.freeBalance > 0 && creditBalance.freeExpiresAt && (
-                        <div className="text-[10px] text-amber-500">
-                          {creditBalance.freeBalance} free · exp {new Date(creditBalance.freeExpiresAt).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </Link>
-              </div>
-            )}
+            {/* Credits meter hidden while Pro billing is primary. Re-enable when credit packs return. */}
 
             <div className="shrink-0 border-t border-sidebar-border bg-sidebar-bg/90 p-3">
               <div

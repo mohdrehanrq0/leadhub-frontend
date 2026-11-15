@@ -373,7 +373,48 @@ export default function ExtensionSettingsPage() {
         await load();
         return;
       }
-      setPlainToken(token);
+
+      // One-click: dashboard-bridge (content script) forwards this to the extension SW.
+      const connectedViaBridge = await new Promise<boolean>((resolve) => {
+        const timeout = window.setTimeout(() => {
+          window.removeEventListener('message', onMessage);
+          resolve(false);
+        }, 2500);
+        function onMessage(event: MessageEvent) {
+          if (event.source !== window) return;
+          const data = event.data as {
+            source?: string;
+            kind?: string;
+            result?: { ok?: boolean; error?: string; email?: string };
+          } | null;
+          if (!data || data.source !== 'leadhub-extension') return;
+          if (data.kind !== 'connect-extension-result') return;
+          window.clearTimeout(timeout);
+          window.removeEventListener('message', onMessage);
+          if (data.result?.error) {
+            toast.error(data.result.error);
+            resolve(false);
+            return;
+          }
+          toast.success('Extension connected to this workspace.');
+          resolve(true);
+        }
+        window.addEventListener('message', onMessage);
+        window.postMessage(
+          {
+            source: 'leadhub',
+            kind: 'connect-extension',
+            token,
+            workspaceId: undefined,
+          },
+          window.location.origin,
+        );
+      });
+
+      if (!connectedViaBridge) {
+        setPlainToken(token);
+        toast.message('Extension not detected — copy the token into the popup, or reload this page with the extension installed.');
+      }
       await load();
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
@@ -442,16 +483,11 @@ export default function ExtensionSettingsPage() {
           </li>
           <li className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">2</span>
-            Click <strong>Connect extension</strong> here. A one-time <code className="rounded bg-slate-100 px-1 text-xs">lhx_…</code> token is shown once — copy it.
+            Click <strong>Connect extension</strong>. With the extension installed, LeadHub connects this workspace in one click. If the extension is missing, a one-time token is shown to paste into the popup.
           </li>
           <li className="flex gap-3">
             <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">3</span>
-            Open the extension popup and paste the token → <strong>Connect account</strong>. For a local API, set{' '}
-            <code className="rounded bg-slate-100 px-1 text-xs">leadhub_api_base</code> to <code className="rounded bg-slate-100 px-1 text-xs">http://localhost:4001</code> in the service-worker console.
-          </li>
-          <li className="flex gap-3">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-settings-accent text-[11px] font-bold text-white">4</span>
-            Reload this page — status becomes Connected. Then run a recipe ending in <code className="rounded bg-slate-100 px-1 text-xs">out.linkedin_queue</code>; the extension only ever receives today&apos;s backend-allowed batch.
+            Open LinkedIn — the LeadHub sidebar appears for Add prospects / Status. Upgrade to Pro on Billing for search, reactions, events, and withdraw.
           </li>
         </ol>
         {RECIPE_ENGINE_V2 ? (

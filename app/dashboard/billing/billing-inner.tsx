@@ -11,39 +11,31 @@ import {
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '../../../lib/api';
-import { APOLLO_UI_ENABLED, BYOK_UI_ENABLED } from '../../../lib/features';
+import { BYOK_UI_ENABLED } from '../../../lib/features';
 import { useAuth } from '../../../context/AuthContext';
 import { PageHeader } from '../../../components/layout/PageHeader';
-import {
-  detectDisplayCurrency,
-  detectIsIndiaUser,
-  formatPackPrice,
-  type DisplayCurrency,
-} from '../../../lib/currency';
+import { detectIsIndiaUser } from '../../../lib/currency';
 import {
   CreditCheckoutModal,
   type CreditPack,
 } from '../../../components/billing/CreditCheckoutModal';
 
-type CreditBalance = {
-  balance: number;
-  freeBalance: number;
-  freeExpiresAt: string | null;
-  reservedBalance: number;
-  totalPurchased: number;
-  totalUsed: number;
-  available: number;
-};
-
-type CreditTxn = {
-  id: string;
-  type: string;
-  amount: number;
-  balanceAfter: number;
-  description: string | null;
-  operation: string | null;
-  priceVersion: number | null;
-  createdAt: string;
+type PlanInfo = {
+  plan: 'free' | 'pro';
+  status: string;
+  proUntil: string | null;
+  isPro: boolean;
+  upgradeUrl: string;
+  periodDays: number;
+  proPack: {
+    id: string;
+    slug: string;
+    name: string;
+    description: string | null;
+    priceInrPaise: number;
+    priceUsdCents: number;
+    isActive: boolean;
+  } | null;
 };
 
 type PaymentRow = {
@@ -69,12 +61,9 @@ function errorMessage(err: unknown, fallback: string) {
 export default function BillingPage() {
   const { activeWorkspaceId } = useAuth();
   const searchParams = useSearchParams();
-  const currency: DisplayCurrency = detectDisplayCurrency();
   const isIndia = detectIsIndiaUser();
 
-  const [balance, setBalance] = useState<CreditBalance | null>(null);
-  const [packs, setPacks] = useState<CreditPack[]>([]);
-  const [history, setHistory] = useState<CreditTxn[]>([]);
+  const [plan, setPlan] = useState<PlanInfo | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkoutPack, setCheckoutPack] = useState<CreditPack | null>(null);
@@ -84,17 +73,13 @@ export default function BillingPage() {
     if (!activeWorkspaceId) return;
     try {
       setLoading(true);
-      const [balRes, packsRes, histRes, payRes] = await Promise.all([
-        api.get('/api/credits/balance'),
-        api.get('/api/credits/packs'),
-        api.get('/api/credits/history', { params: { limit: 20 } }),
+      const [planRes, payRes] = await Promise.all([
+        api.get('/api/billing/plan'),
         api
           .get('/api/credits/payments', { params: { limit: 20 } })
           .catch(() => ({ data: { data: [] } })),
       ]);
-      setBalance(balRes.data.data);
-      setPacks(packsRes.data.data ?? []);
-      setHistory(histRes.data.data ?? []);
+      setPlan(planRes.data.data);
       setPayments(payRes.data.data ?? []);
     } catch (err) {
       toast.error(errorMessage(err, 'Failed to load billing.'));
@@ -125,7 +110,7 @@ export default function BillingPage() {
           });
           const status = res.data.data?.status;
           if (status === 'succeeded') {
-            toast.success('Payment confirmed — credits added.');
+            toast.success('Payment confirmed — Pro is active.');
             await load();
             setPollingCrypto(false);
             return;
@@ -152,16 +137,31 @@ export default function BillingPage() {
     };
   }, [searchParams, load]);
 
-  if (loading && !balance) {
+  if (loading && !plan) {
     return <div className="h-40 max-w-4xl skeleton" />;
   }
+
+  const proPack = plan?.proPack;
+  const checkoutAsPack: CreditPack | null = proPack
+    ? {
+        id: proPack.id,
+        slug: proPack.slug,
+        name: proPack.name,
+        description: proPack.description,
+        credits: 0,
+        priceInrPaise: proPack.priceInrPaise,
+        priceUsdCents: proPack.priceUsdCents,
+        isCustom: false,
+        isActive: proPack.isActive,
+      }
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 animate-fade-in text-text">
       <PageHeader
         eyebrow="Billing"
-        title="Credits"
-        description={`1 credit = 1 lead analyzed. You're only charged when AI research completes successfully.`}
+        title="Plan"
+        description="Free includes core capture. Pro unlocks search import, reactions, event attendees, withdraw invites, and more."
       />
 
       {pollingCrypto && (
@@ -171,167 +171,109 @@ export default function BillingPage() {
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Available</p>
-          <p className="mt-1 text-3xl font-bold text-text-100">
-            {(balance?.available ?? 0).toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-text-200">credits ready to use</p>
-        </div>
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Free Credits</p>
-          <p className="mt-1 text-3xl font-bold text-emerald-600">
-            {(balance?.freeBalance ?? 0).toLocaleString()}
-          </p>
-          {balance?.freeExpiresAt ? (
-            <p className="mt-1 text-xs text-amber-600">
-              expires {new Date(balance.freeExpiresAt).toLocaleDateString()}
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-text-200">
+              Current plan
             </p>
+            <h2 className="mt-1 text-2xl font-bold text-text-100">
+              {plan?.isPro ? 'LeadHub Pro' : 'Free'}
+            </h2>
+            {plan?.isPro && plan.proUntil ? (
+              <p className="mt-1 text-sm text-text-200">
+                Renews / active until {new Date(plan.proUntil).toLocaleDateString()}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-text-200">
+                Limited capture tools. Upgrade for full LinkedIn prospecting.
+              </p>
+            )}
+          </div>
+          {plan?.isPro ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+              <IconCheck size={14} /> Active
+            </span>
           ) : (
-            <p className="mt-1 text-xs text-text-200">signup bonus</p>
+            <span className="inline-flex rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
+              Free
+            </span>
           )}
         </div>
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Reserved</p>
-          <p className="mt-1 text-3xl font-bold text-text-100">
-            {(balance?.reservedBalance ?? 0).toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-text-200">currently being used</p>
-        </div>
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-text-200">Used</p>
-          <p className="mt-1 text-3xl font-bold text-text-100">
-            {(balance?.totalUsed ?? 0).toLocaleString()}
-          </p>
-          <p className="mt-1 text-xs text-text-200">leads analyzed</p>
-        </div>
-      </div>
 
-      <section>
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-text-100">
-          <IconSparkles size={18} className="text-primary" />
-          Credit packs
-          <span className="text-xs font-normal text-text-200">
-            ({isIndia ? 'INR · Razorpay' : 'USD · Crypto'})
-          </span>
-        </h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {packs.map((pack) => {
-            const price = pack.isCustom
-              ? 'Custom'
-              : formatPackPrice(pack.priceInrPaise, pack.priceUsdCents, currency);
-            const perCredit =
-              !pack.isCustom && pack.credits > 0
-                ? currency === 'INR'
-                  ? `₹${(pack.priceInrPaise / 100 / pack.credits).toFixed(2)}/credit`
-                  : `$${(pack.priceUsdCents / 100 / pack.credits).toFixed(3)}/credit`
-                : null;
-
-            return (
-              <div
-                key={pack.id}
-                className="flex flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm"
-              >
-                <h3 className="text-base font-bold text-text-100">{pack.name}</h3>
-                <p className="mt-1 text-xs text-text-200">{pack.description}</p>
-                <p className="mt-4 text-3xl font-bold text-text-100">{price}</p>
-                {!pack.isCustom && (
-                  <p className="mt-1 text-sm font-semibold text-primary">
-                    {pack.credits.toLocaleString()} credits
-                  </p>
-                )}
-                {perCredit && <p className="mt-1 text-[11px] text-text-200">{perCredit}</p>}
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (pack.isCustom) {
-                      toast.message('Email sales for Enterprise volume pricing.');
-                      return;
-                    }
-                    setCheckoutPack(pack);
-                  }}
-                  className="mt-auto pt-4"
-                >
-                  <span className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-white hover:opacity-90">
-                    {pack.isCustom ? 'Contact sales' : 'Buy credits'}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/80 p-4">
+            <p className="text-sm font-semibold text-text-100">Free</p>
+            <ul className="mt-2 space-y-1 text-xs text-text-200">
+              <li>Profile save &amp; commenters import</li>
+              <li>Extension Status &amp; workspace connect</li>
+              <li>Company / groups page detection</li>
+            </ul>
+          </div>
+          <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <p className="text-sm font-semibold text-text-100">Pro — ₹99 / month</p>
+            <ul className="mt-2 space-y-1 text-xs text-text-200">
+              <li>Likes / reactions import</li>
+              <li>People search import + CSV</li>
+              <li>Event attendees + CSV</li>
+              <li>Withdraw sent invites</li>
+            </ul>
+          </div>
         </div>
+
+        {checkoutAsPack && (
+          <button
+            type="button"
+            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white hover:opacity-90 sm:w-auto"
+            onClick={() => {
+              if (!isIndia) {
+                toast.message('Pro checkout is available via Razorpay (INR). Switch to an India locale or contact support.');
+              }
+              setCheckoutPack(checkoutAsPack);
+            }}
+          >
+            <IconSparkles size={16} />
+            {plan?.isPro ? 'Extend Pro — ₹99' : 'Upgrade to Pro — ₹99'}
+          </button>
+        )}
+        {!checkoutAsPack && (
+          <p className="mt-4 text-sm text-amber-700">
+            Pro product is not seeded yet. Run <code className="font-mono text-xs">pnpm db:seed:credits</code> on the backend.
+          </p>
+        )}
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-100">
-            <IconReceipt size={16} /> Credit activity
-          </h2>
-          {history.length === 0 ? (
-            <p className="text-sm text-text-200">No credit activity yet.</p>
-          ) : (
-            <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">
-              {history.map((txn) => (
-                <li
-                  key={txn.id}
-                  className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium capitalize text-text-100">
-                      {txn.type}
-                      {txn.operation && (
-                        <span className="ml-2 text-xs font-normal text-primary">{txn.operation}</span>
-                      )}
-                    </p>
-                    <p className="text-[11px] text-text-200">
-                      {txn.description || '—'} · {new Date(txn.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <span
-                    className={`font-bold ${txn.amount > 0 ? 'text-emerald-600' : txn.amount < 0 ? 'text-rose-600' : 'text-text-200'}`}
-                  >
-                    {txn.amount > 0 ? '+' : ''}
-                    {txn.amount}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-100">
-            <IconCheck size={16} /> Payment history
-          </h2>
-          {payments.length === 0 ? (
-            <p className="text-sm text-text-200">No purchases yet.</p>
-          ) : (
-            <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">
-              {payments.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium text-text-100">
-                      {p.description || `${p.creditsGranted} credits`}
-                    </p>
-                    <p className="text-[11px] text-text-200">
-                      {p.paymentProvider} · {p.status} ·{' '}
-                      {new Date(p.paidAt || p.createdAt).toLocaleString()}
-                    </p>
-                  </div>
-                  <span className="font-bold text-text-100">
-                    {p.currency === 'INR'
-                      ? `₹${(p.amount / 100).toLocaleString('en-IN')}`
-                      : `$${(p.amount / 100).toFixed(2)}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <section className="overflow-hidden rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm">
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-text-100">
+          <IconReceipt size={16} /> Payment history
+        </h2>
+        {payments.length === 0 ? (
+          <p className="text-sm text-text-200">No purchases yet.</p>
+        ) : (
+          <ul className="max-h-72 space-y-2 overflow-y-auto text-sm">
+            {payments.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-start justify-between gap-3 border-b border-border/60 py-2 last:border-0"
+              >
+                <div>
+                  <p className="font-medium text-text-100">
+                    {p.description || 'Payment'}
+                  </p>
+                  <p className="text-[11px] text-text-200">
+                    {p.paymentProvider} · {p.status} ·{' '}
+                    {new Date(p.paidAt || p.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <span className="font-bold text-text-100">
+                  {p.currency === 'INR'
+                    ? `₹${(p.amount / 100).toLocaleString('en-IN')}`
+                    : `$${(p.amount / 100).toFixed(2)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {BYOK_UI_ENABLED && (
