@@ -6,10 +6,18 @@ import { useRouter } from 'next/navigation';
 import { IconArrowLeft, IconCheck } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { MessageTemplateEditor } from '@/components/campaigns/MessageTemplateEditor';
+import {
+  SequenceBuilder,
+  ensureSequence,
+} from '@/components/campaigns/SequenceBuilder';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { btnOutline, btnPrimary, cardClass, inputClass } from '@/components/ui/styles';
-import { DEFAULT_MESSAGE_TEMPLATE } from '@/lib/campaigns';
+import {
+  DEFAULT_MESSAGE_TEMPLATE,
+  defaultInviteThenMessageSequence,
+  defaultMessage1stSequence,
+  type CampaignSequence,
+} from '@/lib/campaigns';
 import { toTemplateLead, type TemplateLead } from '@/lib/message-template';
 import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 import type { LeadList, LeadRow } from '@/components/leads/types';
@@ -91,6 +99,9 @@ export default function NewCampaignPage() {
     keywords: '',
   });
   const [messageTemplate, setMessageTemplate] = useState(DEFAULT_MESSAGE_TEMPLATE);
+  const [sequence, setSequence] = useState<CampaignSequence>(() =>
+    defaultInviteThenMessageSequence(DEFAULT_MESSAGE_TEMPLATE),
+  );
   const [lists, setLists] = useState<LeadList[]>([]);
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
   const [connections, setConnections] = useState<SyncedConnection[]>([]);
@@ -391,11 +402,13 @@ export default function NewCampaignPage() {
     if (step === 'leads') return selectedListIds.length > 0 && selectedListLeadCount > 0;
     if (step === 'pick') return selectedConnectionCount > 0;
     if (step === 'message') {
-      if (isSearchSource) return messageTemplate.trim().length > 0;
+      const firstMsg = sequence.steps.find((s) => s.kind === 'message')?.bodyTemplate ?? '';
+      const hasMsg = firstMsg.trim().length > 0 || messageTemplate.trim().length > 0;
+      if (isSearchSource) return hasMsg;
       if (isConnectionsSource) {
-        return messageTemplate.trim().length > 0 && selectedConnectionCount > 0;
+        return hasMsg && selectedConnectionCount > 0;
       }
-      return messageTemplate.trim().length > 0 && templateLeads.length > 0;
+      return hasMsg && templateLeads.length > 0;
     }
     return true;
   }
@@ -403,14 +416,18 @@ export default function NewCampaignPage() {
   async function createAndOptionallyStart(start: boolean) {
     setSubmitting(true);
     try {
+      const seq = ensureSequence(sequence, kind, messageTemplate);
+      const firstBody =
+        seq.steps.find((s) => s.kind === 'message')?.bodyTemplate?.trim() || messageTemplate;
       const payload =
         kind === 'message_1st'
           ? {
               name: name.trim(),
-              messageTemplate,
+              messageTemplate: firstBody,
               dropTrackingDays: 6,
               mode: 'message_1st' as const,
               source: message1stSource,
+              sequence: seq,
               ...(message1stSource === 'people_search'
                 ? {
                     searchQuery: {
@@ -424,9 +441,10 @@ export default function NewCampaignPage() {
             }
           : {
               name: name.trim(),
-              messageTemplate,
+              messageTemplate: firstBody,
               dropTrackingDays,
               mode: 'invite_then_message' as const,
+              sequence: seq,
             };
 
       const created = await api.post('/api/campaigns', payload);
@@ -516,7 +534,10 @@ export default function NewCampaignPage() {
             <div className="grid gap-2 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => setKind('invite_then_message')}
+                onClick={() => {
+                  setKind('invite_then_message');
+                  setSequence(defaultInviteThenMessageSequence(messageTemplate));
+                }}
                 className={`rounded-xl border px-4 py-3 text-left transition ${
                   kind === 'invite_then_message'
                     ? 'border-brand-main bg-brand-main/5'
@@ -530,7 +551,10 @@ export default function NewCampaignPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setKind('message_1st')}
+                onClick={() => {
+                  setKind('message_1st');
+                  setSequence(defaultMessage1stSequence(messageTemplate));
+                }}
                 className={`rounded-xl border px-4 py-3 text-left transition ${
                   kind === 'message_1st'
                     ? 'border-brand-main bg-brand-main/5'
@@ -872,13 +896,19 @@ export default function NewCampaignPage() {
           {busy ? (
             <div className="h-40 animate-pulse rounded-lg bg-slate-100" />
           ) : (
-            <MessageTemplateEditor
-              value={messageTemplate}
-              onChange={setMessageTemplate}
+            <SequenceBuilder
+              value={ensureSequence(sequence, kind, messageTemplate)}
+              mode={kind}
               leads={templateLeads.length ? templateLeads : [SAMPLE_SEARCH_TEMPLATE_LEAD]}
               onNeedLeads={
                 isSearchSource ? undefined : () => setStep(isConnectionsSource ? 'pick' : 'leads')
               }
+              onChange={(next) => {
+                setSequence(next);
+                const first =
+                  next.steps.find((s) => s.kind === 'message')?.bodyTemplate ?? messageTemplate;
+                setMessageTemplate(first);
+              }}
             />
           )}
         </div>
@@ -933,10 +963,16 @@ export default function NewCampaignPage() {
             </div>
           )}
           <div>
-            <span className="font-semibold">Message:</span>
-            <pre className="mt-2 whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
-              {messageTemplate}
-            </pre>
+            <span className="font-semibold">Sequence:</span>
+            <ul className="mt-2 list-inside list-decimal text-xs text-slate-600">
+              {sequence.steps.map((s) => (
+                <li key={s.id}>
+                  {s.label || s.kind}
+                  {s.delayDays > 0 ? ` · +${s.delayDays}d` : ''}
+                  {s.sendIf !== 'always' ? ` · ${s.sendIf.replace(/_/g, ' ')}` : ''}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       )}

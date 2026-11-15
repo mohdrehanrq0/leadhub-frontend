@@ -7,12 +7,33 @@ export type PeopleSearchQuery = {
   keywords?: string;
 };
 
+export type SequenceSendIf = 'always' | 'if_no_reply' | 'if_reply';
+
+export type CampaignSequenceStep = {
+  id: string;
+  kind: 'invitation' | 'check_connection' | 'message';
+  label?: string;
+  bodyTemplate?: string;
+  delayDays: number;
+  sendIf: SequenceSendIf;
+  onReply?: string | null;
+  onNoReply?: string | null;
+};
+
+export type CampaignSequence = {
+  version: 1;
+  steps: CampaignSequenceStep[];
+};
+
+export const MAX_SEQUENCE_STEPS = 20;
+
 export type LinkedInCampaignSettings = {
   channel: 'linkedin';
   mode?: 'invite_then_message' | 'message_1st';
   source?: 'people_search' | 'prospect_list';
   messageTemplate: string;
   dropTrackingDays: number;
+  sequence?: CampaignSequence;
   searchQuery?: PeopleSearchQuery;
   searchUrl?: string;
 };
@@ -50,8 +71,11 @@ export type CampaignLeadRow = {
   flowStep: string | null;
   sequenceStatus?: string | null;
   currentStep?: string | null;
+  currentStepId?: string | null;
+  stepLabel?: string | null;
   nextActionAt?: string | null;
   reply: string;
+  linkedinRepliedAt?: string | null;
   lastError: string | null;
   lastEventAt: string | null;
   sentAt: string | null;
@@ -65,6 +89,68 @@ export type CampaignLeadRow = {
     location?: string | null;
   };
 };
+
+function newStepId() {
+  return crypto.randomUUID();
+}
+
+export function defaultInviteThenMessageSequence(messageTemplate: string): CampaignSequence {
+  const inviteId = newStepId();
+  const checkId = newStepId();
+  const messageId = newStepId();
+  return {
+    version: 1,
+    steps: [
+      {
+        id: inviteId,
+        kind: 'invitation',
+        label: 'Send invite',
+        delayDays: 0,
+        sendIf: 'always',
+        onNoReply: checkId,
+        onReply: checkId,
+      },
+      {
+        id: checkId,
+        kind: 'check_connection',
+        label: 'Check connection',
+        delayDays: 1,
+        sendIf: 'always',
+        onNoReply: messageId,
+        onReply: messageId,
+      },
+      {
+        id: messageId,
+        kind: 'message',
+        label: 'Message 1',
+        bodyTemplate: messageTemplate,
+        delayDays: 0,
+        sendIf: 'always',
+        onNoReply: null,
+        onReply: null,
+      },
+    ],
+  };
+}
+
+export function defaultMessage1stSequence(messageTemplate: string): CampaignSequence {
+  const messageId = newStepId();
+  return {
+    version: 1,
+    steps: [
+      {
+        id: messageId,
+        kind: 'message',
+        label: 'Message 1',
+        bodyTemplate: messageTemplate,
+        delayDays: 0,
+        sendIf: 'always',
+        onNoReply: null,
+        onReply: null,
+      },
+    ],
+  };
+}
 
 export type CampaignAnalytics = {
   progress: number;
@@ -185,6 +271,25 @@ export function leadNextStep(lead: CampaignLeadRow): {
   const check = formatNextCheckShort(lead.nextActionAt);
   const seq = lead.sequenceStatus ?? '';
   const step = lead.currentStep ?? lead.flowStep ?? '';
+  const stepName = lead.stepLabel?.trim() || null;
+
+  const withStepName = (label: string) => (stepName && stepName !== label ? stepName : label);
+  const delayMeta = () => {
+    if (!check) return null;
+    if (check === 'Due now') return 'Due now';
+    return `in ${check.toLowerCase() === 'today' || check.toLowerCase() === 'tomorrow' ? check.toLowerCase() : check}`;
+  };
+
+  if (lead.linkedinRepliedAt || lead.reply === 'Replied') {
+    return {
+      label: 'Replied',
+      meta: lead.linkedinRepliedAt
+        ? new Date(lead.linkedinRepliedAt).toLocaleDateString()
+        : null,
+      tone: 'message',
+      hint: 'Inbound LinkedIn reply detected.',
+    };
+  }
 
   if (lead.status === 'dropped' || lead.stopReason === 'drop_tracking') {
     return {
@@ -251,11 +356,24 @@ export function leadNextStep(lead: CampaignLeadRow): {
     };
   }
   if (seq === 'message_pending' || (lead.status === 'in_progress' && step === 'message')) {
+    const due = check === 'Due now' || !check;
     return {
-      label: 'Waiting to message',
-      meta: check ?? 'Next',
+      label: withStepName(due ? 'Waiting to message' : stepName || 'Waiting to message'),
+      meta: delayMeta() ?? (due ? 'Due now' : 'Next'),
       tone: 'wait',
-      hint: 'Connected. Next action is your campaign message — not another invite. Not sent yet.',
+      hint: stepName
+        ? `${stepName}. Connected — next campaign message when due.`
+        : 'Connected. Next action is your campaign message — not another invite. Not sent yet.',
+    };
+  }
+  if (lead.status === 'waiting' && seq === 'message_pending') {
+    return {
+      label: withStepName(stepName || 'Waiting for delay'),
+      meta: delayMeta(),
+      tone: 'wait',
+      hint: stepName
+        ? `${stepName} · scheduled after delay.`
+        : 'Next sequence step is scheduled after a delay.',
     };
   }
   if (seq === 'extension_sending') {

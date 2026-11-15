@@ -12,7 +12,7 @@ import {
   // IconBook2, // Recipes tab parked
   IconChevronLeft,
   IconChevronRight,
-  IconCode,
+  // IconCode, // API tab parked
   IconCoin,
   // IconHistory, // Runs tab parked
   IconListDetails,
@@ -43,7 +43,7 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
 const NAV_RECIPE_LIBRARY = [
-  // Recipes / Tools / Runs tabs parked — restore when those surfaces ship again.
+  // Recipes / Tools / Runs / API tabs parked — restore when those surfaces ship again.
   // { name: 'Recipes', href: '/research', icon: IconBook2 },
   // { name: 'Tools', href: '/tools', icon: IconTool },
   // { name: 'Runs', href: '/research/history', icon: IconHistory },
@@ -53,7 +53,7 @@ const NAV_RECIPE_LIBRARY = [
   ...(CAMPAIGNS_UI
     ? [{ name: 'Campaigns', href: '/dashboard/campaigns', icon: IconSend }]
     : []),
-  { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
+  // { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
 ];
 

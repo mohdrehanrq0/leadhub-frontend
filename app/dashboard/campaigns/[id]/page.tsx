@@ -19,7 +19,10 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { AddCampaignLeadsModal } from '@/components/campaigns/AddCampaignLeadsModal';
-import { MessageTemplateEditor } from '@/components/campaigns/MessageTemplateEditor';
+import {
+  SequenceBuilder,
+  ensureSequence,
+} from '@/components/campaigns/SequenceBuilder';
 import { btnOutline, btnPrimary, cardClass, inputClass } from '@/components/ui/styles';
 import {
   activitySummary,
@@ -34,6 +37,7 @@ import {
   type CampaignAnalytics,
   type CampaignDetail,
   type CampaignLeadRow,
+  type CampaignSequence,
 } from '@/lib/campaigns';
 import { toTemplateLead } from '@/lib/message-template';
 import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
@@ -75,6 +79,7 @@ export default function CampaignDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [template, setTemplate] = useState('');
+  const [sequence, setSequence] = useState<CampaignSequence | null>(null);
   const [dropDays, setDropDays] = useState(6);
   const [name, setName] = useState('');
   const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
@@ -89,6 +94,13 @@ export default function CampaignDetailPage() {
     const data = res.data.data as CampaignDetail;
     setCampaign(data);
     setTemplate(data.settings.messageTemplate);
+    setSequence(
+      ensureSequence(
+        data.settings.sequence,
+        data.settings.mode === 'message_1st' ? 'message_1st' : 'invite_then_message',
+        data.settings.messageTemplate,
+      ),
+    );
     setDropDays(data.settings.dropTrackingDays);
     setName(data.name);
   }, [campaignId]);
@@ -362,10 +374,16 @@ export default function CampaignDetailPage() {
             : 'Name saved.',
         );
       } else {
+        const mode =
+          campaign?.settings.mode === 'message_1st' ? 'message_1st' : 'invite_then_message';
+        const seq = ensureSequence(sequence ?? undefined, mode, template);
+        const firstBody =
+          seq.steps.find((s) => s.kind === 'message')?.bodyTemplate?.trim() || template;
         await api.patch(`/api/campaigns/${campaignId}`, {
           name: name.trim(),
-          messageTemplate: template,
+          messageTemplate: firstBody,
           dropTrackingDays: dropDays,
+          sequence: seq,
         });
         toast.success('Settings saved.');
       }
@@ -981,19 +999,25 @@ export default function CampaignDetailPage() {
           </div>
 
           <div className={`${cardClass} space-y-4`}>
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Message template</h3>
-              <p className="mt-0.5 text-xs text-slate-500">
-                Variables and preview use your enrolled campaign leads only — no sample placeholder text.
-              </p>
-            </div>
-            <MessageTemplateEditor
-              value={template}
-              onChange={setTemplate}
-              disabled={isRunning || campaign.status === 'completed'}
-              leads={editorLeads}
-              onNeedLeads={() => setTab('leads')}
-            />
+            {sequence ? (
+              <SequenceBuilder
+                value={sequence}
+                mode={
+                  campaign.settings.mode === 'message_1st'
+                    ? 'message_1st'
+                    : 'invite_then_message'
+                }
+                disabled={isRunning || campaign.status === 'completed'}
+                leads={editorLeads}
+                onNeedLeads={() => setTab('leads')}
+                onChange={(next) => {
+                  setSequence(next);
+                  const first =
+                    next.steps.find((s) => s.kind === 'message')?.bodyTemplate ?? template;
+                  setTemplate(first);
+                }}
+              />
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
