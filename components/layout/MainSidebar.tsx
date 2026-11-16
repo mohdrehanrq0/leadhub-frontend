@@ -14,6 +14,7 @@ import {
   // IconCode, // API tab parked
   IconCoin,
   // IconHistory, // Runs tab parked
+  IconFileText,
   IconListDetails,
   IconLogout,
   IconSend,
@@ -21,7 +22,7 @@ import {
   // IconTool, // Tools tab parked
   IconX,
 } from '@tabler/icons-react';
-import { CAMPAIGNS_UI, LISTS_UI } from '@/lib/features';
+import { CAMPAIGNS_UI, CONTENT_UI, LISTS_UI } from '@/lib/features';
 
 type User = {
   firstName?: string;
@@ -51,6 +52,9 @@ const NAV_RECIPE_LIBRARY = [
     : []),
   ...(CAMPAIGNS_UI
     ? [{ name: 'Campaigns', href: '/dashboard/campaigns', icon: IconSend }]
+    : []),
+  ...(CONTENT_UI
+    ? [{ name: 'Content', href: '/dashboard/content', icon: IconFileText }]
     : []),
   // { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },

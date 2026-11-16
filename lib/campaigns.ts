@@ -9,15 +9,38 @@ export type PeopleSearchQuery = {
 
 export type SequenceSendIf = 'always' | 'if_no_reply' | 'if_reply';
 
+export type SequenceStepKind =
+  | 'invitation'
+  | 'check_connection'
+  | 'message'
+  | 'follow'
+  | 'visit'
+  | 'react'
+  | 'comment'
+  | 'like_profile_posts'
+  | 'contact_info';
+
+export type ReactionType =
+  | 'LIKE'
+  | 'PRAISE'
+  | 'EMPATHY'
+  | 'APPRECIATION'
+  | 'INTEREST'
+  | 'ENTERTAINMENT'
+  | 'RANDOM';
+
 export type CampaignSequenceStep = {
   id: string;
-  kind: 'invitation' | 'check_connection' | 'message';
+  kind: SequenceStepKind;
   label?: string;
   bodyTemplate?: string;
   delayDays: number;
   sendIf: SequenceSendIf;
   onReply?: string | null;
   onNoReply?: string | null;
+  reactionType?: ReactionType;
+  postResolve?: 'latest';
+  postCount?: number;
 };
 
 export type CampaignSequence = {

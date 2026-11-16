@@ -4,6 +4,7 @@
 import {
   AGENT_BUILDER_UI,
   CAMPAIGNS_UI,
+  CONTENT_UI,
   CAPTURES_UI,
   EXTENSION_CONNECTION_ENABLED,
   LEADS_CRM_UI,
@@ -68,6 +69,10 @@ export function parkedRedirectFor(pathname: string): string | null {
   }
 
   if (!CAMPAIGNS_UI && pathname.startsWith('/dashboard/campaigns')) {
+    return PARKED_REDIRECT;
+  }
+
+  if (!CONTENT_UI && pathname.startsWith('/dashboard/content')) {
     return PARKED_REDIRECT;
   }
 

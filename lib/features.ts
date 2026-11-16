@@ -23,6 +23,8 @@ export const MONITORING_UI = false;
 export const TEAM_UI = false;
 export const LISTS_UI = true;
 export const CAMPAIGNS_UI = true;
+/** LinkedIn organic content drafts / calendar / extension publish. */
+export const CONTENT_UI = true;
 export const AGENT_BUILDER_UI = false;
 export const EXTENSION_SETTINGS_UI = false;
 

@@ -965,13 +965,23 @@ export default function NewCampaignPage() {
           <div>
             <span className="font-semibold">Sequence:</span>
             <ul className="mt-2 list-inside list-decimal text-xs text-slate-600">
-              {sequence.steps.map((s) => (
-                <li key={s.id}>
-                  {s.label || s.kind}
-                  {s.delayDays > 0 ? ` · +${s.delayDays}d` : ''}
-                  {s.sendIf !== 'always' ? ` · ${s.sendIf.replace(/_/g, ' ')}` : ''}
-                </li>
-              ))}
+              {sequence.steps.map((s, i) => {
+                const day = sequence.steps
+                  .slice(0, i + 1)
+                  .reduce((sum, step) => sum + Math.max(0, step.delayDays || 0), 0);
+                return (
+                  <li key={s.id}>
+                    {s.label || s.kind}
+                    {` · Day ${day}`}
+                    {i > 0 && s.delayDays > 0
+                      ? ` · wait ${s.delayDays}d after previous`
+                      : i > 0
+                        ? ' · immediately after previous'
+                        : ''}
+                    {s.sendIf !== 'always' ? ` · ${s.sendIf.replace(/_/g, ' ')}` : ''}
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>

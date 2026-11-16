@@ -88,7 +88,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <main
           className={cn(
             'thin-scrollbar min-w-0 flex-1 overflow-auto',
-            isSettingsPath(pathname) ? 'p-0' : 'p-6',
+            isSettingsPath(pathname) ||
+              pathname === '/dashboard/content/new' ||
+              /^\/dashboard\/content\/[^/]+$/.test(pathname)
+              ? 'p-0'
+              : 'p-6',
           )}
         >
           {children}
