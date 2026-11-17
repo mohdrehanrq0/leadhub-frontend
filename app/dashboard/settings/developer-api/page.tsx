@@ -64,6 +64,8 @@ const ALL_SCOPES = [
   { id: 'enrich:write', label: 'enrich:write', desc: 'Trigger on-demand AI lead enrichment (also grants runs:write)' },
   { id: 'recipes:read', label: 'recipes:read', desc: 'List recipes and poll run results' },
   { id: 'runs:write', label: 'runs:write', desc: 'Start and delete recipe runs' },
+  { id: 'content:read', label: 'content:read', desc: 'List & read LinkedIn content posts (MCP / API)' },
+  { id: 'content:write', label: 'content:write', desc: 'Create, update, and schedule content posts (MCP / API)' },
   { id: 'signups:read', label: 'signups:read', desc: 'Fetch website signup leads' },
   { id: 'signups:write', label: 'signups:write', desc: 'Ingest signup leads' },
   { id: 'account:read', label: 'account:read', desc: 'Read workspace profile, credits & stats' },

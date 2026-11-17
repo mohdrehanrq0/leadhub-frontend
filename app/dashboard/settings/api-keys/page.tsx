@@ -587,7 +587,7 @@ function ApiKeysPageInner() {
 
       <SettingsCard
         title="LeadSniper Autopilot keys"
-        description="Service keys start with lh_ and include leads:read, enrich:write, signups:read, and signups:write. The full key is shown only once."
+        description="Service keys start with lh_ and include leads, enrich, signups, and content (read/write) scopes by default. The full key is shown only once."
         actions={
           <button
             type="button"

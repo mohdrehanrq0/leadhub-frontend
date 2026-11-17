@@ -10,6 +10,7 @@ import {
   IconDeviceFloppy,
   IconFileText,
   IconItalic,
+  IconVideo,
   IconLayoutSidebarRight,
   IconLayoutSidebarRightCollapse,
   IconList,
@@ -49,12 +50,13 @@ type Props = {
 };
 
 function toLocalInputValue(iso: string | null | undefined): { date: string; time: string } {
-  const d = iso ? new Date(iso) : new Date(Date.now() + 60 * 60 * 1000);
+  const d = iso ? new Date(iso) : new Date();
   if (Number.isNaN(d.getTime())) {
-    const fallback = new Date(Date.now() + 60 * 60 * 1000);
+    const fallback = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
     return {
-      date: fallback.toISOString().slice(0, 10),
-      time: fallback.toTimeString().slice(0, 5),
+      date: `${fallback.getFullYear()}-${pad(fallback.getMonth() + 1)}-${pad(fallback.getDate())}`,
+      time: `${pad(fallback.getHours())}:${pad(fallback.getMinutes())}`,
     };
   }
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -62,6 +64,11 @@ function toLocalInputValue(iso: string | null | undefined): { date: string; time
     date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
     time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
   };
+}
+
+/** Next whole minute — used when “Now” can’t flush the extension immediately. */
+function oneMinuteFromNowIso(): string {
+  return new Date(Date.now() + 60_000).toISOString();
 }
 
 export function PostEditor({ postId }: Props) {
@@ -149,6 +156,20 @@ export function PostEditor({ postId }: Props) {
   const charCount = [...body].length;
   const locked = post?.status === 'publishing' || post?.status === 'published';
 
+  function snapScheduleInputsToNow() {
+    const local = toLocalInputValue(null);
+    setScheduleDate(local.date);
+    setScheduleTime(local.time);
+  }
+
+  function openPublishPanel() {
+    setPublishOpen(true);
+    // Fresh open: Schedule fields should reflect “right now”, not a stale +1h default.
+    if (!locked && post?.status !== 'scheduled') {
+      snapScheduleInputsToNow();
+    }
+  }
+
   function applyFormat(kind: 'bold' | 'italic' | 'bullet' | 'number') {
     const el = textareaRef.current;
     if (!el || locked) return;
@@ -173,13 +194,21 @@ export function PostEditor({ postId }: Props) {
       setMedia((prev) => {
         const merged = [...prev, ...incoming];
         const docs = merged.filter((m) => m.kind === 'document');
-        const images = merged.filter((m) => m.kind !== 'document');
-        if (docs.length && images.length) {
-          toast.error('Use either images or one PDF, not both.');
+        const videos = merged.filter((m) => m.kind === 'video');
+        const images = merged.filter((m) => m.kind === 'image' || m.kind === 'gif');
+        if (
+          (docs.length && (images.length || videos.length)) ||
+          (videos.length && (images.length || docs.length))
+        ) {
+          toast.error('Use images, one PDF, or one video — not mixed.');
           return prev;
         }
         if (docs.length > 1) {
           toast.error('Only one PDF is allowed.');
+          return prev;
+        }
+        if (videos.length > 1) {
+          toast.error('Only one video is allowed.');
           return prev;
         }
         if (images.length > 4) {
@@ -187,7 +216,9 @@ export function PostEditor({ postId }: Props) {
           return prev;
         }
         setDirty(true);
-        return docs.length ? docs.slice(0, 1) : images.slice(0, 4);
+        if (docs.length) return docs.slice(0, 1);
+        if (videos.length) return videos.slice(0, 1);
+        return images.slice(0, 4);
       });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not attach file.');
@@ -257,17 +288,53 @@ export function PostEditor({ postId }: Props) {
           setScheduling(false);
           return;
         }
-        when = local.toISOString();
+        // If they left Schedule at “now” (same minute), treat as immediate publish.
+        const diffMs = local.getTime() - Date.now();
+        if (diffMs <= 30_000) {
+          when = 'now';
+        } else {
+          when = local.toISOString();
+        }
       }
 
-      const scheduled = await scheduleContentPost(saved.id, { when, timezone });
+      const scheduled = await scheduleContentPost(saved.id, {
+        when,
+        timezone,
+        // Caller handles flush for “now” so we can await ack + fall back.
+        flush: when !== 'now',
+      });
       setPost(scheduled);
       setDirty(false);
-      toast.success(
-        whenMode === 'now'
-          ? 'Queued to publish now. Keep the LeadHub extension connected.'
-          : 'Post scheduled. The extension will publish at the planned time.',
-      );
+
+      if (when === 'now' || whenMode === 'now') {
+        const flushed = await flushLinkedInOutbox(4500);
+        if (flushed) {
+          toast.success('Publishing now via the LeadHub extension.');
+        } else {
+          // Extension offline / no ack — schedule ~1 minute ahead so the next poll picks it up.
+          try {
+            const fallback = await scheduleContentPost(saved.id, {
+              when: oneMinuteFromNowIso(),
+              timezone,
+              flush: false,
+            });
+            setPost(fallback);
+            const local = toLocalInputValue(fallback.scheduledFor);
+            setScheduleDate(local.date);
+            setScheduleTime(local.time);
+            setWhenMode('schedule');
+            toast.success(
+              'Extension didn’t respond — scheduled for about one minute from now. Keep LeadHub connected on LinkedIn.',
+            );
+          } catch {
+            toast.success(
+              'Queued to publish. Open LinkedIn with the LeadHub extension connected to send it.',
+            );
+          }
+        }
+      } else {
+        toast.success('Post scheduled. The extension will publish at the planned time.');
+      }
     } catch (err) {
       toast.error(
         (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -373,7 +440,10 @@ export function PostEditor({ postId }: Props) {
                 title={publishOpen ? 'Hide publish panel' : 'Show publish panel'}
                 aria-label={publishOpen ? 'Hide publish panel' : 'Show publish panel'}
                 aria-pressed={publishOpen}
-                onClick={() => setPublishOpen((open) => !open)}
+                onClick={() => {
+                  if (publishOpen) setPublishOpen(false);
+                  else openPublishPanel();
+                }}
                 className={cn(
                   'inline-flex items-center rounded-md border px-1.5 py-0.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800',
                   publishOpen ? 'border-brand-main/40 text-brand-main' : 'border-slate-200',
@@ -404,7 +474,7 @@ export function PostEditor({ postId }: Props) {
               type="button"
               className={btnPrimary}
               disabled={locked || (!body.trim() && media.length === 0)}
-              onClick={() => setPublishOpen(true)}
+              onClick={() => openPublishPanel()}
             >
               <IconSend size={16} /> {whenMode === 'now' ? 'Publish' : 'Schedule'}
             </button>
@@ -437,7 +507,7 @@ export function PostEditor({ postId }: Props) {
             </ToolbarBtn>
             <span className="mx-1 h-4 w-px bg-slate-200" />
             <ToolbarBtn
-              label="Attach image or PDF"
+              label="Attach image, PDF, or video"
               onClick={() => fileInputRef.current?.click()}
             >
               <IconPaperclip size={16} />
@@ -445,7 +515,7 @@ export function PostEditor({ postId }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/gif,application/pdf"
+              accept="image/jpeg,image/png,image/gif,application/pdf,video/mp4,video/quicktime,video/webm"
               multiple
               className="hidden"
               onChange={(e) => void onPickFiles(e.target.files)}
@@ -474,6 +544,19 @@ export function PostEditor({ postId }: Props) {
                       <div className="flex h-28 items-center gap-2 px-3 text-sm text-slate-600">
                         <IconFileText size={20} />
                         <span className="truncate">{item.name}</span>
+                      </div>
+                    ) : item.kind === 'video' ? (
+                      <div className="relative flex h-28 items-center justify-center bg-slate-900/5">
+                        <video
+                          src={item.dataUrl}
+                          className="h-28 w-full object-cover"
+                          muted
+                          playsInline
+                        />
+                        <IconVideo
+                          size={22}
+                          className="pointer-events-none absolute text-white drop-shadow"
+                        />
                       </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
@@ -609,6 +692,16 @@ export function PostEditor({ postId }: Props) {
                         <IconFileText size={22} />
                         {item.name}
                       </div>
+                    ) : item.kind === 'video' ? (
+                      <div key={item.id} className="relative h-40 bg-slate-900/5">
+                        <video
+                          src={item.dataUrl}
+                          className="h-40 w-full object-cover"
+                          muted
+                          playsInline
+                          controls
+                        />
+                      </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -690,7 +783,12 @@ export function PostEditor({ postId }: Props) {
                     key={m}
                     type="button"
                     disabled={locked}
-                    onClick={() => setWhenMode(m)}
+                    onClick={() => {
+                      setWhenMode(m);
+                      if (m === 'schedule' && !locked && post?.status !== 'scheduled') {
+                        snapScheduleInputsToNow();
+                      }
+                    }}
                     className={cn(
                       'flex-1 rounded-md px-2 py-1.5 text-xs font-semibold capitalize',
                       whenMode === m ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500',
@@ -717,12 +815,13 @@ export function PostEditor({ postId }: Props) {
                     onChange={(e) => setScheduleTime(e.target.value)}
                   />
                   <p className="text-[11px] text-slate-500">
-                    Posts automatically at this time. ({timezone})
+                    Defaults to the current time. Change it to plan ahead. ({timezone})
                   </p>
                 </div>
               ) : (
                 <p className="text-[11px] text-slate-500">
-                  Queues immediately. The Chrome extension publishes when LinkedIn is available.
+                  Publishes immediately via the LeadHub extension. If it isn’t connected, we schedule
+                  about one minute from now.
                 </p>
               )}
               <button

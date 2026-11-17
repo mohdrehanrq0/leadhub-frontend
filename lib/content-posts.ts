@@ -12,7 +12,7 @@ export type ContentPostStatus =
 
 export type ContentPostMedia = {
   id: string;
-  kind: 'image' | 'gif' | 'document';
+  kind: 'image' | 'gif' | 'document' | 'video';
   name: string;
   mimeType: string;
   sizeBytes: number;
@@ -172,11 +172,14 @@ export async function updateContentPost(
 
 export async function scheduleContentPost(
   id: string,
-  input: { when: 'now' | string; timezone?: string },
+  input: { when: 'now' | string; timezone?: string; flush?: boolean },
 ): Promise<ContentPost> {
-  const res = await api.post(`/api/content/posts/${id}/schedule`, input);
+  const { flush = true, ...body } = input;
+  const res = await api.post(`/api/content/posts/${id}/schedule`, body);
   const post = res.data.data as ContentPost;
-  void flushLinkedInOutbox(2000);
+  if (flush) {
+    void flushLinkedInOutbox(2000);
+  }
   return post;
 }
 
@@ -196,14 +199,22 @@ export function previewSnippet(body: string, max = 140): string {
 }
 
 export async function fileToContentMedia(file: File): Promise<ContentPostMedia> {
-  const max = 4 * 1024 * 1024;
-  if (file.size > max) throw new Error(`“${file.name}” exceeds 4 MB.`);
   const mime = file.type || 'application/octet-stream';
   let kind: ContentPostMedia['kind'] = 'image';
   if (mime === 'image/gif') kind = 'gif';
   else if (mime === 'application/pdf') kind = 'document';
+  else if (mime.startsWith('video/')) kind = 'video';
   else if (!mime.startsWith('image/')) {
-    throw new Error('Only JPEG, PNG, GIF, or PDF are supported.');
+    throw new Error('Only images (JPEG/PNG/GIF), PDF, or video are supported.');
+  }
+  // Images/PDF stay small for dataUrl outbox; video allows larger clips.
+  const max = kind === 'video' ? 50 * 1024 * 1024 : 4 * 1024 * 1024;
+  if (file.size > max) {
+    throw new Error(
+      kind === 'video'
+        ? `“${file.name}” exceeds 50 MB.`
+        : `“${file.name}” exceeds 4 MB.`,
+    );
   }
   const dataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
