@@ -23,6 +23,8 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import {
+  CONTENT_MEDIA_RULES,
+  CONTENT_MEDIA_RULES_HINT,
   cancelScheduleContentPost,
   createContentPost,
   deleteContentPost,
@@ -43,7 +45,7 @@ import { renderLinkedInPreviewHtml, wrapSelection } from '@/lib/linkedin-unicode
 import { btnOutline, btnPrimary, inputClass } from '@/components/ui/styles';
 import { cn } from '@/lib/utils';
 
-const MAX_CHARS = 3000;
+const MAX_CHARS = CONTENT_MEDIA_RULES.maxBodyChars;
 
 type Props = {
   postId?: string;
@@ -200,19 +202,19 @@ export function PostEditor({ postId }: Props) {
           (docs.length && (images.length || videos.length)) ||
           (videos.length && (images.length || docs.length))
         ) {
-          toast.error('Use images, one PDF, or one video — not mixed.');
+          toast.error(`Use images, one PDF, or one video — not mixed.\n${CONTENT_MEDIA_RULES_HINT}`);
           return prev;
         }
-        if (docs.length > 1) {
-          toast.error('Only one PDF is allowed.');
+        if (docs.length > CONTENT_MEDIA_RULES.maxPdf) {
+          toast.error(`Only one PDF is allowed.\n${CONTENT_MEDIA_RULES_HINT}`);
           return prev;
         }
-        if (videos.length > 1) {
-          toast.error('Only one video is allowed.');
+        if (videos.length > CONTENT_MEDIA_RULES.maxVideo) {
+          toast.error(`Only one video is allowed.\n${CONTENT_MEDIA_RULES_HINT}`);
           return prev;
         }
-        if (images.length > 4) {
-          toast.error('Up to 4 images.');
+        if (images.length > CONTENT_MEDIA_RULES.maxImages) {
+          toast.error(`Up to ${CONTENT_MEDIA_RULES.maxImages} images.\n${CONTENT_MEDIA_RULES_HINT}`);
           return prev;
         }
         setDirty(true);
@@ -507,7 +509,7 @@ export function PostEditor({ postId }: Props) {
             </ToolbarBtn>
             <span className="mx-1 h-4 w-px bg-slate-200" />
             <ToolbarBtn
-              label="Attach image, PDF, or video"
+              label={`Attach media — ${CONTENT_MEDIA_RULES_HINT}`}
               onClick={() => fileInputRef.current?.click()}
             >
               <IconPaperclip size={16} />
@@ -515,12 +517,15 @@ export function PostEditor({ postId }: Props) {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/gif,application/pdf,video/mp4,video/quicktime,video/webm"
+              accept={CONTENT_MEDIA_RULES.acceptAttr}
               multiple
               className="hidden"
               onChange={(e) => void onPickFiles(e.target.files)}
             />
           </div>
+          <p className="border-b border-slate-100 px-4 py-1.5 text-[11px] leading-snug text-slate-500">
+            {CONTENT_MEDIA_RULES_HINT}
+          </p>
           <div className="flex-1 overflow-auto p-4">
             <textarea
               ref={textareaRef}

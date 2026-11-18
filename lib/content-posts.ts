@@ -19,6 +19,34 @@ export type ContentPostMedia = {
   dataUrl: string;
 };
 
+/**
+ * Keep in sync with leadhub-backend content-media-rules + leadhub-mcp media-rules.
+ * LinkedIn organic attachments LeadHub accepts for content posts.
+ */
+export const CONTENT_MEDIA_RULES = {
+  maxImages: 4,
+  maxPdf: 1,
+  maxVideo: 1,
+  maxImageOrPdfBytes: 4 * 1024 * 1024,
+  maxVideoBytes: 50 * 1024 * 1024,
+  maxBodyChars: 3000,
+  acceptAttr: 'image/jpeg,image/png,image/gif,application/pdf,video/mp4,video/quicktime,video/webm',
+  imageMimes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'] as const,
+  pdfMimes: ['application/pdf'] as const,
+  videoMimes: ['video/mp4', 'video/quicktime', 'video/webm'] as const,
+} as const;
+
+export const CONTENT_MEDIA_RULES_TEXT = [
+  'LeadHub LinkedIn media rules:',
+  '• Images: JPEG, PNG, GIF — max 4 MB each, up to 4 images',
+  '• PDF: max 4 MB, one PDF alone (no images/video)',
+  '• Video: MP4, MOV, WebM — max 50 MB, one video alone',
+  '• Do not mix images + PDF + video on the same post',
+].join('\n');
+
+export const CONTENT_MEDIA_RULES_HINT =
+  'JPEG/PNG/GIF ≤4 MB (up to 4) · PDF ≤4 MB (1 alone) · MP4/MOV/WebM ≤50 MB (1 alone)';
+
 export type ContentPost = {
   id: string;
   workspaceId: string;
@@ -199,21 +227,32 @@ export function previewSnippet(body: string, max = 140): string {
 }
 
 export async function fileToContentMedia(file: File): Promise<ContentPostMedia> {
-  const mime = file.type || 'application/octet-stream';
+  const mime = (file.type || 'application/octet-stream').toLowerCase();
   let kind: ContentPostMedia['kind'] = 'image';
   if (mime === 'image/gif') kind = 'gif';
-  else if (mime === 'application/pdf') kind = 'document';
-  else if (mime.startsWith('video/')) kind = 'video';
-  else if (!mime.startsWith('image/')) {
-    throw new Error('Only images (JPEG/PNG/GIF), PDF, or video are supported.');
+  else if ((CONTENT_MEDIA_RULES.pdfMimes as readonly string[]).includes(mime)) kind = 'document';
+  else if ((CONTENT_MEDIA_RULES.videoMimes as readonly string[]).includes(mime)) kind = 'video';
+  else if ((CONTENT_MEDIA_RULES.imageMimes as readonly string[]).includes(mime)) kind = 'image';
+  else {
+    throw new Error(
+      [
+        `“${file.name}” is not an allowed type (${mime || 'unknown'}).`,
+        CONTENT_MEDIA_RULES_TEXT,
+      ].join('\n'),
+    );
   }
-  // Images/PDF stay small for dataUrl outbox; video allows larger clips.
-  const max = kind === 'video' ? 50 * 1024 * 1024 : 4 * 1024 * 1024;
+  const max =
+    kind === 'video'
+      ? CONTENT_MEDIA_RULES.maxVideoBytes
+      : CONTENT_MEDIA_RULES.maxImageOrPdfBytes;
   if (file.size > max) {
     throw new Error(
-      kind === 'video'
-        ? `“${file.name}” exceeds 50 MB.`
-        : `“${file.name}” exceeds 4 MB.`,
+      [
+        kind === 'video'
+          ? `“${file.name}” exceeds 50 MB.`
+          : `“${file.name}” exceeds 4 MB.`,
+        CONTENT_MEDIA_RULES_TEXT,
+      ].join('\n'),
     );
   }
   const dataUrl = await new Promise<string>((resolve, reject) => {
