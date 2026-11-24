@@ -29,6 +29,7 @@ import {
   cancelScheduleContentPost,
   createContentPost,
   deleteContentPost,
+  contentMediaSrc,
   fileToContentMedia,
   getContentPost,
   getLinkedInIdentity,
@@ -567,7 +568,7 @@ export function PostEditor({ postId }: Props) {
                     ) : item.kind === 'video' ? (
                       <div className="relative flex h-28 items-center justify-center bg-slate-900/5">
                         <video
-                          src={item.dataUrl}
+                          src={contentMediaSrc(item)}
                           className="h-28 w-full object-cover"
                           muted
                           playsInline
@@ -579,7 +580,11 @@ export function PostEditor({ postId }: Props) {
                       </div>
                     ) : (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={item.dataUrl} alt={item.name} className="h-28 w-full object-cover" />
+                      <img
+                        src={contentMediaSrc(item)}
+                        alt={item.name}
+                        className="h-28 w-full object-cover"
+                      />
                     )}
                     {!locked ? (
                       <button
@@ -699,7 +704,7 @@ export function PostEditor({ postId }: Props) {
                 media.length === 1 && media[0]?.kind === 'document' ? (
                   <div className="border-y border-slate-100">
                     <LinkedInPdfViewer
-                      fileUrl={media[0].dataUrl}
+                      fileUrl={contentMediaSrc(media[0])}
                       fileName={media[0].name}
                     />
                   </div>
@@ -714,13 +719,13 @@ export function PostEditor({ postId }: Props) {
                       item.kind === 'document' ? (
                         <LinkedInPdfViewer
                           key={item.id}
-                          fileUrl={item.dataUrl}
+                          fileUrl={contentMediaSrc(item)}
                           fileName={item.name}
                         />
                       ) : item.kind === 'video' ? (
                         <div key={item.id} className="relative h-40 bg-slate-900/5">
                           <video
-                            src={item.dataUrl}
+                            src={contentMediaSrc(item)}
                             className="h-40 w-full object-cover"
                             muted
                             playsInline
@@ -731,7 +736,7 @@ export function PostEditor({ postId }: Props) {
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           key={item.id}
-                          src={item.dataUrl}
+                          src={contentMediaSrc(item)}
                           alt={item.name}
                           className="h-40 w-full object-cover"
                         />

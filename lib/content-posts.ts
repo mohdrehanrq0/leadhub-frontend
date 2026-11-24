@@ -16,8 +16,17 @@ export type ContentPostMedia = {
   name: string;
   mimeType: string;
   sizeBytes: number;
-  dataUrl: string;
+  /** Inline data URL (legacy / local upload before S3). */
+  dataUrl?: string;
+  /** Public HTTPS URL after S3 upload. */
+  url?: string;
+  s3Key?: string;
 };
+
+/** Prefer dataUrl for local preview; fall back to S3/public url. */
+export function contentMediaSrc(item: ContentPostMedia): string {
+  return item.dataUrl || item.url || '';
+}
 
 /**
  * Keep in sync with leadhub-backend content-media-rules + leadhub-mcp media-rules.
