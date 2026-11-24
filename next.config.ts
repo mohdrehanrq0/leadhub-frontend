@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // react-pdf / pdfjs use browser-only APIs; keep them out of the Node SSR bundle.
+  serverExternalPackages: ["pdfjs-dist"],
 };
 
 export default nextConfig;

@@ -196,7 +196,7 @@ export default function CampaignDetailPage() {
     const ok = await flushLinkedInOutbox(2500, campaignId);
     if (!ok) {
       toast.error(
-        'LeadHub extension did not respond. Reload the unpacked extension from leadhub-extension/dist, stay on localhost:3000, and keep a LinkedIn tab open.',
+        'LeadHub extension did not respond. Reload the extension, stay on this LeadHub tab (leadhub.leadsnipper.com or local), and keep a LinkedIn tab open.',
       );
       return;
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -44,6 +45,19 @@ import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 import { renderLinkedInPreviewHtml, wrapSelection } from '@/lib/linkedin-unicode';
 import { btnOutline, btnPrimary, inputClass } from '@/components/ui/styles';
 import { cn } from '@/lib/utils';
+
+const LinkedInPdfViewer = dynamic(
+  () =>
+    import('@/components/content/LinkedInPdfViewer').then((m) => m.LinkedInPdfViewer),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-56 items-center justify-center bg-[#e9e5df] text-sm text-slate-500">
+        Loading PDF…
+      </div>
+    ),
+  },
+);
 
 const MAX_CHARS = CONTENT_MEDIA_RULES.maxBodyChars;
 
@@ -682,42 +696,49 @@ export function PostEditor({ postId }: Props) {
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
               />
               {media.length > 0 ? (
-                <div
-                  className={cn(
-                    'grid gap-0.5 border-y border-slate-100',
-                    media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
-                  )}
-                >
-                  {media.map((item) =>
-                    item.kind === 'document' ? (
-                      <div
-                        key={item.id}
-                        className="flex h-40 items-center justify-center gap-2 bg-slate-50 text-sm text-slate-600"
-                      >
-                        <IconFileText size={22} />
-                        {item.name}
-                      </div>
-                    ) : item.kind === 'video' ? (
-                      <div key={item.id} className="relative h-40 bg-slate-900/5">
-                        <video
-                          src={item.dataUrl}
-                          className="h-40 w-full object-cover"
-                          muted
-                          playsInline
-                          controls
+                media.length === 1 && media[0]?.kind === 'document' ? (
+                  <div className="border-y border-slate-100">
+                    <LinkedInPdfViewer
+                      fileUrl={media[0].dataUrl}
+                      fileName={media[0].name}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      'grid gap-0.5 border-y border-slate-100',
+                      media.length === 1 ? 'grid-cols-1' : 'grid-cols-2',
+                    )}
+                  >
+                    {media.map((item) =>
+                      item.kind === 'document' ? (
+                        <LinkedInPdfViewer
+                          key={item.id}
+                          fileUrl={item.dataUrl}
+                          fileName={item.name}
                         />
-                      </div>
-                    ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        key={item.id}
-                        src={item.dataUrl}
-                        alt={item.name}
-                        className="h-40 w-full object-cover"
-                      />
-                    ),
-                  )}
-                </div>
+                      ) : item.kind === 'video' ? (
+                        <div key={item.id} className="relative h-40 bg-slate-900/5">
+                          <video
+                            src={item.dataUrl}
+                            className="h-40 w-full object-cover"
+                            muted
+                            playsInline
+                            controls
+                          />
+                        </div>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={item.id}
+                          src={item.dataUrl}
+                          alt={item.name}
+                          className="h-40 w-full object-cover"
+                        />
+                      ),
+                    )}
+                  </div>
+                )
               ) : null}
               <div className="flex justify-between px-6 py-3 text-xs font-semibold text-slate-500">
                 <span>Like</span>

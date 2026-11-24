@@ -5,9 +5,17 @@
  * deployed frontend, axios falls back to localhost and every call fails in
  * the user's browser even though the same build works on a dev machine.
  */
+function normalizeApiOrigin(raw: string): string {
+  return raw
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/api\/v1$/i, '')
+    .replace(/\/api$/i, '');
+}
+
 export function getApiBaseUrl(): string {
   const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (configured) return configured.replace(/\/$/, '');
+  if (configured) return normalizeApiOrigin(configured);
 
   if (typeof window !== 'undefined') {
     const { protocol, hostname, port } = window.location;
@@ -16,12 +24,12 @@ export function getApiBaseUrl(): string {
     }
     // Conventional split: app.example.com → api.example.com
     if (hostname.startsWith('app.')) {
-      return `${protocol}//api.${hostname.slice(4)}${port ? `:${port}` : ''}`;
+      return normalizeApiOrigin(`${protocol}//api.${hostname.slice(4)}${port ? `:${port}` : ''}`);
     }
     // LeadHub production: leadhub.leadsnipper.com → leadhub-api.leadsnipper.com
     if (hostname.startsWith('leadhub.')) {
       const parent = hostname.slice('leadhub.'.length);
-      return `${protocol}//leadhub-api.${parent}${port ? `:${port}` : ''}`;
+      return normalizeApiOrigin(`${protocol}//leadhub-api.${parent}${port ? `:${port}` : ''}`);
     }
   }
 

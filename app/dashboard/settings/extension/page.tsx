@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import api from '@/lib/api';
+import { getApiBaseUrl } from '@/lib/api-base';
 import { EXTENSION_SETTINGS_UI, RECIPE_ENGINE_V2 } from '@/lib/features';
 import {
   IconAlertTriangle,
@@ -406,6 +407,8 @@ export default function ExtensionSettingsPage() {
             kind: 'connect-extension',
             token,
             workspaceId: undefined,
+            // Same origin the dashboard uses (prod → leadhub-api.leadsnipper.com).
+            apiBase: getApiBaseUrl(),
           },
           window.location.origin,
         );
