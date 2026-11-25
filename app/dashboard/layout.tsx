@@ -9,6 +9,7 @@ import { spinnerClass } from '../../components/ui/styles';
 import { cn } from '../../lib/utils';
 import { isSettingsPath } from '../../lib/settings-nav';
 import { parkedRedirectFor } from '../../lib/parked-routes';
+import { watchExtensionAnnouncement } from '../../lib/extension-bridge';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, onboardingStep, onboardingLoading, activeWorkspaceId, setActiveWorkspaceId } =
@@ -16,6 +17,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  useEffect(() => watchExtensionAnnouncement(), []);
 
   useEffect(() => {
     if (!loading && !user) {

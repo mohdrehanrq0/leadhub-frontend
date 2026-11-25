@@ -340,8 +340,8 @@ export function PostEditor({ postId }: Props) {
             setScheduleDate(local.date);
             setScheduleTime(local.time);
             setWhenMode('schedule');
-            toast.success(
-              'Extension didn’t respond — scheduled for about one minute from now. Keep LeadHub connected on LinkedIn.',
+            toast.error(
+              'Extension is unreachable — scheduled for about one minute from now. Reload the LeadHub extension, refresh this tab, and keep LinkedIn open.',
             );
           } catch {
             toast.success(
@@ -404,7 +404,7 @@ export function PostEditor({ postId }: Props) {
       toast.success(
         ok
           ? 'Asked the extension to refresh your LinkedIn profile.'
-          : 'Extension may be offline — open LinkedIn with LeadHub connected, then try again.',
+          : 'Extension is unreachable — reload the extension, refresh this tab, and open LinkedIn with LeadHub connected.',
       );
     } finally {
       setSyncingIdentity(false);

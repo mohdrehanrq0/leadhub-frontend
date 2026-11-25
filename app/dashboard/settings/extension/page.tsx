@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import { getApiBaseUrl } from '@/lib/api-base';
+import { rememberExtensionId, sendToExtensionRuntime } from '@/lib/extension-bridge';
 import { EXTENSION_SETTINGS_UI, RECIPE_ENGINE_V2 } from '@/lib/features';
 import {
   IconAlertTriangle,
@@ -375,44 +376,62 @@ export default function ExtensionSettingsPage() {
         return;
       }
 
-      // One-click: dashboard-bridge (content script) forwards this to the extension SW.
-      const connectedViaBridge = await new Promise<boolean>((resolve) => {
-        const timeout = window.setTimeout(() => {
-          window.removeEventListener('message', onMessage);
-          resolve(false);
-        }, 2500);
-        function onMessage(event: MessageEvent) {
-          if (event.source !== window) return;
-          const data = event.data as {
-            source?: string;
-            kind?: string;
-            result?: { ok?: boolean; error?: string; email?: string };
-          } | null;
-          if (!data || data.source !== 'leadhub-extension') return;
-          if (data.kind !== 'connect-extension-result') return;
-          window.clearTimeout(timeout);
-          window.removeEventListener('message', onMessage);
-          if (data.result?.error) {
-            toast.error(data.result.error);
-            resolve(false);
-            return;
-          }
+      // Prefer direct runtime messaging (survives orphaned content scripts), then bridge.
+      const apiBase = getApiBaseUrl();
+      let connectedViaBridge = false;
+      const viaRuntime = await sendToExtensionRuntime({ kind: 'set-api-base', apiBase });
+      if (viaRuntime.ok) {
+        const connected = await sendToExtensionRuntime({ kind: 'connect', token });
+        if (connected.ok) {
+          connectedViaBridge = true;
           toast.success('Extension connected to this workspace.');
-          resolve(true);
+        } else {
+          // SW was reached — do not also try the content-script bridge.
+          connectedViaBridge = true;
+          toast.error(connected.error || 'Could not connect the extension.');
         }
-        window.addEventListener('message', onMessage);
-        window.postMessage(
-          {
-            source: 'leadhub',
-            kind: 'connect-extension',
-            token,
-            workspaceId: undefined,
-            // Same origin the dashboard uses (prod → leadhub-api.leadsnipper.com).
-            apiBase: getApiBaseUrl(),
-          },
-          window.location.origin,
-        );
-      });
+      }
+      if (!connectedViaBridge) {
+        connectedViaBridge = await new Promise<boolean>((resolve) => {
+          const timeout = window.setTimeout(() => {
+            window.removeEventListener('message', onMessage);
+            resolve(false);
+          }, 2500);
+          function onMessage(event: MessageEvent) {
+            if (event.source !== window) return;
+            const data = event.data as {
+              source?: string;
+              kind?: string;
+              extensionId?: string;
+              result?: { ok?: boolean; error?: string; email?: string };
+            } | null;
+            if (!data || data.source !== 'leadhub-extension') return;
+            if (data.kind !== 'connect-extension-result') return;
+            rememberExtensionId(data.extensionId);
+            window.clearTimeout(timeout);
+            window.removeEventListener('message', onMessage);
+            if (data.result?.error) {
+              toast.error(data.result.error);
+              resolve(false);
+              return;
+            }
+            toast.success('Extension connected to this workspace.');
+            resolve(true);
+          }
+          window.addEventListener('message', onMessage);
+          window.postMessage(
+            {
+              source: 'leadhub',
+              kind: 'connect-extension',
+              token,
+              workspaceId: undefined,
+              // Same origin the dashboard uses (prod → leadhub-api.leadsnipper.com).
+              apiBase,
+            },
+            window.location.origin,
+          );
+        });
+      }
 
       if (!connectedViaBridge) {
         setPlainToken(token);
