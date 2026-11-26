@@ -92,6 +92,12 @@ export default function RootIndex() {
               Log in
             </Link>
           )}
+          <Link
+            href="/tools"
+            className="rounded-xl border border-slate-300 bg-white/80 px-5 py-2.5 text-sm font-semibold text-slate-800 hover:bg-white"
+          >
+            Try free tools
+          </Link>
           <a
             href="#samples"
             className="rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-white/70"

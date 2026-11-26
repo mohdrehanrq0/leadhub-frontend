@@ -19,7 +19,7 @@ import {
   IconLogout,
   IconSend,
   IconSettings,
-  // IconTool, // Tools tab parked
+  IconTool,
   IconX,
 } from '@tabler/icons-react';
 import { CAMPAIGNS_UI, CONTENT_UI, LISTS_UI } from '@/lib/features';
@@ -43,9 +43,9 @@ const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
 const NAV_RECIPE_LIBRARY = [
-  // Recipes / Tools / Runs / API tabs parked — restore when those surfaces ship again.
+  // Recipes / Runs / API tabs parked — restore when those surfaces ship again.
   // { name: 'Recipes', href: '/research', icon: IconBook2 },
-  // { name: 'Tools', href: '/tools', icon: IconTool },
+  { name: 'Tools', href: '/tools', icon: IconTool },
   // { name: 'Runs', href: '/research/history', icon: IconHistory },
   ...(LISTS_UI
     ? [{ name: 'Prospect Lists', href: '/dashboard/prospect-lists', icon: IconListDetails }]

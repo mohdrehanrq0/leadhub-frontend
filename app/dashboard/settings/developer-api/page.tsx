@@ -70,6 +70,8 @@ const ALL_SCOPES = [
   { id: 'signups:write', label: 'signups:write', desc: 'Ingest signup leads' },
   { id: 'account:read', label: 'account:read', desc: 'Read workspace profile, credits & stats' },
   { id: 'webhooks:manage', label: 'webhooks:manage', desc: 'Register webhook endpoints (run.completed, enrichment.*)' },
+  { id: 'data:linkedin', label: 'data:linkedin', desc: 'Call LinkedIn Profile & Company scraper APIs' },
+  { id: 'data:email', label: 'data:email', desc: 'Call Email Finder API' },
 ];
 
 export default function DeveloperApiPage() {
