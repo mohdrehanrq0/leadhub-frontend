@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
-  IconAddressBook,
   IconBrandLinkedin,
+  IconBuilding,
   IconLoader2,
   IconMail,
   IconPhone,
@@ -19,7 +19,6 @@ import api from '@/lib/api';
 import {
   getLinkedInContactInfoSyncProgress,
   requestLinkedInConnectionsSync,
-  requestLinkedInContactInfoSync,
   stopLinkedInContactInfoSync,
   type ContactInfoSyncProgress,
 } from '@/lib/linkedin-connections-sync';
@@ -43,6 +42,12 @@ type ConnectionRow = {
   twitterHandle: string | null;
   birthday: string | null;
   address: string | null;
+  companyName: string | null;
+  companyWebsite: string | null;
+  companyLinkedinUrl: string | null;
+  currentTitle: string | null;
+  location: string | null;
+  industry: string | null;
   contactInfoFetchedAt: string | null;
   contactInfoStatus: string | null;
   lastSeenAt: string;
@@ -86,7 +91,6 @@ export function LinkedInConnectionsPanel() {
   const [listId, setListId] = useState('');
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [fetchingContacts, setFetchingContacts] = useState(false);
   const [contactProgress, setContactProgress] = useState<ContactInfoSyncProgress | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -151,7 +155,6 @@ export function LinkedInConnectionsPanel() {
     const running =
       syncing ||
       syncStatus?.last_sync?.status === 'running' ||
-      fetchingContacts ||
       contactProgress?.status === 'running';
     if (!running) return;
     const timer = window.setInterval(() => {
@@ -165,7 +168,6 @@ export function LinkedInConnectionsPanel() {
   }, [
     syncing,
     syncStatus?.last_sync?.status,
-    fetchingContacts,
     contactProgress?.status,
     fetchStatus,
     fetchConnections,
@@ -265,35 +267,10 @@ export function LinkedInConnectionsPanel() {
     }
   };
 
-  const kickContactInfoSync = async (opts?: {
-    connectionIds?: string[];
-    maxCount?: number;
-    forceRefetch?: boolean;
-  }) => {
-    setFetchingContacts(true);
-    try {
-      const result = await requestLinkedInContactInfoSync(opts);
-      if (!result.ok) {
-        toast.error(result.message ?? 'Could not start contact details lookup.');
-        return;
-      }
-      if (result.progress) setContactProgress(result.progress);
-      if (result.started === false) {
-        toast.message(result.message ?? 'Contact lookup already running or up to date.');
-      } else {
-        toast.success(result.message ?? 'Fetching LinkedIn contact details…');
-      }
-      await fetchStatus();
-      await fetchConnections();
-    } finally {
-      setFetchingContacts(false);
-    }
-  };
-
   const handleStopContactInfo = async () => {
     const res = await stopLinkedInContactInfoSync();
     if (res.progress) setContactProgress(res.progress);
-    toast.message('Contact details lookup stopped.');
+    toast.message('Contact & company enrichment stopped.');
     await fetchStatus();
     await fetchConnections();
   };
@@ -396,8 +373,9 @@ export function LinkedInConnectionsPanel() {
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
               Auto-sync runs once when you first connect the extension, then daily to pull new
-              connections at the top and fetch their LinkedIn contact details (email, phone,
-              websites). Sync now / Full resync / Fetch contact details always work manually.
+              connections at the top. Each sync automatically fetches contact details (email, phone,
+              websites) and company info (company name, website, title, location) once per
+              connection — never re-fetching already enriched profiles.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -406,7 +384,7 @@ export function LinkedInConnectionsPanel() {
               disabled={syncing}
               onClick={() => void kickSync({ forceFull: false })}
               className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand-main px-4 text-sm font-semibold text-white hover:bg-brand-main/90 disabled:opacity-60"
-              title="Fetch only connections newer than the last sync cursor"
+              title="Sync new connections and automatically fetch their contact & company details"
             >
               {syncing ? <IconLoader2 size={16} className="animate-spin" /> : <IconRefresh size={16} />}
               Sync now
@@ -416,7 +394,7 @@ export function LinkedInConnectionsPanel() {
               disabled={syncing}
               onClick={() => void kickSync({ forceFull: true })}
               className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
-              title="Re-scan your entire LinkedIn network into LeadHub"
+              title="Re-scan your entire LinkedIn network and enrich any pending connections"
             >
               Full resync
             </button>
@@ -427,24 +405,9 @@ export function LinkedInConnectionsPanel() {
                 className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-50 px-4 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
               >
                 <IconPlayerStop size={16} />
-                Stop contact fetch ({contactProgress.processedCount}/{contactProgress.totalCount})
+                Stop enrichment ({contactProgress.processedCount}/{contactProgress.totalCount})
               </button>
-            ) : (
-              <button
-                type="button"
-                disabled={fetchingContacts || (syncStatus?.contactInfoPendingCount ?? 0) === 0}
-                onClick={() => void kickContactInfoSync({ maxCount: 100 })}
-                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
-                title="Fetch email, phone, and websites from LinkedIn Contact Info for up to 100 pending connections"
-              >
-                {fetchingContacts ? (
-                  <IconLoader2 size={16} className="animate-spin" />
-                ) : (
-                  <IconAddressBook size={16} />
-                )}
-                Fetch contact details
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
         {lastSync?.status === 'running' && lastSync.totalCount ? (
@@ -617,21 +580,6 @@ export function LinkedInConnectionsPanel() {
           >
             {importing ? 'Adding…' : 'Add to prospect list'}
           </button>
-          <button
-            type="button"
-            disabled={fetchingContacts || contactProgress?.status === 'running'}
-            onClick={() =>
-              void kickContactInfoSync({
-                connectionIds: [...selected].slice(0, 200),
-                forceRefetch: true,
-              })
-            }
-            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white px-3.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
-            title="Fetch email, phone, and websites from LinkedIn Contact Info for selected connections"
-          >
-            <IconAddressBook size={15} />
-            Fetch contact details
-          </button>
         </div>
       ) : null}
 
@@ -687,7 +635,7 @@ export function LinkedInConnectionsPanel() {
                     />
                   </th>
                   <th className="px-5 py-3.5">Name</th>
-                  <th className="px-5 py-3.5">Headline</th>
+                  <th className="px-5 py-3.5">Company & Role</th>
                   <th className="px-5 py-3.5">Contact</th>
                   <th className="px-5 py-3.5">Connected</th>
                   <th className="px-5 py-3.5">LinkedIn</th>
@@ -704,8 +652,53 @@ export function LinkedInConnectionsPanel() {
                         aria-label={`Select ${row.fullName}`}
                       />
                     </td>
-                    <td className="px-5 py-4 text-sm font-semibold text-slate-900">{row.fullName}</td>
-                    <td className="px-5 py-4 text-sm text-slate-600">{row.headline || '—'}</td>
+                    <td className="px-5 py-4">
+                      <div className="text-sm font-semibold text-slate-900">{row.fullName}</div>
+                      {row.location ? (
+                        <div className="mt-0.5 text-xs text-slate-400">{row.location}</div>
+                      ) : null}
+                    </td>
+                    <td className="px-5 py-4 text-sm text-slate-600">
+                      {row.companyName ? (
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 font-medium text-slate-800">
+                            <IconBuilding size={14} className="shrink-0 text-slate-400" />
+                            {row.companyLinkedinUrl ? (
+                              <a
+                                href={row.companyLinkedinUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="hover:text-brand-main hover:underline"
+                              >
+                                {row.companyName}
+                              </a>
+                            ) : (
+                              <span>{row.companyName}</span>
+                            )}
+                          </div>
+                          {row.currentTitle || row.headline ? (
+                            <div className="text-xs text-slate-500">
+                              {row.currentTitle || row.headline}
+                            </div>
+                          ) : null}
+                          {row.companyWebsite ? (
+                            <a
+                              href={row.companyWebsite}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 text-xs text-brand-main hover:underline"
+                            >
+                              <IconWorld size={12} className="shrink-0" />
+                              <span className="truncate max-w-[200px]">
+                                {row.companyWebsite.replace(/^https?:\/\/(www\.)?/i, '')}
+                              </span>
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span>{row.headline || '—'}</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-xs text-slate-600">
                       {row.email || row.phone || row.websites?.length || row.twitterHandle ? (
                         <div className="space-y-1">
