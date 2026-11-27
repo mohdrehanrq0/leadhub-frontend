@@ -76,13 +76,30 @@ export function requestLinkedInConnectionsSync(opts?: {
   });
 }
 
+export type ContactInfoPhase =
+  | 'idle'
+  | 'waiting_for_sync'
+  | 'enriching'
+  | 'taking_break'
+  | 'daily_limit_reached'
+  | 'cooldown'
+  | 'completed'
+  | 'stopped'
+  | 'failed';
+
 export type ContactInfoSyncProgress = {
   status: 'idle' | 'running' | 'completed' | 'failed' | 'stopped';
+  phase?: ContactInfoPhase;
   processedCount: number;
   foundCount: number;
   failedCount: number;
   totalCount: number;
   percentComplete: number;
+  usedToday?: number;
+  dailyLimit?: number;
+  currentName?: string | null;
+  nextTickAt?: string | null;
+  cooldownUntil?: string | null;
   error?: string | null;
   updatedAt: string;
 };

@@ -58,6 +58,7 @@ type SyncStatus = {
   connectionCount: number;
   withEmailCount: number;
   withPhoneCount: number;
+  withCompanyCount?: number;
   contactInfoFetchedCount: number;
   contactInfoPendingCount: number;
   last_sync: {
@@ -152,18 +153,20 @@ export function LinkedInConnectionsPanel() {
   }, [fetchConnections]);
 
   useEffect(() => {
-    const running =
-      syncing ||
-      syncStatus?.last_sync?.status === 'running' ||
-      contactProgress?.status === 'running';
-    if (!running) return;
+    // Poll live enrichment & sync status every 5s so state transitions (sync -> enriching -> break -> daily limit) show immediately.
     const timer = window.setInterval(() => {
-      void fetchStatus();
-      void fetchConnections();
       void getLinkedInContactInfoSyncProgress().then((p) => {
         if (p) setContactProgress(p);
       });
-    }, 4000);
+      if (
+        syncing ||
+        syncStatus?.last_sync?.status === 'running' ||
+        contactProgress?.status === 'running'
+      ) {
+        void fetchStatus();
+        void fetchConnections();
+      }
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [
     syncing,
@@ -333,6 +336,104 @@ export function LinkedInConnectionsPanel() {
   const lastSync = syncStatus?.last_sync;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const enrichmentSummary = useMemo(() => {
+    const totalConn = syncStatus?.connectionCount ?? 0;
+    const fetched = syncStatus?.contactInfoFetchedCount ?? 0;
+    const pending = syncStatus?.contactInfoPendingCount ?? 0;
+    const coveragePct = totalConn > 0 ? Math.min(100, Math.round((fetched / totalConn) * 100)) : 0;
+    const dailyLimit = contactProgress?.dailyLimit ?? 80;
+    const usedToday = contactProgress?.usedToday ?? 0;
+    const dailyPct = dailyLimit > 0 ? Math.min(100, Math.round((usedToday / dailyLimit) * 100)) : 0;
+
+    const rawPhase = contactProgress?.phase ?? contactProgress?.status ?? 'idle';
+    const phase =
+      rawPhase === 'completed' && pending === 0 && totalConn > 0
+        ? 'all_done'
+        : rawPhase;
+
+    const nextInSec =
+      contactProgress?.nextTickAt
+        ? Math.max(0, Math.round((Date.parse(contactProgress.nextTickAt) - Date.now()) / 1000))
+        : null;
+    const nextInLabel =
+      nextInSec == null
+        ? null
+        : nextInSec >= 60
+          ? `~${Math.ceil(nextInSec / 60)}m`
+          : `${nextInSec}s`;
+
+    let badgeLabel = 'Idle';
+    let badgeClass = 'bg-slate-100 text-slate-600 ring-slate-200';
+    let detail =
+      pending > 0
+        ? `${pending.toLocaleString()} connection(s) queued — enriches automatically at a human-safe pace (up to ${dailyLimit}/day).`
+        : totalConn > 0
+          ? 'All synced connections have been enriched.'
+          : 'Sync your LinkedIn connections to start enriching contact & company details.';
+
+    if (phase === 'enriching') {
+      badgeLabel = 'Enriching';
+      badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      const cur = contactProgress?.currentName ? ` · Last: ${contactProgress.currentName}` : '';
+      const next = nextInLabel ? ` · Next lookup in ${nextInLabel}` : '';
+      detail = `Processing ${contactProgress?.processedCount ?? 0}/${contactProgress?.totalCount ?? 0} in this run (${contactProgress?.foundCount ?? 0} found)${cur}${next}`;
+    } else if (phase === 'taking_break') {
+      badgeLabel = 'Taking natural break';
+      badgeClass = 'bg-amber-50 text-amber-700 ring-amber-200';
+      detail = `Pausing ${nextInLabel ? `for ${nextInLabel} ` : ''}between batches to mimic normal LinkedIn browsing (${contactProgress?.processedCount ?? 0}/${contactProgress?.totalCount ?? 0} done in this run).`;
+    } else if (phase === 'waiting_for_sync') {
+      badgeLabel = 'Waiting for connections sync';
+      badgeClass = 'bg-blue-50 text-blue-700 ring-blue-200';
+      detail = 'Waiting for LinkedIn connections paging to finish so requests never run in parallel.';
+    } else if (phase === 'daily_limit_reached') {
+      badgeLabel = `Daily safety limit reached (${usedToday}/${dailyLimit})`;
+      badgeClass = 'bg-indigo-50 text-indigo-700 ring-indigo-200';
+      detail =
+        pending > 0
+          ? `Enriched ${usedToday} profiles today to keep your LinkedIn account safe. ${pending.toLocaleString()} remaining will resume automatically tomorrow.`
+          : `Enriched ${usedToday} profiles today. All connections are up to date.`;
+    } else if (phase === 'cooldown') {
+      badgeLabel = '24h safety cooldown';
+      badgeClass = 'bg-rose-50 text-rose-700 ring-rose-200';
+      const until = contactProgress?.cooldownUntil
+        ? new Date(contactProgress.cooldownUntil).toLocaleString()
+        : null;
+      detail =
+        contactProgress?.error ||
+        `Paused to protect your LinkedIn account${until ? ` until ${until}` : ''}.`;
+    } else if (phase === 'stopped') {
+      badgeLabel = 'Paused by user';
+      badgeClass = 'bg-slate-100 text-slate-700 ring-slate-200';
+      detail = `Enrichment was stopped (${pending.toLocaleString()} still pending). Click Sync now to resume.`;
+    } else if (phase === 'failed') {
+      badgeLabel = 'Paused (error)';
+      badgeClass = 'bg-rose-50 text-rose-700 ring-rose-200';
+      detail = contactProgress?.error || 'Contact enrichment paused. Refresh LinkedIn and click Sync now.';
+    } else if (phase === 'all_done') {
+      badgeLabel = 'All enriched';
+      badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      detail = 'Every synced connection has been checked for email, phone, and company details.';
+    } else if (phase === 'completed' && pending > 0) {
+      badgeLabel = 'Batch complete';
+      badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      detail = `Enriched ${contactProgress?.processedCount ?? 0} profile(s) (${contactProgress?.foundCount ?? 0} found). ${pending.toLocaleString()} remaining will continue automatically within the ${dailyLimit}/day safety limit.`;
+    }
+
+    return {
+      totalConn,
+      fetched,
+      pending,
+      coveragePct,
+      dailyLimit,
+      usedToday,
+      dailyPct,
+      badgeLabel,
+      badgeClass,
+      detail,
+      isRunning: contactProgress?.status === 'running',
+    };
+  }, [syncStatus, contactProgress]);
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -420,30 +521,72 @@ export function LinkedInConnectionsPanel() {
             />
           </div>
         ) : null}
-        {contactProgress &&
-        (contactProgress.status === 'running' ||
-          (contactProgress.status === 'failed' && contactProgress.error)) ? (
-          <div className="mt-3 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-600">
-              <span>
-                {contactProgress.status === 'running'
-                  ? `Fetching LinkedIn contact details: ${contactProgress.processedCount} / ${contactProgress.totalCount} (${contactProgress.foundCount} found)`
-                  : `Contact lookup paused: ${contactProgress.error}`}
+
+        {/* Dedicated Contact & Company Enrichment Status */}
+        <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-800">
+                Contact &amp; company enrichment
               </span>
-              {contactProgress.status === 'running' ? (
-                <span>{contactProgress.percentComplete}%</span>
-              ) : null}
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${enrichmentSummary.badgeClass}`}
+              >
+                {enrichmentSummary.isRunning ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+                ) : null}
+                {enrichmentSummary.badgeLabel}
+              </span>
             </div>
-            {contactProgress.status === 'running' ? (
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+              <span>
+                <strong className="text-slate-700">{(syncStatus?.withEmailCount ?? 0).toLocaleString()}</strong> emails
+              </span>
+              <span>
+                <strong className="text-slate-700">{(syncStatus?.withPhoneCount ?? 0).toLocaleString()}</strong> phones
+              </span>
+              <span>
+                <strong className="text-slate-700">{(syncStatus?.withCompanyCount ?? 0).toLocaleString()}</strong> companies
+              </span>
+              <span>
+                <strong className="text-slate-700">{enrichmentSummary.pending.toLocaleString()}</strong> pending
+              </span>
+            </div>
+          </div>
+
+          <p className="mt-1.5 text-xs text-slate-600">{enrichmentSummary.detail}</p>
+
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Overall enrichment coverage</span>
+                <span className="font-semibold text-slate-700">
+                  {enrichmentSummary.fetched.toLocaleString()} / {enrichmentSummary.totalConn.toLocaleString()} ({enrichmentSummary.coveragePct}%)
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/80">
                 <div
                   className="h-full rounded-full bg-emerald-500 transition-all"
-                  style={{ width: `${contactProgress.percentComplete}%` }}
+                  style={{ width: `${enrichmentSummary.coveragePct}%` }}
                 />
               </div>
-            ) : null}
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Today&apos;s LinkedIn safety quota</span>
+                <span className="font-semibold text-slate-700">
+                  {enrichmentSummary.usedToday} / {enrichmentSummary.dailyLimit} profiles
+                </span>
+              </div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-slate-200/80">
+                <div
+                  className="h-full rounded-full bg-indigo-500 transition-all"
+                  style={{ width: `${enrichmentSummary.dailyPct}%` }}
+                />
+              </div>
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
