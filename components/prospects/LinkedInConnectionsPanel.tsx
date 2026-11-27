@@ -3,18 +3,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
+  IconAddressBook,
   IconBrandLinkedin,
   IconLoader2,
+  IconMail,
+  IconPhone,
+  IconPlayerStop,
   IconPlus,
   IconRefresh,
   IconSearch,
+  IconWorld,
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
-import { requestLinkedInConnectionsSync } from '@/lib/linkedin-connections-sync';
+import {
+  getLinkedInContactInfoSyncProgress,
+  requestLinkedInConnectionsSync,
+  requestLinkedInContactInfoSync,
+  stopLinkedInContactInfoSync,
+  type ContactInfoSyncProgress,
+} from '@/lib/linkedin-connections-sync';
 import { CreateListDialog } from '@/components/prospects/CreateListDialog';
 import { errorMessage } from '@/components/prospects/utils';
 import type { LeadList } from '@/components/leads/types';
+
+type ContactFilter = 'all' | 'has_email' | 'missing_email' | 'has_phone' | 'not_fetched';
 
 type ConnectionRow = {
   id: string;
@@ -24,12 +37,24 @@ type ConnectionRow = {
   headline: string | null;
   linkedinUrl: string;
   connectedOnDate: string | null;
+  email: string | null;
+  phone: string | null;
+  websites: string[];
+  twitterHandle: string | null;
+  birthday: string | null;
+  address: string | null;
+  contactInfoFetchedAt: string | null;
+  contactInfoStatus: string | null;
   lastSeenAt: string;
 };
 
 type SyncStatus = {
   has_cursor: boolean;
   connectionCount: number;
+  withEmailCount: number;
+  withPhoneCount: number;
+  contactInfoFetchedCount: number;
+  contactInfoPendingCount: number;
   last_sync: {
     id: string;
     mode: string;
@@ -55,11 +80,14 @@ export function LinkedInConnectionsPanel() {
   const [appliedQuery, setAppliedQuery] = useState('');
   const [headline, setHeadline] = useState('');
   const [appliedHeadline, setAppliedHeadline] = useState('');
+  const [contactFilter, setContactFilter] = useState<ContactFilter>('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [lists, setLists] = useState<LeadList[]>([]);
   const [listId, setListId] = useState('');
   const [importing, setImporting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [fetchingContacts, setFetchingContacts] = useState(false);
+  const [contactProgress, setContactProgress] = useState<ContactInfoSyncProgress | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -83,6 +111,7 @@ export function LinkedInConnectionsPanel() {
           limit,
           q: appliedQuery.trim() || undefined,
           headline: appliedHeadline.trim() || undefined,
+          contactFilter: contactFilter !== 'all' ? contactFilter : undefined,
         },
       });
       const data = res.data.data;
@@ -93,7 +122,7 @@ export function LinkedInConnectionsPanel() {
     } finally {
       setLoading(false);
     }
-  }, [page, appliedQuery, appliedHeadline]);
+  }, [page, appliedQuery, appliedHeadline, contactFilter]);
 
   const fetchLists = useCallback(async () => {
     try {
@@ -109,6 +138,9 @@ export function LinkedInConnectionsPanel() {
   useEffect(() => {
     void fetchStatus();
     void fetchLists();
+    void getLinkedInContactInfoSyncProgress().then((p) => {
+      if (p) setContactProgress(p);
+    });
   }, [fetchStatus, fetchLists]);
 
   useEffect(() => {
@@ -116,14 +148,28 @@ export function LinkedInConnectionsPanel() {
   }, [fetchConnections]);
 
   useEffect(() => {
-    const running = syncing || syncStatus?.last_sync?.status === 'running';
+    const running =
+      syncing ||
+      syncStatus?.last_sync?.status === 'running' ||
+      fetchingContacts ||
+      contactProgress?.status === 'running';
     if (!running) return;
     const timer = window.setInterval(() => {
       void fetchStatus();
       void fetchConnections();
+      void getLinkedInContactInfoSyncProgress().then((p) => {
+        if (p) setContactProgress(p);
+      });
     }, 4000);
     return () => window.clearInterval(timer);
-  }, [syncing, syncStatus?.last_sync?.status, fetchStatus, fetchConnections]);
+  }, [
+    syncing,
+    syncStatus?.last_sync?.status,
+    fetchingContacts,
+    contactProgress?.status,
+    fetchStatus,
+    fetchConnections,
+  ]);
 
   const allSelectedOnPage = useMemo(
     () => rows.length > 0 && rows.every((row) => selected.has(row.id)),
@@ -158,6 +204,7 @@ export function LinkedInConnectionsPanel() {
         params: {
           q: appliedQuery.trim() || undefined,
           headline: appliedHeadline.trim() || undefined,
+          contactFilter: contactFilter !== 'all' ? contactFilter : undefined,
         },
       });
       const ids = (res.data.data?.ids ?? []) as string[];
@@ -178,6 +225,7 @@ export function LinkedInConnectionsPanel() {
         params: {
           q: appliedQuery.trim() || undefined,
           headline: appliedHeadline.trim() || undefined,
+          contactFilter: contactFilter !== 'all' ? contactFilter : undefined,
         },
       });
       const drop = new Set((res.data.data?.ids ?? []) as string[]);
@@ -215,6 +263,39 @@ export function LinkedInConnectionsPanel() {
       await fetchStatus();
       await fetchConnections();
     }
+  };
+
+  const kickContactInfoSync = async (opts?: {
+    connectionIds?: string[];
+    maxCount?: number;
+    forceRefetch?: boolean;
+  }) => {
+    setFetchingContacts(true);
+    try {
+      const result = await requestLinkedInContactInfoSync(opts);
+      if (!result.ok) {
+        toast.error(result.message ?? 'Could not start contact details lookup.');
+        return;
+      }
+      if (result.progress) setContactProgress(result.progress);
+      if (result.started === false) {
+        toast.message(result.message ?? 'Contact lookup already running or up to date.');
+      } else {
+        toast.success(result.message ?? 'Fetching LinkedIn contact details…');
+      }
+      await fetchStatus();
+      await fetchConnections();
+    } finally {
+      setFetchingContacts(false);
+    }
+  };
+
+  const handleStopContactInfo = async () => {
+    const res = await stopLinkedInContactInfoSync();
+    if (res.progress) setContactProgress(res.progress);
+    toast.message('Contact details lookup stopped.');
+    await fetchStatus();
+    await fetchConnections();
   };
 
   const importSelected = async () => {
@@ -291,6 +372,12 @@ export function LinkedInConnectionsPanel() {
               {lastSync?.totalCount
                 ? ` · LinkedIn total ${lastSync.totalCount.toLocaleString()}`
                 : null}
+              {syncStatus
+                ? ` · ${syncStatus.withEmailCount.toLocaleString()} with email · ${syncStatus.withPhoneCount.toLocaleString()} with phone`
+                : null}
+              {syncStatus && syncStatus.contactInfoPendingCount > 0
+                ? ` · ${syncStatus.contactInfoPendingCount.toLocaleString()} pending contact lookup`
+                : null}
               {lastSync?.lastSyncedAt
                 ? ` · last sync ${new Date(lastSync.lastSyncedAt).toLocaleString()}`
                 : lastSync?.status
@@ -308,9 +395,9 @@ export function LinkedInConnectionsPanel() {
               {lastSync?.error ? ` · ${lastSync.error}` : null}
             </p>
             <p className="mt-1 text-[11px] text-slate-400">
-              Auto-sync runs once when you first connect the extension, then at most every 7 days.
-              Sync now / Full resync always work manually. Full resync walks your entire network in
-              pages of 40 — keep LinkedIn signed in; large networks can take 10–25 minutes.
+              Auto-sync runs once when you first connect the extension, then daily to pull new
+              connections at the top and fetch their LinkedIn contact details (email, phone,
+              websites). Sync now / Full resync / Fetch contact details always work manually.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -333,6 +420,31 @@ export function LinkedInConnectionsPanel() {
             >
               Full resync
             </button>
+            {contactProgress?.status === 'running' ? (
+              <button
+                type="button"
+                onClick={() => void handleStopContactInfo()}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-rose-50 px-4 text-sm font-semibold text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100"
+              >
+                <IconPlayerStop size={16} />
+                Stop contact fetch ({contactProgress.processedCount}/{contactProgress.totalCount})
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={fetchingContacts || (syncStatus?.contactInfoPendingCount ?? 0) === 0}
+                onClick={() => void kickContactInfoSync({ maxCount: 100 })}
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+                title="Fetch email, phone, and websites from LinkedIn Contact Info for up to 100 pending connections"
+              >
+                {fetchingContacts ? (
+                  <IconLoader2 size={16} className="animate-spin" />
+                ) : (
+                  <IconAddressBook size={16} />
+                )}
+                Fetch contact details
+              </button>
+            )}
           </div>
         </div>
         {lastSync?.status === 'running' && lastSync.totalCount ? (
@@ -343,6 +455,30 @@ export function LinkedInConnectionsPanel() {
                 width: `${Math.min(100, Math.round((lastSync.syncedCount / lastSync.totalCount) * 100))}%`,
               }}
             />
+          </div>
+        ) : null}
+        {contactProgress &&
+        (contactProgress.status === 'running' ||
+          (contactProgress.status === 'failed' && contactProgress.error)) ? (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span>
+                {contactProgress.status === 'running'
+                  ? `Fetching LinkedIn contact details: ${contactProgress.processedCount} / ${contactProgress.totalCount} (${contactProgress.foundCount} found)`
+                  : `Contact lookup paused: ${contactProgress.error}`}
+              </span>
+              {contactProgress.status === 'running' ? (
+                <span>{contactProgress.percentComplete}%</span>
+              ) : null}
+            </div>
+            {contactProgress.status === 'running' ? (
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all"
+                  style={{ width: `${contactProgress.percentComplete}%` }}
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -384,6 +520,25 @@ export function LinkedInConnectionsPanel() {
             placeholder="e.g. founder"
             className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
           />
+        </label>
+        <label className="min-w-[170px]">
+          <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+            Contact
+          </span>
+          <select
+            value={contactFilter}
+            onChange={(event) => {
+              setPage(1);
+              setContactFilter(event.target.value as ContactFilter);
+            }}
+            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none focus:border-blue-300"
+          >
+            <option value="all">All contacts</option>
+            <option value="has_email">Has email</option>
+            <option value="missing_email">Missing email</option>
+            <option value="has_phone">Has phone</option>
+            <option value="not_fetched">Not fetched yet</option>
+          </select>
         </label>
         <button
           type="button"
@@ -462,6 +617,21 @@ export function LinkedInConnectionsPanel() {
           >
             {importing ? 'Adding…' : 'Add to prospect list'}
           </button>
+          <button
+            type="button"
+            disabled={fetchingContacts || contactProgress?.status === 'running'}
+            onClick={() =>
+              void kickContactInfoSync({
+                connectionIds: [...selected].slice(0, 200),
+                forceRefetch: true,
+              })
+            }
+            className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-white px-3.5 text-sm font-semibold text-slate-700 ring-1 ring-slate-200 hover:bg-slate-50 disabled:opacity-60"
+            title="Fetch email, phone, and websites from LinkedIn Contact Info for selected connections"
+          >
+            <IconAddressBook size={15} />
+            Fetch contact details
+          </button>
         </div>
       ) : null}
 
@@ -518,6 +688,7 @@ export function LinkedInConnectionsPanel() {
                   </th>
                   <th className="px-5 py-3.5">Name</th>
                   <th className="px-5 py-3.5">Headline</th>
+                  <th className="px-5 py-3.5">Contact</th>
                   <th className="px-5 py-3.5">Connected</th>
                   <th className="px-5 py-3.5">LinkedIn</th>
                 </tr>
@@ -535,6 +706,52 @@ export function LinkedInConnectionsPanel() {
                     </td>
                     <td className="px-5 py-4 text-sm font-semibold text-slate-900">{row.fullName}</td>
                     <td className="px-5 py-4 text-sm text-slate-600">{row.headline || '—'}</td>
+                    <td className="px-5 py-4 text-xs text-slate-600">
+                      {row.email || row.phone || row.websites?.length || row.twitterHandle ? (
+                        <div className="space-y-1">
+                          {row.email ? (
+                            <a
+                              href={`mailto:${row.email}`}
+                              className="flex items-center gap-1.5 text-slate-800 hover:text-brand-main hover:underline"
+                            >
+                              <IconMail size={14} className="shrink-0 text-slate-400" />
+                              <span className="truncate max-w-[220px]">{row.email}</span>
+                            </a>
+                          ) : null}
+                          {row.phone ? (
+                            <a
+                              href={`tel:${row.phone}`}
+                              className="flex items-center gap-1.5 text-slate-700 hover:text-brand-main hover:underline"
+                            >
+                              <IconPhone size={14} className="shrink-0 text-slate-400" />
+                              <span>{row.phone}</span>
+                            </a>
+                          ) : null}
+                          {row.websites?.[0] ? (
+                            <a
+                              href={row.websites[0]}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1.5 text-slate-500 hover:text-brand-main hover:underline"
+                            >
+                              <IconWorld size={14} className="shrink-0 text-slate-400" />
+                              <span className="truncate max-w-[200px]">
+                                {row.websites[0].replace(/^https?:\/\/(www\.)?/i, '')}
+                              </span>
+                            </a>
+                          ) : null}
+                          {row.twitterHandle ? (
+                            <span className="inline-block text-[11px] text-slate-400">
+                              @{row.twitterHandle}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : row.contactInfoFetchedAt ? (
+                        <span className="text-slate-400">None listed</span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-4 text-sm text-slate-600">{row.connectedOnDate || '—'}</td>
                     <td className="px-5 py-4">
                       <a

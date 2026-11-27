@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils';
 type Props = {
   posts: ContentPost[];
   unplanned: ContentPost[];
+  basePath?: string;
+  untitledLabel?: string;
 };
 
 function startOfMonth(d: Date) {
@@ -36,7 +38,12 @@ function dayKey(d: Date) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-export function ContentCalendar({ posts, unplanned }: Props) {
+export function ContentCalendar({
+  posts,
+  unplanned,
+  basePath = '/dashboard/content',
+  untitledLabel = 'Untitled post',
+}: Props) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const today = useMemo(() => new Date(), []);
 
@@ -157,7 +164,7 @@ export function ContentCalendar({ posts, unplanned }: Props) {
                   {dayPosts.slice(0, 3).map((p) => (
                     <Link
                       key={p.id}
-                      href={`/dashboard/content/${p.id}`}
+                      href={`${basePath}/${p.id}`}
                       className={cn(
                         'block truncate rounded px-1 py-0.5 text-[10px] font-medium',
                         p.status === 'published' && 'bg-emerald-50 text-emerald-800',
@@ -185,7 +192,7 @@ export function ContentCalendar({ posts, unplanned }: Props) {
       <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-slate-800">Not planned yet</h3>
-          <Link href="/dashboard/content?tab=drafts" className="text-xs font-medium text-brand-main hover:underline">
+          <Link href={`${basePath}?tab=drafts`} className="text-xs font-medium text-brand-main hover:underline">
             All drafts
           </Link>
         </div>
@@ -196,10 +203,10 @@ export function ContentCalendar({ posts, unplanned }: Props) {
             {unplanned.map((p) => (
               <li key={p.id}>
                 <Link
-                  href={`/dashboard/content/${p.id}`}
+                  href={`${basePath}/${p.id}`}
                   className="block rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:border-brand-main/40 hover:bg-slate-50"
                 >
-                  {previewSnippet(p.title || p.body, 60) || 'Untitled post'}
+                  {previewSnippet(p.title || p.body, 60) || untitledLabel}
                 </Link>
               </li>
             ))}

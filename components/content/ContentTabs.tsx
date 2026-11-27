@@ -4,19 +4,26 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import type { ContentTab } from '@/lib/content-posts';
 
-const TABS: { id: ContentTab; label: string }[] = [
-  { id: 'drafts', label: 'Drafts' },
-  { id: 'calendar', label: 'Calendar' },
-  { id: 'posts', label: 'Posts' },
-];
-
-export function ContentTabs({ active }: { active: ContentTab }) {
+export function ContentTabs({
+  active,
+  basePath = '/dashboard/content',
+  publishedLabel = 'Posts',
+}: {
+  active: ContentTab;
+  basePath?: string;
+  publishedLabel?: string;
+}) {
+  const tabs: { id: ContentTab; label: string }[] = [
+    { id: 'drafts', label: 'Drafts' },
+    { id: 'calendar', label: 'Calendar' },
+    { id: 'posts', label: publishedLabel },
+  ];
   return (
     <nav className="flex gap-1 border-b border-slate-200">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <Link
           key={tab.id}
-          href={`/dashboard/content?tab=${tab.id}`}
+          href={`${basePath}?tab=${tab.id}`}
           className={cn(
             'relative px-3 py-2.5 text-sm font-medium transition',
             active === tab.id ? 'text-brand-main' : 'text-slate-500 hover:text-slate-800',

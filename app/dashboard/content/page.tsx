@@ -55,14 +55,15 @@ function ContentPageInner() {
       setLoading(true);
       if (tab === 'calendar') {
         const [cal, unpl] = await Promise.all([
-          listContentPosts({ tab: 'calendar' }),
-          listContentPosts({ tab: 'unplanned' }),
+          listContentPosts({ tab: 'calendar', contentType: 'post' }),
+          listContentPosts({ tab: 'unplanned', contentType: 'post' }),
         ]);
         setPosts(cal);
         setUnplanned(unpl);
       } else {
         const data = await listContentPosts({
           tab,
+          contentType: 'post',
           status: filter,
           q: search,
         });

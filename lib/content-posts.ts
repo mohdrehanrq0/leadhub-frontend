@@ -1,6 +1,14 @@
 import api from '@/lib/api';
 import { flushLinkedInOutbox } from '@/lib/flush-linkedin-outbox';
 
+export type ContentType = 'post' | 'article';
+
+export type ContentArticleMeta = {
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  commentary?: string | null;
+};
+
 export type ContentPostStatus =
   | 'draft'
   | 'ready'
@@ -39,6 +47,11 @@ export const CONTENT_MEDIA_RULES = {
   maxImageOrPdfBytes: 4 * 1024 * 1024,
   maxVideoBytes: 50 * 1024 * 1024,
   maxBodyChars: 3000,
+  maxArticleBodyChars: 120_000,
+  maxArticleTitleChars: 150,
+  maxSeoTitleChars: 60,
+  maxSeoDescriptionChars: 160,
+  maxArticleCommentaryChars: 3000,
   acceptAttr: 'image/jpeg,image/png,image/gif,application/pdf,video/mp4,video/quicktime,video/webm',
   imageMimes: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'] as const,
   pdfMimes: ['application/pdf'] as const,
@@ -59,8 +72,10 @@ export const CONTENT_MEDIA_RULES_HINT =
 export type ContentPost = {
   id: string;
   workspaceId: string;
+  contentType?: ContentType;
   title: string | null;
   body: string;
+  articleMeta?: ContentArticleMeta | null;
   status: ContentPostStatus;
   scheduledFor: string | null;
   timezone: string;
@@ -157,6 +172,7 @@ export function formatPlannedFor(iso: string | null | undefined, timezone?: stri
 
 export async function listContentPosts(params: {
   tab?: ContentTab | 'unplanned';
+  contentType?: ContentType | 'all';
   status?: string;
   q?: string;
   from?: string;
@@ -164,6 +180,7 @@ export async function listContentPosts(params: {
 }): Promise<ContentPost[]> {
   const qs = new URLSearchParams();
   if (params.tab) qs.set('tab', params.tab);
+  if (params.contentType) qs.set('contentType', params.contentType);
   if (params.status && params.status !== 'all') qs.set('status', params.status);
   if (params.q?.trim()) qs.set('q', params.q.trim());
   if (params.from) qs.set('from', params.from);
@@ -183,8 +200,10 @@ export async function getLinkedInIdentity(): Promise<LinkedInIdentity> {
 }
 
 export async function createContentPost(input: {
+  contentType?: ContentType;
   body?: string;
   title?: string | null;
+  articleMeta?: ContentArticleMeta | null;
   tags?: string[];
   status?: 'draft' | 'ready';
   media?: ContentPostMedia[];
@@ -198,6 +217,7 @@ export async function updateContentPost(
   input: {
     body?: string;
     title?: string | null;
+    articleMeta?: ContentArticleMeta | null;
     tags?: string[];
     status?: 'draft' | 'ready';
     media?: ContentPostMedia[];
@@ -230,7 +250,11 @@ export async function deleteContentPost(id: string): Promise<void> {
 }
 
 export function previewSnippet(body: string, max = 140): string {
-  const t = body.trim();
+  const t = body
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (!t) return '';
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }

@@ -9,6 +9,8 @@ import GetLogo from '@/components/common/getLogo';
 import { WorkspaceSwitcher } from '@/components/layout/WorkspaceSwitcher';
 import {
   // IconBook2, // Recipes tab parked
+  IconArticle,
+  IconChevronDown,
   IconChevronLeft,
   IconChevronRight,
   // IconCode, // API tab parked
@@ -17,6 +19,7 @@ import {
   IconFileText,
   IconListDetails,
   IconLogout,
+  IconNote,
   IconSend,
   IconSettings,
   IconTool,
@@ -42,7 +45,20 @@ type MainSidebarProps = {
 const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 const HOVER_COLLAPSE_MS = 220;
 
-const NAV_RECIPE_LIBRARY = [
+type NavChild = {
+  name: string;
+  href: string;
+  icon: typeof IconFileText;
+};
+
+type NavItem = {
+  name: string;
+  href: string;
+  icon: typeof IconFileText;
+  children?: NavChild[];
+};
+
+const NAV_RECIPE_LIBRARY: NavItem[] = [
   // Recipes / Runs / API tabs parked — restore when those surfaces ship again.
   // { name: 'Recipes', href: '/research', icon: IconBook2 },
   { name: 'Tools', href: '/tools', icon: IconTool },
@@ -54,7 +70,17 @@ const NAV_RECIPE_LIBRARY = [
     ? [{ name: 'Campaigns', href: '/dashboard/campaigns', icon: IconSend }]
     : []),
   ...(CONTENT_UI
-    ? [{ name: 'Content', href: '/dashboard/content', icon: IconFileText }]
+    ? [
+        {
+          name: 'Content',
+          href: '/dashboard/content',
+          icon: IconFileText,
+          children: [
+            { name: 'LinkedIn Post', href: '/dashboard/content', icon: IconNote },
+            { name: 'LinkedIn Article', href: '/dashboard/content/articles', icon: IconArticle },
+          ],
+        },
+      ]
     : []),
   // { name: 'API', href: '/dashboard/settings/developer-api', icon: IconCode },
   { name: 'Billing', href: '/dashboard/billing', icon: IconCoin },
@@ -71,8 +97,18 @@ export function MainSidebar({
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isHoverExpanded, setIsHoverExpanded] = useState(false);
+  const [contentExpanded, setContentExpanded] = useState(() =>
+    pathname.startsWith('/dashboard/content'),
+  );
   const hoverCollapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hydratedCollapse = useRef(false);
+
+  useEffect(() => {
+    if (pathname.startsWith('/dashboard/content')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setContentExpanded(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (hydratedCollapse.current) return;
@@ -125,13 +161,99 @@ export function MainSidebar({
         pathname.startsWith('/dashboard/settings/api-keys')
       );
     }
+    if (href === '/dashboard/content') {
+      return (
+        pathname === '/dashboard/content' ||
+        (pathname.startsWith('/dashboard/content/') &&
+          !pathname.startsWith('/dashboard/content/articles'))
+      );
+    }
+    if (href === '/dashboard/content/articles') {
+      return (
+        pathname === '/dashboard/content/articles' ||
+        pathname.startsWith('/dashboard/content/articles/')
+      );
+    }
     return pathname === href || pathname.startsWith(`${href}/`);
   };
 
-  const renderNav = (items: typeof NAV_RECIPE_LIBRARY) =>
+  const renderNav = (items: NavItem[]) =>
     items.map((item) => {
-      const active = isActive(item.href);
       const Icon = item.icon;
+      if (item.children?.length) {
+        const groupActive = pathname.startsWith('/dashboard/content');
+        return (
+          <div key={item.name} className="space-y-1">
+            <button
+              type="button"
+              title={!showExpandedChrome ? item.name : undefined}
+              onClick={() => {
+                if (!showExpandedChrome) {
+                  setIsCollapsed(false);
+                  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, 'false');
+                  setContentExpanded(true);
+                  return;
+                }
+                setContentExpanded((prev) => !prev);
+              }}
+              className={cn(
+                'group relative flex w-full items-center py-2.5 text-sm font-medium transition-all duration-200',
+                showExpandedChrome ? 'rounded-lg px-3' : 'justify-center rounded-lg px-0',
+                groupActive && !showExpandedChrome
+                  ? 'bg-brand-main text-white shadow-md'
+                  : groupActive
+                    ? 'bg-sidebar-hover/80 text-sidebar-text'
+                    : 'text-sidebar-text hover:bg-sidebar-hover',
+              )}
+            >
+              <span className={cn('flex-shrink-0', showExpandedChrome && 'mr-3')}>
+                <Icon className="h-5 w-5" />
+              </span>
+              {showExpandedChrome ? (
+                <>
+                  <span className="flex-1 overflow-hidden text-left whitespace-nowrap">
+                    {item.name}
+                  </span>
+                  <IconChevronDown
+                    className={cn(
+                      'h-4 w-4 text-sidebar-muted transition-transform duration-200',
+                      contentExpanded ? 'rotate-0' : '-rotate-90',
+                    )}
+                  />
+                </>
+              ) : null}
+            </button>
+            {showExpandedChrome && contentExpanded ? (
+              <div className="ml-4 space-y-1 border-l border-sidebar-border pl-2.5">
+                {item.children.map((child) => {
+                  const ChildIcon = child.icon;
+                  const childActive = isActive(child.href);
+                  return (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      onClick={() => {
+                        if (window.innerWidth < 768) onClose();
+                      }}
+                      className={cn(
+                        'flex items-center rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200',
+                        childActive
+                          ? 'bg-brand-main text-white shadow-sm'
+                          : 'text-sidebar-text/80 hover:bg-sidebar-hover hover:text-sidebar-text',
+                      )}
+                    >
+                      <ChildIcon className="mr-2.5 h-4 w-4 flex-shrink-0" />
+                      <span className="overflow-hidden whitespace-nowrap">{child.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        );
+      }
+
+      const active = isActive(item.href);
       return (
         <Link
           key={item.href}

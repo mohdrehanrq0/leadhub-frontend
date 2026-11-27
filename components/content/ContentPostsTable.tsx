@@ -17,9 +17,18 @@ type Props = {
   emptyLabel: string;
   onWrite?: () => void;
   writeLabel?: string;
+  basePath?: string;
+  untitledLabel?: string;
 };
 
-export function ContentPostsTable({ posts, emptyLabel, onWrite, writeLabel }: Props) {
+export function ContentPostsTable({
+  posts,
+  emptyLabel,
+  onWrite,
+  writeLabel,
+  basePath = '/dashboard/content',
+  untitledLabel = 'Untitled post',
+}: Props) {
   if (posts.length === 0) {
     return (
       <div className={`${tableShellClass} flex min-h-[280px] flex-col items-center justify-center gap-3 p-8`}>
@@ -54,10 +63,10 @@ export function ContentPostsTable({ posts, emptyLabel, onWrite, writeLabel }: Pr
             <tr key={post.id} className="hover:bg-slate-50/60">
               <td className="px-4 py-3">
                 <Link
-                  href={`/dashboard/content/${post.id}`}
+                  href={`${basePath}/${post.id}`}
                   className="font-medium text-slate-800 hover:text-brand-main"
                 >
-                  {post.title || previewSnippet(post.body, 80) || 'Untitled post'}
+                  {post.title || previewSnippet(post.body, 80) || untitledLabel}
                 </Link>
                 {post.lastError ? (
                   <p className="mt-0.5 text-xs text-red-600">{post.lastError}</p>
@@ -76,9 +85,9 @@ export function ContentPostsTable({ posts, emptyLabel, onWrite, writeLabel }: Pr
               <td className="px-4 py-3 text-slate-500">{formatRelativeUpdated(post.updatedAt)}</td>
               <td className="px-4 py-3">
                 <Link
-                  href={`/dashboard/content/${post.id}`}
+                  href={`${basePath}/${post.id}`}
                   className="inline-flex rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Open post"
+                  aria-label="Open item"
                 >
                   <IconDotsVertical size={16} />
                 </Link>
