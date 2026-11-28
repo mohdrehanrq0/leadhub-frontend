@@ -1057,6 +1057,9 @@ export function ArticleEditor({ articleId }: Props) {
               <label htmlFor="article-tags" className="text-sm font-semibold text-slate-800">
                 Tags
               </label>
+              <p className="text-xs text-slate-500">
+                Added as #hashtags in the LinkedIn share post when your article is published.
+              </p>
               <input
                 id="article-tags"
                 type="text"
