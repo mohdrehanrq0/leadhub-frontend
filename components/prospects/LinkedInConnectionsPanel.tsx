@@ -336,6 +336,13 @@ export function LinkedInConnectionsPanel() {
   const lastSync = syncStatus?.last_sync;
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    if (contactProgress?.status !== 'running') return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [contactProgress?.status]);
+
   const enrichmentSummary = useMemo(() => {
     const totalConn = syncStatus?.connectionCount ?? 0;
     const fetched = syncStatus?.contactInfoFetchedCount ?? 0;
@@ -353,13 +360,13 @@ export function LinkedInConnectionsPanel() {
 
     const nextInSec =
       contactProgress?.nextTickAt
-        ? Math.max(0, Math.round((Date.parse(contactProgress.nextTickAt) - Date.now()) / 1000))
+        ? Math.max(0, Math.round((Date.parse(contactProgress.nextTickAt) - nowMs) / 1000))
         : null;
     const nextInLabel =
       nextInSec == null
         ? null
         : nextInSec >= 60
-          ? `~${Math.ceil(nextInSec / 60)}m`
+          ? `${Math.floor(nextInSec / 60)}m ${nextInSec % 60}s`
           : `${nextInSec}s`;
 
     let badgeLabel = 'Idle';
@@ -372,15 +379,23 @@ export function LinkedInConnectionsPanel() {
           : 'Sync your LinkedIn connections to start enriching contact & company details.';
 
     if (phase === 'enriching') {
-      badgeLabel = 'Enriching';
-      badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+      const processed = contactProgress?.processedCount ?? 0;
+      const runTotal = contactProgress?.totalCount ?? 0;
+      const found = contactProgress?.foundCount ?? 0;
       const cur = contactProgress?.currentName ? ` · Last: ${contactProgress.currentName}` : '';
-      const next = nextInLabel ? ` · Next lookup in ${nextInLabel}` : '';
-      detail = `Processing ${contactProgress?.processedCount ?? 0}/${contactProgress?.totalCount ?? 0} in this run (${contactProgress?.foundCount ?? 0} found)${cur}${next}`;
+      if (nextInSec != null && nextInSec > 0 && nextInLabel) {
+        badgeLabel = `Human pacing · ${nextInLabel}`;
+        badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+        detail = `Enriched ${processed}/${runTotal} in this run (${found} found)${cur} · Waiting ${nextInLabel} (human pacing) before next profile`;
+      } else {
+        badgeLabel = 'Fetching profile';
+        badgeClass = 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+        detail = `Fetching ${contactProgress?.currentName || 'next profile'} (${processed}/${runTotal} in this run, ${found} found)…`;
+      }
     } else if (phase === 'taking_break') {
-      badgeLabel = 'Taking natural break';
+      badgeLabel = nextInLabel ? `Safety break · ${nextInLabel}` : 'Taking safety break';
       badgeClass = 'bg-amber-50 text-amber-700 ring-amber-200';
-      detail = `Pausing ${nextInLabel ? `for ${nextInLabel} ` : ''}between batches to mimic normal LinkedIn browsing (${contactProgress?.processedCount ?? 0}/${contactProgress?.totalCount ?? 0} done in this run).`;
+      detail = `Pausing ${nextInLabel ? `for ${nextInLabel} ` : ''}every 15 profiles to mimic normal LinkedIn browsing (${contactProgress?.processedCount ?? 0}/${contactProgress?.totalCount ?? 0} done in this run).`;
     } else if (phase === 'waiting_for_sync') {
       badgeLabel = 'Waiting for connections sync';
       badgeClass = 'bg-blue-50 text-blue-700 ring-blue-200';
@@ -432,7 +447,7 @@ export function LinkedInConnectionsPanel() {
       detail,
       isRunning: contactProgress?.status === 'running',
     };
-  }, [syncStatus, contactProgress]);
+  }, [syncStatus, contactProgress, nowMs]);
 
   return (
     <div className="space-y-4">
